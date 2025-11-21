@@ -6,10 +6,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      // forward /auth, /users, /admin to Django backend
-      '/auth': { target: 'http://localhost:8000', changeOrigin: true, secure: false },
-      '/users': { target: 'http://localhost:8000', changeOrigin: true, secure: false },
-      '/admin': { target: 'http://localhost:8000', changeOrigin: true, secure: false },
+      // forward API calls to Django backend
+      '/api': { target: 'http://localhost:8000', changeOrigin: true, secure: false },
     }
   }
 });

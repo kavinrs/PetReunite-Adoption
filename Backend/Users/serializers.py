@@ -1,7 +1,7 @@
 # users/serializers.py
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import UserProfile
+from .models import UserProfile, FoundPetReport, LostPetReport
 
 User = get_user_model()
 
@@ -13,6 +13,8 @@ class RegisterSerializer(serializers.ModelSerializer):
     phone_number = serializers.CharField(required=True, write_only=True)
     address = serializers.CharField(required=True, write_only=True)
     pincode = serializers.CharField(required=True, write_only=True)
+    state = serializers.CharField(required=True, write_only=True)
+    city = serializers.CharField(required=True, write_only=True)
 
 
     class Meta:
@@ -23,6 +25,8 @@ class RegisterSerializer(serializers.ModelSerializer):
             "password",
             "full_name",
             "phone_number",
+            "state",
+            "city",
             "address",
             "pincode",
         )
@@ -32,6 +36,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         full_name = validated_data.pop("full_name")
         phone_number = validated_data.pop("phone_number")
         address = validated_data.pop("address")
+        state = validated_data.pop("state")
+        city = validated_data.pop("city")
         pincode = validated_data.pop("pincode")
 
         # Create main Django User
@@ -46,6 +52,8 @@ class RegisterSerializer(serializers.ModelSerializer):
             full_name=full_name,
             phone_number=phone_number,
             address=address,
+            state=state,
+            city=city,
             pincode=pincode,
         )
 
@@ -69,6 +77,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "full_name",
             "phone_number",
             "address",
+            "state",
+            "city",
             "role",
             "verified",
             "profile_photo",
@@ -76,3 +86,48 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = ("role", "verified")
+
+
+class FoundPetReportSerializer(serializers.ModelSerializer):
+    reporter = UserSerializer(read_only=True)
+
+    class Meta:
+        model = FoundPetReport
+        fields = (
+            "id",
+            "reporter",
+            "pet_type",
+            "breed",
+            "color",
+            "estimated_age",
+            "found_city",
+            "state",
+            "description",
+            "photo",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "reporter", "created_at", "updated_at")
+
+
+class LostPetReportSerializer(serializers.ModelSerializer):
+    reporter = UserSerializer(read_only=True)
+
+    class Meta:
+        model = LostPetReport
+        fields = (
+            "id",
+            "reporter",
+            "pet_name",
+            "pet_type",
+            "breed",
+            "color",
+            "age",
+            "city",
+            "state",
+            "description",
+            "photo",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "reporter", "created_at", "updated_at")

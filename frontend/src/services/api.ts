@@ -6,10 +6,41 @@ export type ApiResult = {
   error?: string;
 };
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? ""; // if empty, assume proxy or same origin
+const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
 async function parseJSONSafe(resp: Response) {
   try { return await resp.json(); } catch { return null; }
+}
+
+function collectFirstError(errors: any): string | null {
+  if (!errors) return null;
+  if (typeof errors === "string") return errors;
+  if (Array.isArray(errors)) {
+    for (const entry of errors) {
+      const nested = collectFirstError(entry);
+      if (nested) return nested;
+    }
+    return null;
+  }
+  if (typeof errors === "object") {
+    for (const key of Object.keys(errors)) {
+      const nested = collectFirstError(errors[key]);
+      if (nested) {
+        return key === "non_field_errors" ? nested : `${key}: ${nested}`;
+      }
+    }
+  }
+  return null;
+}
+
+function extractErrorMessage(data: any): string | null {
+  return (
+    collectFirstError(data?.errors) ??
+    data?.detail ??
+    data?.error ??
+    data?.message ??
+    null
+  );
 }
 
 /* token helpers */
@@ -28,6 +59,10 @@ export function clearTokens() {
 export function authHeader(): Record<string,string> {
   const t = getAccessToken();
   return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
+function isFormData(body: unknown): body is FormData {
+  return typeof FormData !== "undefined" && body instanceof FormData;
 }
 
 /* User login (SimpleJWT TokenObtainPairView expects username+password by default) */
@@ -83,14 +118,30 @@ export async function refreshAccess(): Promise<ApiResult> {
 
 /* Generic fetch wrapper which auto-refreshes token on 401 once */
 export async function fetchWithAuth(input: RequestInfo, init: RequestInit = {}): Promise<Response> {
-  const headers = { "Content-Type": "application/json", ...(init.headers ?? {}) as any, ...authHeader() };
-  let resp = await fetch(input, { ...init, headers, credentials: init.credentials ?? "same-origin" });
+  const buildHeaders = () => {
+    const base = new Headers(init.headers ?? {});
+    if (!isFormData(init.body) && !base.has("Content-Type")) {
+      base.set("Content-Type", "application/json");
+    }
+    const auth = authHeader();
+    Object.entries(auth).forEach(([key, value]) => base.set(key, value));
+    return base;
+  };
+
+  let resp = await fetch(input, {
+    ...init,
+    headers: buildHeaders(),
+    credentials: init.credentials ?? "same-origin",
+  });
   if (resp.status === 401) {
     // try refresh once
     const ref = await refreshAccess();
     if (ref.ok) {
-      const headers2 = { "Content-Type": "application/json", ...(init.headers ?? {}) as any, ...authHeader() };
-      resp = await fetch(input, { ...init, headers: headers2, credentials: init.credentials ?? "same-origin" });
+      resp = await fetch(input, {
+        ...init,
+        headers: buildHeaders(),
+        credentials: init.credentials ?? "same-origin",
+      });
     }
   }
   return resp;
@@ -99,16 +150,81 @@ export async function fetchWithAuth(input: RequestInfo, init: RequestInit = {}):
 /* Get current user's profile */
 export async function getProfile(): Promise<ApiResult> {
   const url = `${API_BASE}/users/me/`;
-  const resp = await fetchWithAuth(url, { method: "GET" });
+  try {
+    const token = getAccessToken();
+    console.log('Fetching profile with token:', token ? 'Token exists' : 'No token found');
+    
+    const resp = await fetchWithAuth(url, { 
+      method: "GET",
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include' // Ensure cookies are sent with the request
+    });
+    
+    const data = await parseJSONSafe(resp);
+    console.log('Profile response status:', resp.status, 'data:', data);
+    
+    if (resp.ok) {
+      return { ok: true, status: resp.status, data };
+    } else {
+      console.error('Profile fetch failed:', { status: resp.status, statusText: resp.statusText, data });
+      if (resp.status === 403) {
+        // If we get a 403, clear tokens as they might be invalid
+        clearTokens();
+        return { 
+          ok: false, 
+          status: resp.status, 
+          error: 'Session expired or invalid. Please log in again.',
+          data 
+        };
+      }
+      return { 
+        ok: false, 
+        status: resp.status, 
+        error: data?.detail || data?.error || `Failed to fetch profile: ${resp.statusText}`,
+        data 
+      };
+    }
+  } catch (error) {
+    console.error('Error in getProfile:', error);
+    return { 
+      ok: false, 
+      status: 0, 
+      error: error instanceof Error ? error.message : 'Network error',
+      data: null 
+    };
+  }
+}
+
+export async function updateProfile(payload: {
+  full_name?: string;
+  phone_number?: string;
+  address?: string;
+  state?: string;
+  city?: string;
+  pincode?: string;
+  password?: string;
+}): Promise<ApiResult> {
+  const url = `${API_BASE}/users/me/`;
+  const resp = await fetchWithAuth(url, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
   const data = await parseJSONSafe(resp);
-  if (resp.ok) return { ok: true, status: resp.status, data };
-  return { ok: false, status: resp.status, error: data?.detail || data?.error || "Failed to fetch profile", data };
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to update profile";
+  return { ok: false, status: resp.status, error: message, data };
 }
 
 /* Register - matches your RegisterSerializer required fields */
 export async function registerUser(payload: {
   username: string; email: string; password: string;
-  full_name: string; phone_number: string; address: string; pincode: string;
+  full_name: string; phone_number: string; state: string; city: string; address: string; pincode: string;
 }): Promise<ApiResult> {
   const url = `${API_BASE}/auth/register/`;
   const resp = await fetch(url, {
@@ -118,5 +234,76 @@ export async function registerUser(payload: {
   });
   const data = await parseJSONSafe(resp);
   if (resp.ok) return { ok: true, status: resp.status, data };
-  return { ok: false, status: resp.status, error: data?.detail || data?.error || "Registration failed", data };
+  const message = extractErrorMessage(data) ?? "Registration failed";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+const PETS_BASE = `${API_BASE}/pets`;
+
+export async function reportFoundPet(payload: {
+  pet_type: string;
+  breed?: string;
+  color?: string;
+  estimated_age?: string;
+  found_city: string;
+  state: string;
+  description: string;
+  photo?: File | null;
+}): Promise<ApiResult> {
+  const url = `${PETS_BASE}/reports/found/`;
+  const formData = new FormData();
+  formData.append("pet_type", payload.pet_type);
+  formData.append("found_city", payload.found_city);
+  formData.append("state", payload.state);
+  formData.append("description", payload.description);
+  if (payload.breed) formData.append("breed", payload.breed);
+  if (payload.color) formData.append("color", payload.color);
+  if (payload.estimated_age) formData.append("estimated_age", payload.estimated_age);
+  if (payload.photo) formData.append("photo", payload.photo);
+
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: formData,
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to submit report";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function reportLostPet(payload: {
+  pet_name?: string;
+  pet_type: string;
+  breed?: string;
+  color?: string;
+  age?: string;
+  city: string;
+  state: string;
+  description: string;
+  photo?: File | null;
+}): Promise<ApiResult> {
+  const url = `${PETS_BASE}/reports/lost/`;
+  const formData = new FormData();
+  if (payload.pet_name) formData.append("pet_name", payload.pet_name);
+  formData.append("pet_type", payload.pet_type);
+  if (payload.breed) formData.append("breed", payload.breed);
+  if (payload.color) formData.append("color", payload.color);
+  if (payload.age) formData.append("age", payload.age);
+  formData.append("city", payload.city);
+  formData.append("state", payload.state);
+  formData.append("description", payload.description);
+  if (payload.photo) formData.append("photo", payload.photo);
+
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: formData,
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to submit report";
+  return { ok: false, status: resp.status, error: message, data };
 }

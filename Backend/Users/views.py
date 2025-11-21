@@ -2,8 +2,14 @@
 from rest_framework import generics, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from .serializers import RegisterSerializer, UserProfileSerializer
-from .models import UserProfile
+from rest_framework import parsers
+from .serializers import (
+    RegisterSerializer,
+    UserProfileSerializer,
+    FoundPetReportSerializer,
+    LostPetReportSerializer,
+)
+from .models import UserProfile, FoundPetReport, LostPetReport
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -107,3 +113,25 @@ class AdminLoginView(APIView):
             },
             status=status.HTTP_200_OK
         )
+
+
+class FoundPetReportView(generics.ListAPIView):
+    serializer_class = FoundPetReportSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff or user.is_superuser:
+            return FoundPetReport.objects.all()
+        return FoundPetReport.objects.filter(reporter=user)
+
+
+class LostPetReportView(generics.ListAPIView):
+    serializer_class = LostPetReportSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff or user.is_superuser:
+            return LostPetReport.objects.all()
+        return LostPetReport.objects.filter(reporter=user)

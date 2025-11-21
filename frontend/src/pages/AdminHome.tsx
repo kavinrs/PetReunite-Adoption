@@ -26,7 +26,32 @@ export default function AdminHome() {
 
   return (
     <div style={{ padding: 24 }}>
-      <h2>Admin Dashboard</h2>
+      <header
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 16,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            fontSize: 26,
+            fontWeight: 800,
+          }}
+        >
+          <img
+            src="/pawreunite-logo.svg"
+            alt="PawReunite logo"
+            style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }}
+          />
+          <span>PawReunite</span>
+        </div>
+        <div style={{ fontWeight: 600 }}>Admin Dashboard</div>
+      </header>
       <pre>{JSON.stringify(profile, null, 2)}</pre>
       <button onClick={() => { clearTokens(); navigate("/", { replace: true }); }}>Logout</button>
     </div>

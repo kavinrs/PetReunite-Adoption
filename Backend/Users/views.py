@@ -3,6 +3,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import parsers
+
 from .serializers import (
     RegisterSerializer,
     UserProfileSerializer,
@@ -14,8 +15,8 @@ from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 
 
-
 class RegisterView(APIView):
+
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
@@ -44,7 +45,6 @@ class RegisterView(APIView):
             },
             status=status.HTTP_400_BAD_REQUEST,
         )
-
 
 
 class MeView(APIView):

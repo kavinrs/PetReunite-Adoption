@@ -40,7 +40,7 @@ export default function Register() {
         }}
       >
         <img
-          src="/pawreunite-logo.svg"
+          src=""
           alt="PawReunite logo"
           style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }}
         />

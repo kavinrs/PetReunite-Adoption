@@ -97,6 +97,24 @@ export async function adminLogin(username: string, password: string): Promise<Ap
   return { ok: false, status: resp.status, error: data?.detail || data?.error || "Admin login failed", data };
 }
 
+/* Admin register (same fields as user plus a secret code) */
+export async function adminRegister(payload: {
+  username: string; email: string; password: string;
+  full_name: string; phone_number: string; state: string; city: string; address: string; pincode: string;
+  code: string;
+}): Promise<ApiResult> {
+  const url = `${API_BASE}/admin/register/`;
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Admin registration failed";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
 /* Refresh access token */
 export async function refreshAccess(): Promise<ApiResult> {
   const refresh = getRefreshToken();
@@ -239,6 +257,65 @@ export async function registerUser(payload: {
 }
 
 const PETS_BASE = `${API_BASE}/pets`;
+
+export async function fetchAdminSummary(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/summary/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to load admin summary";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function fetchAdminFoundReports(status?: string): Promise<ApiResult> {
+  const qs = status && status !== "all" ? `?status=${encodeURIComponent(status)}` : "";
+  const url = `${PETS_BASE}/admin/reports/found/${qs}`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to load found reports";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function fetchAdminLostReports(status?: string): Promise<ApiResult> {
+  const qs = status && status !== "all" ? `?status=${encodeURIComponent(status)}` : "";
+  const url = `${PETS_BASE}/admin/reports/lost/${qs}`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to load lost reports";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function updateAdminFoundReport(
+  id: number,
+  payload: { status?: string; admin_notes?: string }
+): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/reports/found/${id}/`;
+  const resp = await fetchWithAuth(url, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to update report";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function updateAdminLostReport(
+  id: number,
+  payload: { status?: string; admin_notes?: string }
+): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/reports/lost/${id}/`;
+  const resp = await fetchWithAuth(url, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to update report";
+  return { ok: false, status: resp.status, error: message, data };
+}
 
 export async function reportFoundPet(payload: {
   pet_type: string;

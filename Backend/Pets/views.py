@@ -2,9 +2,15 @@ from rest_framework import generics, permissions, parsers
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.utils import timezone
 
-from .models import FoundPetReport, LostPetReport
-from .serializers import FoundPetReportSerializer, LostPetReportSerializer
+from .models import FoundPetReport, LostPetReport, STATUS_CHOICES
+from .serializers import (
+    FoundPetReportSerializer,
+    LostPetReportSerializer,
+    AdminFoundPetReportSerializer,
+    AdminLostPetReportSerializer,
+)
 
 
 class FoundPetReportView(generics.ListCreateAPIView):
@@ -48,6 +54,68 @@ class AllReportsView(APIView):
             LostPetReport.objects.filter(reporter=request.user), many=True
         ).data
         return Response({"lost": lost, "found": found}, status=status.HTTP_200_OK)
-from django.shortcuts import render
 
-# Create your views here.
+
+class AdminReportSummaryView(APIView):
+    """Basic analytics for the admin dashboard."""
+
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        now = timezone.now()
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        lost_qs = LostPetReport.objects.all()
+        found_qs = FoundPetReport.objects.all()
+
+        def status_counts(qs):
+            return {code: qs.filter(status=code).count() for code, _ in STATUS_CHOICES}
+
+        data = {
+            "lost_total": lost_qs.count(),
+            "found_total": found_qs.count(),
+            "lost_this_month": lost_qs.filter(created_at__gte=month_start).count(),
+            "found_this_month": found_qs.filter(created_at__gte=month_start).count(),
+            "status_breakdown": {
+                "lost": status_counts(lost_qs),
+                "found": status_counts(found_qs),
+            },
+        }
+
+        return Response(data, status=status.HTTP_200_OK)
+
+
+class AdminFoundPetListView(generics.ListAPIView):
+    serializer_class = AdminFoundPetReportSerializer
+    permission_classes = [permissions.IsAdminUser]
+
+    def get_queryset(self):
+        qs = FoundPetReport.objects.select_related("reporter").all()
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            qs = qs.filter(status=status_param)
+        return qs
+
+
+class AdminFoundPetDetailView(generics.RetrieveUpdateAPIView):
+    serializer_class = AdminFoundPetReportSerializer
+    permission_classes = [permissions.IsAdminUser]
+    queryset = FoundPetReport.objects.select_related("reporter").all()
+
+
+class AdminLostPetListView(generics.ListAPIView):
+    serializer_class = AdminLostPetReportSerializer
+    permission_classes = [permissions.IsAdminUser]
+
+    def get_queryset(self):
+        qs = LostPetReport.objects.select_related("reporter").all()
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            qs = qs.filter(status=status_param)
+        return qs
+
+
+class AdminLostPetDetailView(generics.RetrieveUpdateAPIView):
+    serializer_class = AdminLostPetReportSerializer
+    permission_classes = [permissions.IsAdminUser]
+    queryset = LostPetReport.objects.select_related("reporter").all()

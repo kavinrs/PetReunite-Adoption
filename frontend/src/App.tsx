@@ -4,6 +4,8 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import UserHome from "./pages/UserHome";
 import AdminHome from "./pages/AdminHome";
+import AdminRegister from "./pages/AdminRegister";
+import AdminProfile from "./pages/AdminProfile";
 import PrivateRoute from "./components/PrivateRoute";
 import UserProfile from "./pages/UserProfile";
 import ReportFoundPet from "./pages/ReportFoundPet";
@@ -16,6 +18,7 @@ export default function App() {
       <Route path="/" element={<Home />} />
       <Route path="/login" element={<Dashboard />} />
       <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/admin/register" element={<AdminRegister />} />
       {/* protected routes remain */}
       <Route
         path="/user"
@@ -54,6 +57,14 @@ export default function App() {
         element={
           <PrivateRoute role="admin">
             <AdminHome />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/admin/profile"
+        element={
+          <PrivateRoute role="admin">
+            <AdminProfile />
           </PrivateRoute>
         }
       />

@@ -23,6 +23,7 @@ class UserProfile(models.Model):
     profile_photo = models.ImageField(upload_to="profile_photos/%Y/%m/%d/", blank=True, null=True)
     verified = models.BooleanField(default=False)
     pincode=models.CharField(max_length=10,blank=True,null=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

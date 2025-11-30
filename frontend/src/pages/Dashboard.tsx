@@ -1,6 +1,6 @@
 // src/pages/Dashboard.tsx
 import React, { useState } from "react";
-import { userLogin, adminLogin, registerUser } from "../services/api";
+import { userLogin, adminLogin, registerUser, adminRegister } from "../services/api";
 import { useNavigate } from "react-router-dom";
 
 const SearchIcon = () => (
@@ -95,11 +95,20 @@ export default function Dashboard() {
   // user login state
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showUserPass, setShowUserPass] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
+  const [showAdminRegister, setShowAdminRegister] = useState(false);
 
   // admin
   const [adminUser, setAdminUser] = useState("");
   const [adminPass, setAdminPass] = useState("");
+  const [showAdminPass, setShowAdminPass] = useState(false);
+
+  const [adminVerifyStatus, setAdminVerifyStatus] = useState<
+    "idle" | "verifying" | "success" | "not_found" | "error"
+  >("idle");
+  const [adminVerifyMsg, setAdminVerifyMsg] = useState("");
+  const [adminVerifyLabel, setAdminVerifyLabel] = useState("Verify Email");
 
   // inline register state
   const [reg, setReg] = useState({
@@ -113,6 +122,21 @@ export default function Dashboard() {
     address: "",
     pincode: "",
   });
+  const [showRegPass, setShowRegPass] = useState(false);
+
+  const [adminReg, setAdminReg] = useState({
+    username: "",
+    email: "",
+    password: "",
+    full_name: "",
+    phone_number: "",
+    state: "",
+    city: "",
+    address: "",
+    pincode: "",
+    code: "",
+  });
+  const [showAdminRegPass, setShowAdminRegPass] = useState(false);
 
   const navigate = useNavigate();
 
@@ -178,6 +202,100 @@ export default function Dashboard() {
     }
   }
 
+  async function handleAdminRegister(e: React.FormEvent) {
+    e.preventDefault();
+    setErrorMsg(null);
+    setServerMsg(null);
+    setLoading(true);
+    try {
+      const res = await adminRegister(adminReg);
+      if (res.ok) {
+        setServerMsg("Admin registered successfully. Please login.");
+        setShowAdminRegister(false);
+        setActiveTab("adminlogin");
+      } else setErrorMsg(res.error ?? "Admin registration failed");
+    } catch (err: any) {
+      setErrorMsg(err?.message ?? "Network error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleAdminEmailVerify(e: React.MouseEvent<HTMLButtonElement>) {
+    e.preventDefault();
+
+    const email = adminReg.email.trim();
+    if (!email) {
+      setAdminVerifyStatus("error");
+      setAdminVerifyMsg("Please enter an email to verify.");
+      setAdminVerifyLabel("Verify Email");
+      (window as any).__adminInviteVerified = null;
+      return;
+    }
+
+    try {
+      setAdminVerifyStatus("verifying");
+      setAdminVerifyMsg("Verifying email...");
+      setAdminVerifyLabel("Verifying...");
+      (window as any).__adminInviteVerified = null;
+
+      const base = (import.meta as any).env?.VITE_API_BASE ?? "/api";
+      const resp = await fetch(
+        `${base}/admin/verify-email/?email=${encodeURIComponent(email)}`,
+        {
+          method: "GET",
+          headers: { Accept: "application/json" },
+        }
+      );
+
+      let data: any = null;
+      try {
+        data = await resp.json();
+      } catch {
+        data = null;
+      }
+
+      if (!resp.ok || !data || typeof data !== "object") {
+        setAdminVerifyStatus("error");
+        setAdminVerifyMsg("Server error — try again later");
+        setAdminVerifyLabel("Verify Email");
+        (window as any).__adminInviteVerified = null;
+        return;
+      }
+
+      if (data.exists === true) {
+        setAdminVerifyStatus("success");
+        setAdminVerifyMsg(
+          "Admin email verified — admin code has been sent to your email."
+        );
+        setAdminVerifyLabel("Verified ✓");
+        (window as any).__adminInviteVerified = {
+          email,
+          code: "sent-via-email",
+        };
+        return;
+      }
+
+      if (data.exists === false) {
+        setAdminVerifyStatus("not_found");
+        setAdminVerifyMsg("Email not authorized for admin access");
+        setAdminVerifyLabel("Not authorized ❌");
+        (window as any).__adminInviteVerified = null;
+        return;
+      }
+
+      setAdminVerifyStatus("error");
+      setAdminVerifyMsg("Server error — try again later");
+      setAdminVerifyLabel("Error");
+      (window as any).__adminInviteVerified = null;
+    } catch {
+      setAdminVerifyStatus("error");
+      setAdminVerifyMsg("Server error — try again later");
+      setAdminVerifyLabel("Verify Email");
+      (window as any).__adminInviteVerified = null;
+    }
+  }
+
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
     setErrorMsg(null);
@@ -199,7 +317,7 @@ export default function Dashboard() {
 
   // ---------------- styles ----------------
   const containerStyle: React.CSSProperties = {
-    minHeight: "100vh",
+    height: "100vh",
     width: "100vw",
     display: "flex",
     alignItems: "center",
@@ -214,42 +332,108 @@ export default function Dashboard() {
 
   const overlayStyle: React.CSSProperties = {
     width: "100%",
-    minHeight: "100vh",
+    height: "100vh",
     backgroundColor: "rgba(0,0,0,0.65)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     boxSizing: "border-box",
     padding: 24,
-    overflowY: "auto",
+    overflow: "hidden",
+  };
+
+  const splitCard: React.CSSProperties = {
+    width: "100%",
+    maxWidth: "1120px",
+    display: "grid",
+    gridTemplateColumns: "minmax(420px,560px) minmax(380px,520px)",
+    borderRadius: 18,
+    boxShadow: "0 18px 45px rgba(15,23,42,0.12)",
+    overflow: "hidden",
+  };
+
+  const leftPane: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+    background: "#ffffff",
+  };
+
+  const rightPane: React.CSSProperties = {
+    position: "relative",
+    background: "linear-gradient(180deg,#0ea5e9,#1d4ed8)",
+    overflow: "hidden",
+  };
+
+  const rightHero: React.CSSProperties = {
+    position: "absolute",
+    inset: 0,
+  };
+
+  const rightContent: React.CSSProperties = {
+    position: "relative",
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    textAlign: "center",
+    color: "#eaf2ff",
+    padding: 40,
   };
 
   const card: React.CSSProperties = {
-    width: 420,
-    maxWidth: "92vw",
-    background: "rgba(0,0,0,0.45)",
-    backdropFilter: "blur(8px)",
-    padding: 32,
-    borderRadius: 16,
-    boxShadow: "0 6px 18px rgba(0,0,0,0.6)",
-    color: "white",
+    width: 520,
+    maxWidth: 520,
+    background: "#ffffff",
+    padding: 28,
+    borderRadius: 18,
+    boxShadow: "0 18px 45px rgba(15,23,42,0.12)",
+    color: "#0f172a",
     zIndex: 2,
-    border: "1px solid rgba(255,255,255,0.15)",
+    border: "1px solid #e5e7eb",
   };
   
 
-  const titleStyle: React.CSSProperties = { textAlign: "center", margin: 0, marginBottom: 14, fontSize: 24, fontWeight: 700 };
+  const titleStyle: React.CSSProperties = { textAlign: "center", margin: 0, marginBottom: 18, fontSize: 28, fontWeight: 800 };
   const input: React.CSSProperties = {
-    width: "100%", padding: "10px 12px", marginTop: 10, borderRadius: 8,
-    border: "1px solid rgba(255,255,255,0.08)", background: "transparent", color: "white",
+    width: "100%", padding: "11px 12px", marginTop: 10, borderRadius: 10,
+    border: "1px solid #e5e7eb", background: "#f8fafc", color: "#0f172a",
     boxSizing: "border-box",
   };
   const btn: React.CSSProperties = {
-    marginTop: 14, padding: "10px 14px", borderRadius: 8, border: "none",
-    background: "#0b6aa0", color: "white", fontWeight: 700, cursor: "pointer",
+    marginTop: 14, padding: "11px 16px", borderRadius: 10, border: "none",
+    background: "linear-gradient(90deg,#0ea5e9,#2563eb)", color: "white", fontWeight: 800, cursor: "pointer",
+    boxShadow: "0 14px 40px rgba(14,165,233,0.35)",
   };
-  const smallText: React.CSSProperties = { marginTop: 12, textAlign: "center", color: "rgba(255,255,255,0.85)" };
-  const blueLink: React.CSSProperties = { color: "#4aa3ff", textDecoration: "underline", cursor: "pointer", fontWeight: 700 };
+  const smallText: React.CSSProperties = { marginTop: 12, textAlign: "center", color: "rgba(15,23,42,0.6)" };
+  const blueLink: React.CSSProperties = { color: "#2563eb", textDecoration: "underline", cursor: "pointer", fontWeight: 700 };
+  const label: React.CSSProperties = { display: "block", marginTop: 8, marginBottom: 4, fontSize: 13, fontWeight: 600, color: "rgba(15,23,42,0.8)" };
+  const field: React.CSSProperties = { position: "relative" };
+  const revealBtn: React.CSSProperties = { position: "absolute", right: 8, top: 12, padding: 6, borderRadius: 8, border: "1px solid #c7d2fe", background: "#eef2ff", color: "#1f2937", cursor: "pointer" };
+  const verifyBtn: React.CSSProperties = {
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: "1px solid #e5e7eb",
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  };
+  const verifySpinner: React.CSSProperties = {
+    width: 14,
+    height: 14,
+    borderRadius: "50%",
+    border: "2px solid rgba(59,130,246,0.4)",
+    borderTopColor: "#2563eb",
+    animation: "spin 0.8s linear infinite",
+  };
+  const socialRow: React.CSSProperties = { display: "flex", gap: 10, justifyContent: "center", marginBottom: 10 };
+  const socialBtn: React.CSSProperties = { flex: "1 1 160px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "8px 10px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#f8fafc", color: "#0f172a", cursor: "pointer" };
+  const dividerRow: React.CSSProperties = { display: "flex", alignItems: "center", gap: 12, margin: "10px 0 6px" };
+  const dividerLine: React.CSSProperties = { flex: 1, height: 1, background: "#e5e7eb" };
 
   // top-right horizontal menu styles
   const topRightBar: React.CSSProperties = {
@@ -317,6 +501,13 @@ export default function Dashboard() {
     </button>
   );
 
+  const adminVerifyColor =
+    adminVerifyStatus === "success"
+      ? "#16a34a"
+      : adminVerifyStatus === "not_found" || adminVerifyStatus === "error"
+      ? "#b91c1c"
+      : "#6b7280";
+
   // ---------------- render ----------------
   return (
     <div style={containerStyle}>
@@ -335,331 +526,401 @@ export default function Dashboard() {
           />
           <span>PawReunite</span>
         </div>
-        {/* Top-right horizontal menu */}
         <nav style={topRightBar} aria-label="Main navigation">
           <MenuButton id="userlogin" label="User Login" />
           <MenuButton id="adminlogin" label="Admin Login" />
         </nav>
 
-        <div style={card}>
-          {/* NOTE: removed the in-card toggle buttons so the card only shows the selected page */}
-          
-          {activeTab === "home" && (
-  <div
-    style={{
-      textAlign: "center",
-      padding: "40px 20px",
-      color: "white",
-      maxWidth: 800,
-      margin: "0 auto",
-    }}
-  >
-    {/* Heading */}
-    <h1
-      style={{
-        fontSize: "48px",
-        fontWeight: 700,
-        lineHeight: "1.2",
-      }}
-    >
-      Lost a Pet?{" "}
-      <span
-        style={{
-          background: "linear-gradient(90deg, #ff6a00, #ff2fab)",
-          WebkitBackgroundClip: "text",
-          color: "transparent",
-        }}
-      >
-        Found a Friend?
-      </span>
-    </h1>
+        <div style={splitCard}>
+          <div style={leftPane}>
+            <div style={card}>
+              {/* NOTE: removed the in-card toggle buttons so the card only shows the selected page */}
 
-    {/* Subheading */}
-    <h3
-      style={{
-        marginTop: 10,
-        fontSize: "22px",
-        fontWeight: 400,
-        opacity: 0.9,
-      }}
-    >
-      Let's Reunite Them Together
-    </h3>
-
-    {/* Description */}
-    <p
-      style={{
-        marginTop: 8,
-        fontSize: "18px",
-        opacity: 0.85,
-        lineHeight: 1.6,
-      }}
-    >
-      Helping lost pets find their way home through our caring
-      community network.
-    </p>
-
-    {/* ONLY ONE BUTTON — Start Your Search */}
-    <div
-      style={{
-        marginTop: 30,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: "18px",
-      }}
-    >
-      <button
-        onClick={() => setActiveTab("userlogin")}   // ← IMPORTANT: GO TO LOGIN
-        style={{
-          background: "linear-gradient(90deg, #ff8a00, #ff2fab)",
-          border: "2px solid rgba(255,255,255,0.8)",
-          padding: "12px 32px",
-          borderRadius: 30,
-          color: "white",
-          fontSize: 16,
-          fontWeight: 700,
-          cursor: "pointer",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-          width: 240,
-        }}
-      >
-        Start Your Search →
-      </button>
-    </div>
-  </div>
-)}
-
-          {activeTab === "home" && (
-            <div
-              style={{
-                textAlign: "center",
-                padding: "40px 20px",
-                color: "white",
-                maxWidth: 800,
-                margin: "0 auto",
-              }}
-            >
-              {/* Heading */}
-              <h1
-                style={{
-                  fontSize: "48px",
-                  fontWeight: 700,
-                  lineHeight: "1.2",
-                }}
-              >
-                Lost a Pet?{" "}
-                <span
+              {activeTab === "home" && (
+                <div
                   style={{
-                    background: "linear-gradient(90deg, #ff6a00, #ff2fab)",
-                    WebkitBackgroundClip: "text",
-                    color: "transparent",
-                  }}
-                >
-                  Found a Friend?
-                </span>
-              </h1>
-
-              {/* Subheading */}
-              <h3
-                style={{
-                  marginTop: 10,
-                  fontSize: "22px",
-                  fontWeight: 400,
-                  opacity: 0.9,
-                }}
-              >
-                Let's Reunite Them Together
-              </h3>
-
-              {/* Description */}
-              <p
-                style={{
-                  marginTop: 8,
-                  fontSize: "18px",
-                  opacity: 0.85,
-                  lineHeight: 1.6,
-                }}
-              >
-                Helping lost pets find their way home through our caring
-                community network.
-              </p>
-
-              {/* ONLY ONE BUTTON — Start Your Search */}
-              <div
-                style={{
-                  marginTop: 30,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "18px",
-                }}
-              >
-                <button
-                  onClick={() => setActiveTab("userlogin")}
-                  style={{
-                    background: "linear-gradient(90deg, #ff8a00, #ff2fab)",
-                    border: "2px solid rgba(255,255,255,0.8)",
-                    padding: "12px 32px",
-                    borderRadius: 30,
+                    textAlign: "center",
+                    padding: "40px 20px",
                     color: "white",
-                    fontSize: 16,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-                    width: 240,
+                    maxWidth: 800,
+                    margin: "0 auto",
                   }}
                 >
-                  Start Your Search →
-                </button>
-              </div>
-            </div>
-          )}
+                  {/* Heading */}
+                  <h1
+                    style={{
+                      fontSize: "48px",
+                      fontWeight: 700,
+                      lineHeight: "1.2",
+                    }}
+                  >
+                    Lost a Pet?{" "}
+                    <span
+                      style={{
+                        background: "linear-gradient(90deg, #ff6a00, #ff2fab)",
+                        WebkitBackgroundClip: "text",
+                        color: "transparent",
+                      }}
+                    >
+                      Found a Friend?
+                    </span>
+                  </h1>
 
+                  {/* Subheading */}
+                  <h3
+                    style={{
+                      marginTop: 10,
+                      fontSize: "22px",
+                      fontWeight: 400,
+                      opacity: 0.9,
+                    }}
+                  >
+                    Let's Reunite Them Together
+                  </h3>
 
-{activeTab === "about" && (
-  <div style={{ width: "100%", background: "#fff", color: "#0b1220", boxSizing: "border-box", padding: "80px 32px" }}>
-    <div style={{ textAlign: "center", maxWidth: 750, margin: "0 auto 48px" }}>
-      <h2 style={{ fontSize: 46, margin: 0, fontWeight: 800 }}>
-        How We{" "}
-        <span style={{ background: "linear-gradient(90deg,#ff8a00,#ff4fb0)", WebkitBackgroundClip: "text", color: "transparent" }}>
-          Help
-        </span>
-      </h2>
-      <div style={{ width: 100, height: 6, margin: "18px auto", borderRadius: 4, background: "linear-gradient(90deg,#ff8a00,#ff4fb0)" }} />
-      <p style={{ margin: 0, fontSize: 20, color: "rgba(13,27,40,0.7)", lineHeight: 1.7 }}>
-        Our platform provides everything you need to report, search, and reunite pets with their families.
-      </p>
-    </div>
+                  {/* Description */}
+                  <p
+                    style={{
+                      marginTop: 8,
+                      fontSize: "18px",
+                      opacity: 0.85,
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    Helping lost pets find their way home through our caring
+                    community network.
+                  </p>
 
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-        gap: 24,
-        maxWidth: 1200,
-        margin: "0 auto",
-      }}
-    >
-      {[
-        {
-          title: "Search Lost Pets",
-          description: "Browse our database of lost pets and help reunite them with their families.",
-          icon: SearchIcon,
-        },
-        {
-          title: "Report Found Pet",
-          description: "Found a pet? Report it quickly and help us connect them with their owner.",
-          icon: HeartIcon,
-        },
-        {
-          title: "Rescue Support",
-          description: "Professional rescue team ready to help with emergency pet situations.",
-          icon: ShieldIcon,
-        },
-        {
-          title: "Community Network",
-          description: "Join thousands of pet lovers working together to keep pets safe.",
-          icon: PeopleIcon,
-        },
-      ].map((card) => (
-        <div
-          key={card.title}
-          style={{
-            background: "#fff",
-            borderRadius: 18,
-            padding: "32px 28px",
-            textAlign: "center",
-            boxShadow: "0 18px 45px rgba(15,23,42,0.08)",
-          }}
-        >
-          <card.icon />
-          <h4 style={{ margin: "18px 0 10px", fontSize: 20, fontWeight: 800 }}>{card.title}</h4>
-          <p style={{ margin: 0, color: "rgba(13,27,40,0.65)", fontSize: 15, lineHeight: 1.6 }}>{card.description}</p>
-        </div>
-      ))}
-    </div>
-  </div>
-)}
-
-
-
-
-          {activeTab === "userlogin" && (
-            <>
-              <h2 style={titleStyle}>User Login</h2>
-
-              {showRegister ? (
-                <form onSubmit={handleRegister}>
-                  <input style={input} placeholder="username" value={reg.username} onChange={(e)=>setReg(p=>({...p, username: e.target.value}))} required />
-                  <input style={input} placeholder="email" value={reg.email} onChange={(e)=>setReg(p=>({...p, email: e.target.value}))} required />
-                  <input style={input} type="password" placeholder="password" value={reg.password} onChange={(e)=>setReg(p=>({...p, password: e.target.value}))} required />
-                  <input style={input} placeholder="full name" value={reg.full_name} onChange={(e)=>setReg(p=>({...p, full_name: e.target.value}))} required />
-                  <input style={input} placeholder="phone number" value={reg.phone_number} onChange={(e)=>setReg(p=>({...p, phone_number: e.target.value}))} required />
-                  <input style={input} placeholder="state" value={reg.state} onChange={(e)=>setReg(p=>({...p, state: e.target.value}))} required />
-                  <input style={input} placeholder="city" value={reg.city} onChange={(e)=>setReg(p=>({...p, city: e.target.value}))} required />
-                  <input style={input} placeholder="pincode" value={reg.pincode} onChange={(e)=>setReg(p=>({...p, pincode: e.target.value}))} required />
-                  <textarea style={{...input, height:80}} placeholder="address" value={reg.address} onChange={(e)=>setReg(p=>({...p, address: e.target.value}))} required />
-                  <button style={btn} type="submit" disabled={loading}>{loading ? "Registering..." : "Register"}</button>
-                  <div style={{ textAlign: "center", marginTop: 12 }}>
-                    <button type="button" onClick={()=>setShowRegister(false)} style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.85)", cursor: "pointer" }}>
-                      Back to login
+                  {/* ONLY ONE BUTTON — Start Your Search */}
+                  <div
+                    style={{
+                      marginTop: 30,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "18px",
+                    }}
+                  >
+                    <button
+                      onClick={() => setActiveTab("userlogin")} // ← IMPORTANT: GO TO LOGIN
+                      style={{
+                        background: "linear-gradient(90deg, #ff8a00, #ff2fab)",
+                        border: "2px solid rgba(255,255,255,0.8)",
+                        padding: "12px 32px",
+                        borderRadius: 30,
+                        color: "white",
+                        fontSize: 16,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                        width: 240,
+                      }}
+                    >
+                      Start Your Search →
                     </button>
                   </div>
-                </form>
-              ) : (
-                <>
-                  <form onSubmit={handleUserLogin}>
-                    <input style={input} placeholder="username" value={username} onChange={(e)=>setUsername(e.target.value)} required />
-                    <input style={input} placeholder="password" type="password" value={password} onChange={(e)=>setPassword(e.target.value)} required />
-                    <div style={{ display: "flex", justifyContent: "flex-start", alignItems: "center" }}>
-                      <button style={btn} type="submit" disabled={loading}>{loading ? "Logging in..." : "Login"}</button>
+                </div>
+              )}
+
+              {activeTab === "userlogin" && (
+                showRegister ? (
+                  <form onSubmit={handleRegister}>
+                    <h2 style={titleStyle}>Create Account</h2>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+                      <div>
+                        <label style={label}>Username</label>
+                        <input style={input} placeholder="username" value={reg.username} onChange={(e)=>setReg(p=>({...p, username: e.target.value}))} required />
+                      </div>
+                      <div>
+                        <label style={label}>Email</label>
+                        <input style={input} type="email" placeholder="email" value={reg.email} onChange={(e)=>setReg(p=>({...p, email: e.target.value}))} required />
+                      </div>
+                      <div>
+                        <label style={label}>Password</label>
+                        <div style={field}>
+                          <input style={input} type={showRegPass ? "text" : "password"} placeholder="password" value={reg.password} onChange={(e)=>setReg(p=>({...p, password: e.target.value}))} required />
+                          <button type="button" style={revealBtn} aria-label={showRegPass ? "Hide password" : "Show password"} onClick={()=>setShowRegPass(p=>!p)}>
+                            {showRegPass ? (
+                              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5" stroke="currentColor" strokeWidth="1.6"/><circle cx="8" cy="8" r="2" fill="currentColor"/><line x1="2" y1="2" x2="14" y2="14" stroke="currentColor" strokeWidth="1.6"/></svg>
+                            ) : (
+                              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5" stroke="currentColor" strokeWidth="1.6"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <label style={label}>Full Name</label>
+                        <input style={input} placeholder="full name" value={reg.full_name} onChange={(e)=>setReg(p=>({...p, full_name: e.target.value}))} required />
+                      </div>
+                      <div>
+                        <label style={label}>Phone Number</label>
+                        <input style={input} placeholder="phone number" value={reg.phone_number} onChange={(e)=>setReg(p=>({...p, phone_number: e.target.value}))} required />
+                      </div>
+                      <div>
+                        <label style={label}>State</label>
+                        <input style={input} placeholder="state" value={reg.state} onChange={(e)=>setReg(p=>({...p, state: e.target.value}))} required />
+                      </div>
+                      <div>
+                        <label style={label}>City</label>
+                        <input style={input} placeholder="city" value={reg.city} onChange={(e)=>setReg(p=>({...p, city: e.target.value}))} required />
+                      </div>
+                      <div>
+                        <label style={label}>Pincode</label>
+                        <input style={input} placeholder="pincode" value={reg.pincode} onChange={(e)=>setReg(p=>({...p, pincode: e.target.value}))} required />
+                      </div>
+                    </div>
+                    <label style={label}>Address</label>
+                    <textarea style={{...input, height:80}} placeholder="address" value={reg.address} onChange={(e)=>setReg(p=>({...p, address: e.target.value}))} required />
+                    <button style={btn} type="submit" disabled={loading}>{loading ? "Registering..." : "Register"}</button>
+                    <div style={{ textAlign: "center", marginTop: 12 }}>
+                      <button type="button" onClick={()=>setShowRegister(false)} style={{ background: "transparent", border: "none", color: "rgba(15,23,42,0.7)", cursor: "pointer" }}>
+                        Back to login
+                      </button>
                     </div>
                   </form>
-
-                  <div style={smallText}>
-                    New user?{" "}
-                    <span style={blueLink} onClick={() => setShowRegister(true)}>
-                      Register now
-                    </span>
-                  </div>
-                </>
+                ) : (
+                  <>
+                    <h2 style={titleStyle}>User Login</h2>
+                    <div style={socialRow}>
+                      <button type="button" style={socialBtn}>
+                        <span style={{ width: 18, height: 18, borderRadius: 9999, background: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, border: "1px solid #e5e7eb" }}>G</span>
+                        Google
+                      </button>
+                      <button type="button" style={socialBtn}>
+                        <span style={{ width: 18, height: 18, borderRadius: 9999, background: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, border: "1px solid #e5e7eb" }}>f</span>
+                        Facebook
+                      </button>
+                    </div>
+                    <div style={dividerRow}>
+                      <div style={dividerLine} />
+                      <div style={{ fontSize: 12, color: "rgba(15,23,42,0.6)" }}>or continue with email</div>
+                      <div style={dividerLine} />
+                    </div>
+                    <form onSubmit={handleUserLogin}>
+                      <label style={label}>Username</label>
+                      <input style={input} placeholder="username" value={username} onChange={(e)=>setUsername(e.target.value)} required />
+                      <label style={label}>Password</label>
+                      <div style={field}>
+                        <input style={input} placeholder="password" type={showUserPass ? "text" : "password"} value={password} onChange={(e)=>setPassword(e.target.value)} required />
+                        <button type="button" style={revealBtn} aria-label={showUserPass ? "Hide password" : "Show password"} onClick={()=>setShowUserPass(p=>!p)}>
+                          {showUserPass ? (
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5" stroke="currentColor" strokeWidth="1.6"/><circle cx="8" cy="8" r="2" fill="currentColor"/><line x1="2" y1="2" x2="14" y2="14" stroke="currentColor" strokeWidth="1.6"/></svg>
+                          ) : (
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5" stroke="currentColor" strokeWidth="1.6"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>
+                          )}
+                        </button>
+                      </div>
+                      <button style={btn} type="submit" disabled={loading}>{loading ? "Logging in..." : "Login"}</button>
+                    </form>
+                    <p style={smallText}>
+                      Don't have an account?
+                      <span
+                        style={blueLink}
+                        onClick={() => setShowRegister(!showRegister)}
+                      >
+                        {showRegister ? " Login" : " Register here"}
+                      </span>
+                    </p>
+                  </>
+                )
               )}
-            </>
-          )}
 
-          {activeTab === "adminlogin" && (
-            <>
-              <h2 style={titleStyle}>Admin Login</h2>
-              <form onSubmit={handleAdminLogin}>
-                <input style={input} placeholder="username" value={adminUser} onChange={(e)=>setAdminUser(e.target.value)} required />
-                <input style={input} placeholder="password" type="password" value={adminPass} onChange={(e)=>setAdminPass(e.target.value)} required />
-                <div style={{ display: "flex", justifyContent: "flex-start", alignItems: "center" }}>
-                  <button style={btn} type="submit" disabled={loading}>{loading ? "Logging..." : "Login"}</button>
-                </div>
-              </form>
+              {activeTab === "adminlogin" && (
+                showAdminRegister ? (
+                  <form onSubmit={handleAdminRegister}>
+                    <h2 style={titleStyle}>Create Admin Account</h2>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+                      <div>
+                        <label style={label}>Username</label>
+                        <input style={input} placeholder="username" value={adminReg.username} onChange={(e)=>setAdminReg(p=>({...p, username: e.target.value}))} required />
+                      </div>
+                      <div>
+                        <label style={label}>Full Name</label>
+                        <input style={input} placeholder="full name" value={adminReg.full_name} onChange={(e)=>setAdminReg(p=>({...p, full_name: e.target.value}))} required />
+                      </div>
+                      <div>
+                        <label style={label}>Email</label>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "minmax(0, 1fr) auto",
+                            gap: 8,
+                            alignItems: "center",
+                          }}
+                        >
+                          <input
+                            style={input}
+                            type="email"
+                            placeholder="email"
+                            value={adminReg.email}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setAdminReg((p) => ({ ...p, email: value }));
+                              setAdminVerifyStatus("idle");
+                              setAdminVerifyMsg("");
+                              setAdminVerifyLabel("Verify Email");
+                              (window as any).__adminInviteVerified = null;
+                            }}
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={handleAdminEmailVerify}
+                            style={{
+                              ...verifyBtn,
+                              opacity:
+                                adminVerifyStatus === "verifying" ? 0.7 : 1,
+                              cursor:
+                                adminVerifyStatus === "verifying"
+                                  ? "default"
+                                  : "pointer",
+                            }}
+                            disabled={adminVerifyStatus === "verifying"}
+                          >
+                            {adminVerifyStatus === "verifying" ? (
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                }}
+                              >
+                                <span style={verifySpinner} />
+                                Verifying...
+                              </span>
+                            ) : (
+                              adminVerifyLabel
+                            )}
+                          </button>
+                        </div>
+                        {adminVerifyMsg && (
+                          <div
+                            aria-live="polite"
+                            style={{
+                              marginTop: 4,
+                              fontSize: 12,
+                              color: adminVerifyColor,
+                            }}
+                          >
+                            {adminVerifyMsg}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <label style={label}>Admin Code</label>
+                        <input style={input} placeholder="admin code" value={adminReg.code} onChange={(e)=>setAdminReg(p=>({...p, code: e.target.value}))} required />
+                      </div>
+                      <div>
+                        <label style={label}>Password</label>
+                        <div style={field}>
+                          <input style={input} type={showAdminRegPass ? "text" : "password"} placeholder="password" value={adminReg.password} onChange={(e)=>setAdminReg(p=>({...p, password: e.target.value}))} required />
+                          <button type="button" style={revealBtn} aria-label={showAdminRegPass ? "Hide password" : "Show password"} onClick={()=>setShowAdminRegPass(p=>!p)}>
+                            {showAdminRegPass ? (
+                              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5" stroke="currentColor" strokeWidth="1.6"/><circle cx="8" cy="8" r="2" fill="currentColor"/><line x1="2" y1="2" x2="14" y2="14" stroke="currentColor" strokeWidth="1.6"/></svg>
+                            ) : (
+                              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5" stroke="currentColor" strokeWidth="1.6"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <label style={label}>Phone Number</label>
+                        <input style={input} placeholder="phone number" value={adminReg.phone_number} onChange={(e)=>setAdminReg(p=>({...p, phone_number: e.target.value}))} required />
+                      </div>
+                      <div>
+                        <label style={label}>State</label>
+                        <input style={input} placeholder="state" value={adminReg.state} onChange={(e)=>setAdminReg(p=>({...p, state: e.target.value}))} required />
+                      </div>
+                      <div>
+                        <label style={label}>City</label>
+                        <input style={input} placeholder="city" value={adminReg.city} onChange={(e)=>setAdminReg(p=>({...p, city: e.target.value}))} required />
+                      </div>
+                      <div style={{ gridColumn: "span 2" }}>
+                        <label style={label}>Pincode</label>
+                        <input style={input} placeholder="pincode" value={adminReg.pincode} onChange={(e)=>setAdminReg(p=>({...p, pincode: e.target.value}))} required />
+                      </div>
+                    </div>
+                    <label style={label}>Address</label>
+                    <textarea style={{...input, height:80}} placeholder="address" value={adminReg.address} onChange={(e)=>setAdminReg(p=>({...p, address: e.target.value}))} required />
+                    <button style={btn} type="submit" disabled={loading}>{loading ? "Registering..." : "Register"}</button>
+                    <div style={{ textAlign: "center", marginTop: 12 }}>
+                      <button type="button" onClick={()=>setShowAdminRegister(false)} style={{ background: "transparent", border: "none", color: "rgba(15,23,42,0.7)", cursor: "pointer" }}>
+                        Back to login
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <h2 style={titleStyle}>Admin Login</h2>
+                    <form onSubmit={handleAdminLogin}>
+                      <label style={label}>Username</label>
+                      <input style={input} placeholder="username" value={adminUser} onChange={(e)=>setAdminUser(e.target.value)} required />
+                      <label style={label}>Password</label>
+                      <div style={field}>
+                        <input style={input} placeholder="password" type={showAdminPass ? "text" : "password"} value={adminPass} onChange={(e)=>setAdminPass(e.target.value)} required />
+                        <button type="button" style={revealBtn} aria-label={showAdminPass ? "Hide password" : "Show password"} onClick={()=>setShowAdminPass(p=>!p)}>
+                          {showAdminPass ? (
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5" stroke="currentColor" strokeWidth="1.6"/><circle cx="8" cy="8" r="2" fill="currentColor"/><line x1="2" y1="2" x2="14" y2="14" stroke="currentColor" strokeWidth="1.6"/></svg>
+                          ) : (
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5" stroke="currentColor" strokeWidth="1.6"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>
+                          )}
+                        </button>
+                      </div>
+                      <button style={btn} type="submit" disabled={loading}>{loading ? "Logging in..." : "Login"}</button>
+                    </form>
+                    <p style={smallText}>
+                      Are you an admin?
+                      <span
+                        style={blueLink}
+                        onClick={() => setShowAdminRegister(!showAdminRegister)}
+                      >
+                        {showAdminRegister ? " Login" : " Register here"}
+                      </span>
+                    </p>
+                  </>
+                )
+              )}
 
-              <div style={smallText}>If you are an admin and cannot login contact your site administrator.</div>
-            </>
-          )}
-
-          {errorMsg && <div style={{ marginTop: 14, color: "#ffb3b3", background: "rgba(0,0,0,0.45)", padding: 10, borderRadius: 8 }}>{errorMsg}</div>}
-          {serverMsg && (
-            <div
-              style={{
-                marginTop: 14,
-                color: "#dfffe0",
-                background: "rgba(0,0,0,0.45)",
-                padding: 10,
-                borderRadius: 8,
-              }}
-            >
-              {serverMsg}
+              {(errorMsg || serverMsg) && (
+                <p
+                  style={{
+                    marginTop: 16,
+                    padding: "10px 14px",
+                    borderRadius: 10,
+                    background: errorMsg ? "#ffe4e6" : "#dcfce7",
+                    color: errorMsg ? "#be123c" : "#166534",
+                    textAlign: "center",
+                    fontWeight: 600,
+                  }}
+                >
+                  {errorMsg || serverMsg}
+                </p>
+              )}
             </div>
-          )}
+          </div>
+          <div style={rightPane}>
+            <div style={rightHero} />
+            <div style={rightContent}>
+              <div>
+                <h2
+                  style={{
+                    fontSize: 32,
+                    fontWeight: 800,
+                    margin: 0,
+                    letterSpacing: -0.5,
+                  }}
+                >
+                  Welcome to PawReunite
+                </h2>
+                <p style={{ opacity: 0.8, marginTop: 8, lineHeight: 1.6 }}>
+                  Our community helps bring lost pets back to their loving homes.
+                  Every share, post, and view counts.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
-

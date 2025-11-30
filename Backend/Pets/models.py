@@ -4,6 +4,17 @@ from django.db import models
 User = get_user_model()
 
 
+STATUS_CHOICES = [
+    ("pending", "Pending review"),
+    ("approved", "Approved"),
+    ("rejected", "Rejected"),
+    ("investigating", "Under investigation"),
+    ("matched", "Matched with potential owner"),
+    ("resolved", "Resolved"),
+    ("closed", "Closed"),
+]
+
+
 class FoundPetReport(models.Model):
     reporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name="petsapp_found_reports")
     pet_type = models.CharField(max_length=100)
@@ -14,6 +25,8 @@ class FoundPetReport(models.Model):
     state = models.CharField(max_length=100)
     description = models.TextField()
     photo = models.ImageField(upload_to="found_pets/%Y/%m/%d/", blank=True, null=True)
+    status = models.CharField(max_length=32, choices=STATUS_CHOICES, default="pending")
+    admin_notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -35,6 +48,8 @@ class LostPetReport(models.Model):
     state = models.CharField(max_length=100)
     description = models.TextField()
     photo = models.ImageField(upload_to="lost_pets/%Y/%m/%d/", blank=True, null=True)
+    status = models.CharField(max_length=32, choices=STATUS_CHOICES, default="pending")
+    admin_notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

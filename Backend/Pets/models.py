@@ -16,7 +16,9 @@ STATUS_CHOICES = [
 
 
 class FoundPetReport(models.Model):
-    reporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name="petsapp_found_reports")
+    reporter = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="petsapp_found_reports"
+    )
     pet_type = models.CharField(max_length=100)
     breed = models.CharField(max_length=120, blank=True)
     color = models.CharField(max_length=80, blank=True)
@@ -24,7 +26,7 @@ class FoundPetReport(models.Model):
     found_city = models.CharField(max_length=100)
     state = models.CharField(max_length=100)
     description = models.TextField()
-    photo = models.ImageField(upload_to="found_pets/%Y/%m/%d/", blank=True, null=True)
+    photo = models.URLField(max_length=500, blank=True, null=True)
     status = models.CharField(max_length=32, choices=STATUS_CHOICES, default="pending")
     admin_notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -38,16 +40,21 @@ class FoundPetReport(models.Model):
 
 
 class LostPetReport(models.Model):
-    reporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name="petsapp_lost_reports")
+    reporter = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="petsapp_lost_reports"
+    )
     pet_name = models.CharField(max_length=150, blank=True)
     pet_type = models.CharField(max_length=100)
     breed = models.CharField(max_length=120, blank=True)
     color = models.CharField(max_length=80, blank=True)
+    weight = models.CharField(max_length=50, blank=True)
+    vaccinated = models.CharField(max_length=20, blank=True)
     age = models.CharField(max_length=60, blank=True)
     city = models.CharField(max_length=100)
     state = models.CharField(max_length=100)
+    pincode = models.CharField(max_length=10, blank=True)
     description = models.TextField()
-    photo = models.ImageField(upload_to="lost_pets/%Y/%m/%d/", blank=True, null=True)
+    photo = models.URLField(max_length=500, blank=True, null=True)
     status = models.CharField(max_length=32, choices=STATUS_CHOICES, default="pending")
     admin_notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

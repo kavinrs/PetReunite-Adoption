@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Home.css";
 import StoriesReel from "../components/StoriesReelClean";
+import { useViewportStandardization } from "../hooks/useViewportStandardization";
 
 const HERO_BG = "/hero.jpeg"; // place uploaded asset at frontend/public/hero-bg.png
 const ABOUT_IMAGE = "/about pet.jpg"; // place uploaded asset at frontend/public/about pet.jpg
@@ -38,6 +39,9 @@ const REEL_SLIDES = [
 ];
 
 export default function Home() {
+  // Apply viewport standardization to ensure consistent 100% scaling
+  useViewportStandardization();
+
   return (
     <>
       <HeroSection />
@@ -81,12 +85,53 @@ function HeroSection() {
             Helping lost pets find their way home through our caring community
             network
           </p>
-          <div className="hero-actions">
+          <div
+            className="hero-actions"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "100%",
+              maxWidth: "100%",
+              gap: "16px",
+              marginTop: "12px",
+              padding: "0",
+            }}
+          >
             <button
               type="button"
               className="hero-btn hero-btn--primary"
               aria-label="Start searching for pets"
               onClick={() => navigate("/login")}
+              style={{
+                background:
+                  "linear-gradient(90deg, #ff9d44 0%, #ff7755 33%, #ff4ba8 100%)",
+                backgroundColor: "#ff6666",
+                width: "100%",
+                maxWidth: "350px",
+                minWidth: "280px",
+                height: "56px",
+                padding: "0 32px",
+                border: "none",
+                borderRadius: "999px",
+                color: "#ffffff",
+                fontWeight: "800",
+                fontSize: "1rem",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "12px",
+                cursor: "pointer",
+                boxSizing: "border-box",
+                textDecoration: "none",
+                whiteSpace: "nowrap",
+                boxShadow: "0 8px 25px rgba(255, 157, 68, 0.4)",
+                textShadow: "0 1px 3px rgba(0, 0, 0, 0.4)",
+                transition: "all 0.3s ease",
+                backgroundSize: "100% 100%",
+                backgroundRepeat: "no-repeat",
+              }}
             >
               <span className="hero-btn__icon" aria-hidden="true">
                 <svg
@@ -205,7 +250,7 @@ function AboutSection() {
         ),
       },
     ],
-    []
+    [],
   );
 
   useEffect(() => {
@@ -224,7 +269,7 @@ function AboutSection() {
           }
         });
       },
-      { threshold: 0.3 }
+      { threshold: 0.3 },
     );
     textRevealRef.current.forEach((el) => observer.observe(el));
     return () => observer.disconnect();
@@ -240,12 +285,18 @@ function AboutSection() {
       const y = (event.clientY - bounds.top) / bounds.height - 0.5;
       node.style.setProperty(
         "--tilt",
-        `perspective(1200px) rotateX(${-y * 8}deg) rotateY(${x * 8}deg)`
+        `perspective(1200px) rotateX(${-y * 8}deg) rotateY(${x * 8}deg)`,
       );
-      node.style.setProperty("--parallax", `translate(${x * 16}px, ${y * 16}px)`);
+      node.style.setProperty(
+        "--parallax",
+        `translate(${x * 16}px, ${y * 16}px)`,
+      );
     };
     const reset = () => {
-      node.style.setProperty("--tilt", "perspective(1200px) rotateX(0deg) rotateY(0deg)");
+      node.style.setProperty(
+        "--tilt",
+        "perspective(1200px) rotateX(0deg) rotateY(0deg)",
+      );
       node.style.setProperty("--parallax", "translate(0,0)");
     };
 
@@ -272,7 +323,7 @@ function AboutSection() {
   const focusTrap = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "Tab" || !modalRef.current) return;
     const focusable = modalRef.current.querySelectorAll<HTMLElement>(
-      "button, [href], input, [tabindex]:not([tabindex='-1'])"
+      "button, [href], input, [tabindex]:not([tabindex='-1'])",
     );
     if (!focusable.length) return;
     const first = focusable[0];
@@ -311,10 +362,10 @@ function AboutSection() {
               className="about-intro about-reveal"
               style={{ transitionDelay: "0ms" }}
             >
-              PetReunite is more than just a platform—it&apos;s a community of pet
-              lovers dedicated to reuniting lost pets with their families. Every
-              day, we help bridge the gap between heartbroken owners and their
-              beloved companions, creating countless happy endings.
+              PetReunite is more than just a platform—it&apos;s a community of
+              pet lovers dedicated to reuniting lost pets with their families.
+              Every day, we help bridge the gap between heartbroken owners and
+              their beloved companions, creating countless happy endings.
             </p>
             {features.map((feature, index) => (
               <article
@@ -393,8 +444,8 @@ function AboutSection() {
               </button>
             </div>
             <p>
-              Join thousands of rescue volunteers or report a pet in need. Together
-              we respond faster and smarter.
+              Join thousands of rescue volunteers or report a pet in need.
+              Together we respond faster and smarter.
             </p>
             <div className="about-modal__actions">
               <button
@@ -426,8 +477,7 @@ function HowWeHelpSection() {
   const cards = [
     {
       title: "Search Missing Pets",
-      body:
-        "Quickly browse verified reports of missing pets with filters for name, breed, color, and last-seen location.",
+      body: "Quickly browse verified reports of missing pets with filters for name, breed, color, and last-seen location.",
       link: "Start a search →",
       icon: (
         <svg
@@ -452,8 +502,7 @@ function HowWeHelpSection() {
     },
     {
       title: "Report a Found Pet",
-      body:
-        "Seen or rescued a lost pet? Submit a fast report with photos and details so we can match them with their family.",
+      body: "Seen or rescued a lost pet? Submit a fast report with photos and details so we can match them with their family.",
       link: "Report a found pet →",
       icon: (
         <svg
@@ -481,8 +530,7 @@ function HowWeHelpSection() {
     },
     {
       title: "Rescue & Emergency Support",
-      body:
-        "Connect with trusted rescue volunteers for urgent pet assistance, medical guidance, or safe pickup.",
+      body: "Connect with trusted rescue volunteers for urgent pet assistance, medical guidance, or safe pickup.",
       link: "Request help →",
       icon: (
         <svg
@@ -510,8 +558,7 @@ function HowWeHelpSection() {
     },
     {
       title: "Community Reunite Network",
-      body:
-        "Join thousands of caring volunteers who share alerts, spread information, and help bring pets safely home.",
+      body: "Join thousands of caring volunteers who share alerts, spread information, and help bring pets safely home.",
       link: "Join the network →",
       icon: (
         <svg
@@ -548,8 +595,8 @@ function HowWeHelpSection() {
             How We Help
           </h2>
           <p className="help-subtitle">
-            Our platform provides everything you need to report, search, and reunite pets
-            with their families.
+            Our platform provides everything you need to report, search, and
+            reunite pets with their families.
           </p>
         </div>
         <div className="help-grid">
@@ -594,7 +641,7 @@ function VisualReelsSection() {
         const entry = entries[0];
         setInView(entry.isIntersecting);
       },
-      { threshold: 0.3 }
+      { threshold: 0.3 },
     );
     observer.observe(node);
     return () => observer.disconnect();
@@ -626,7 +673,7 @@ function VisualReelsSection() {
       const slideCount = REEL_SLIDES.length;
       const targetIndex = Math.min(
         slideCount - 1,
-        Math.floor(progress * slideCount)
+        Math.floor(progress * slideCount),
       );
       if (targetIndex !== activeIndexRef.current) {
         activeIndexRef.current = targetIndex;
@@ -654,9 +701,7 @@ function VisualReelsSection() {
       return;
     }
     const id = window.setInterval(() => {
-      setActiveIndex((prev) =>
-        prev + 1 >= REEL_SLIDES.length ? 0 : prev + 1
-      );
+      setActiveIndex((prev) => (prev + 1 >= REEL_SLIDES.length ? 0 : prev + 1));
     }, 5000);
     return () => window.clearInterval(id);
   }, [inView, prefersReducedMotion, isPaused]);
@@ -727,7 +772,9 @@ function VisualReelsSection() {
     >
       <div className="reels-shell">
         <header className="reels-header">
-          <h2 id="visual-reels-heading">Stories from the PetReunite community</h2>
+          <h2 id="visual-reels-heading">
+            Stories from the PetReunite community
+          </h2>
           <p>
             Scroll through real-world moments where missing pets were spotted,
             reported, and brought safely home.
@@ -760,7 +807,7 @@ function VisualReelsSection() {
                     onError={() => {
                       console.error(
                         "[VisualReels] failed to load image",
-                        slide.src
+                        slide.src,
                       );
                       setFailedSlides((prev) => ({ ...prev, [index]: true }));
                     }}

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { reportFoundPet } from "../services/api";
+import { useViewportStandardization } from "../hooks/useViewportStandardization";
 
 type Feedback = { type: "success" | "error"; message: string } | null;
 
@@ -15,16 +16,15 @@ const initialForm = {
 };
 
 export default function ReportFoundPet() {
+  // Apply viewport standardization to ensure consistent 100% scaling
+  useViewportStandardization();
   const [form, setForm] = useState(initialForm);
   const [photo, setPhoto] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const navigate = useNavigate();
 
-  function handleChange(
-    field: keyof typeof initialForm,
-    value: string
-  ) {
+  function handleChange(field: keyof typeof initialForm, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
@@ -37,11 +37,17 @@ export default function ReportFoundPet() {
       photo,
     });
     if (res.ok) {
-      setFeedback({ type: "success", message: "Thanks! Your found pet report has been submitted." });
+      setFeedback({
+        type: "success",
+        message: "Thanks! Your found pet report has been submitted.",
+      });
       setForm(initialForm);
       setPhoto(null);
     } else {
-      setFeedback({ type: "error", message: res.error ?? "Could not submit report." });
+      setFeedback({
+        type: "error",
+        message: res.error ?? "Could not submit report.",
+      });
     }
     setSubmitting(false);
   }
@@ -67,11 +73,29 @@ export default function ReportFoundPet() {
           border: "1px solid rgba(15,23,42,0.08)",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 24,
+            flexWrap: "wrap",
+            gap: 12,
+          }}
+        >
           <div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: "#0f172a" }}>Report Found Pet</div>
-            <p style={{ margin: "6px 0 0", color: "rgba(15,23,42,0.6)", maxWidth: 640 }}>
-              Share details about the pet you’ve found so the family can be reunited as quickly as possible.
+            <div style={{ fontSize: 28, fontWeight: 800, color: "#0f172a" }}>
+              Report Found Pet
+            </div>
+            <p
+              style={{
+                margin: "6px 0 0",
+                color: "rgba(15,23,42,0.6)",
+                maxWidth: 640,
+              }}
+            >
+              Share details about the pet you’ve found so the family can be
+              reunited as quickly as possible.
             </p>
           </div>
           <button
@@ -108,7 +132,10 @@ export default function ReportFoundPet() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+        <form
+          onSubmit={handleSubmit}
+          style={{ display: "flex", flexDirection: "column", gap: 18 }}
+        >
           <div
             style={{
               display: "grid",
@@ -118,7 +145,8 @@ export default function ReportFoundPet() {
           >
             <div>
               <label style={labelStyle}>
-                Pet Type (Dog, Cat, etc.)<span style={{ color: "#f97316" }}> *</span>
+                Pet Type (Dog, Cat, etc.)
+                <span style={{ color: "#f97316" }}> *</span>
               </label>
               <input
                 type="text"
@@ -204,7 +232,8 @@ export default function ReportFoundPet() {
 
           <div>
             <label style={labelStyle}>
-              Description (where found, condition, behavior, etc.)<span style={{ color: "#f97316" }}> *</span>
+              Description (where found, condition, behavior, etc.)
+              <span style={{ color: "#f97316" }}> *</span>
             </label>
             <textarea
               required
@@ -287,4 +316,3 @@ const inputStyle: React.CSSProperties = {
   color: "#0f172a",
   boxSizing: "border-box",
 };
-

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { reportLostPet } from "../services/api";
+import { useViewportStandardization } from "../hooks/useViewportStandardization";
 
 type Feedback = { type: "success" | "error"; message: string } | null;
 
@@ -9,13 +10,19 @@ const initialForm = {
   pet_type: "",
   breed: "",
   color: "",
+  weight: "",
+  vaccinated: "",
   age: "",
   city: "",
   state: "",
+  pincode: "",
   description: "",
 };
 
 export default function ReportLostPet() {
+  // Apply viewport standardization to ensure consistent 100% scaling
+  useViewportStandardization();
+
   const [form, setForm] = useState(initialForm);
   const [photo, setPhoto] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -39,7 +46,10 @@ export default function ReportLostPet() {
       setForm(initialForm);
       setPhoto(null);
     } else {
-      setFeedback({ type: "error", message: res.error ?? "Unable to submit report." });
+      setFeedback({
+        type: "error",
+        message: res.error ?? "Unable to submit report.",
+      });
     }
     setSubmitting(false);
   }
@@ -65,11 +75,28 @@ export default function ReportLostPet() {
           border: "1px solid rgba(15,23,42,0.08)",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 24 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+            marginBottom: 24,
+          }}
+        >
           <div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: "#0f172a" }}>Report Lost Pet</div>
-            <p style={{ margin: "6px 0 0", color: "rgba(15,23,42,0.65)", maxWidth: 600 }}>
-              Provide as many details as you can so community members can help find your pet quickly.
+            <div style={{ fontSize: 28, fontWeight: 800, color: "#0f172a" }}>
+              Report Lost Pet
+            </div>
+            <p
+              style={{
+                margin: "6px 0 0",
+                color: "rgba(15,23,42,0.65)",
+                maxWidth: 600,
+              }}
+            >
+              Provide as many details as you can so community members can help
+              find your pet quickly.
             </p>
           </div>
           <button
@@ -94,7 +121,9 @@ export default function ReportLostPet() {
               padding: "12px 16px",
               borderRadius: 12,
               border: `1px solid ${
-                feedback.type === "success" ? "rgba(249,115,22,0.3)" : "rgba(248,113,113,0.4)"
+                feedback.type === "success"
+                  ? "rgba(249,115,22,0.3)"
+                  : "rgba(248,113,113,0.4)"
               }`,
               background:
                 feedback.type === "success"
@@ -108,7 +137,10 @@ export default function ReportLostPet() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+        <form
+          onSubmit={handleSubmit}
+          style={{ display: "flex", flexDirection: "column", gap: 18 }}
+        >
           <div
             style={{
               display: "grid",
@@ -128,7 +160,8 @@ export default function ReportLostPet() {
             </div>
             <div>
               <label style={labelStyle}>
-                Pet Type (Dog, Cat, etc.)<span style={{ color: "#f97316" }}> *</span>
+                Pet Type (Dog, Cat, etc.)
+                <span style={{ color: "#f97316" }}> *</span>
               </label>
               <input
                 type="text"
@@ -158,6 +191,29 @@ export default function ReportLostPet() {
                 style={inputStyle}
                 placeholder="Color"
               />
+            </div>
+            <div>
+              <label style={labelStyle}>Weight</label>
+              <input
+                type="text"
+                value={form.weight}
+                onChange={(e) => handleChange("weight", e.target.value)}
+                style={inputStyle}
+                placeholder="Weight (e.g., 5kg, Small, Medium)"
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Vaccinated</label>
+              <select
+                value={form.vaccinated}
+                onChange={(e) => handleChange("vaccinated", e.target.value)}
+                style={inputStyle}
+              >
+                <option value="">Select vaccination status</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+                <option value="Unknown">Unknown</option>
+              </select>
             </div>
             <div>
               <label style={labelStyle}>Age (years)</label>
@@ -196,6 +252,16 @@ export default function ReportLostPet() {
               />
             </div>
             <div>
+              <label style={labelStyle}>Pincode</label>
+              <input
+                type="text"
+                value={form.pincode}
+                onChange={(e) => handleChange("pincode", e.target.value)}
+                style={inputStyle}
+                placeholder="Postal/ZIP code"
+              />
+            </div>
+            <div>
               <label style={labelStyle}>Upload Photo</label>
               <input
                 type="file"
@@ -214,7 +280,8 @@ export default function ReportLostPet() {
 
           <div>
             <label style={labelStyle}>
-              Description (last seen location, behavior, etc.)<span style={{ color: "#f97316" }}> *</span>
+              Description (last seen location, behavior, etc.)
+              <span style={{ color: "#f97316" }}> *</span>
             </label>
             <textarea
               required
@@ -229,7 +296,14 @@ export default function ReportLostPet() {
             />
           </div>
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 14, justifyContent: "space-between" }}>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 14,
+              justifyContent: "space-between",
+            }}
+          >
             <button
               type="button"
               onClick={() => navigate("/user")}
@@ -290,4 +364,3 @@ const inputStyle: React.CSSProperties = {
   color: "#0f172a",
   boxSizing: "border-box",
 };
-

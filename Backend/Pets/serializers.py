@@ -33,7 +33,14 @@ class FoundPetReportSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "reporter", "status", "admin_notes", "created_at", "updated_at")
+        read_only_fields = (
+            "id",
+            "reporter",
+            "status",
+            "admin_notes",
+            "created_at",
+            "updated_at",
+        )
 
 
 class LostPetReportSerializer(serializers.ModelSerializer):
@@ -48,9 +55,12 @@ class LostPetReportSerializer(serializers.ModelSerializer):
             "pet_type",
             "breed",
             "color",
+            "weight",
+            "vaccinated",
             "age",
             "city",
             "state",
+            "pincode",
             "description",
             "photo",
             "status",
@@ -58,7 +68,14 @@ class LostPetReportSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "reporter", "status", "admin_notes", "created_at", "updated_at")
+        read_only_fields = (
+            "id",
+            "reporter",
+            "status",
+            "admin_notes",
+            "created_at",
+            "updated_at",
+        )
 
 
 class AdminFoundPetReportSerializer(FoundPetReportSerializer):
@@ -69,4 +86,3 @@ class AdminFoundPetReportSerializer(FoundPetReportSerializer):
 class AdminLostPetReportSerializer(LostPetReportSerializer):
     class Meta(LostPetReportSerializer.Meta):
         read_only_fields = ("id", "reporter", "created_at", "updated_at")
-

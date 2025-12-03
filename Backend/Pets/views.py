@@ -1,15 +1,14 @@
-from rest_framework import generics, permissions, parsers
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
 from django.utils import timezone
+from rest_framework import generics, parsers, permissions, status
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from .models import FoundPetReport, LostPetReport, STATUS_CHOICES
+from .models import STATUS_CHOICES, FoundPetReport, LostPetReport
 from .serializers import (
-    FoundPetReportSerializer,
-    LostPetReportSerializer,
     AdminFoundPetReportSerializer,
     AdminLostPetReportSerializer,
+    FoundPetReportSerializer,
+    LostPetReportSerializer,
 )
 
 
@@ -47,13 +46,44 @@ class AllReportsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        # Show all approved pets for public viewing in dashboard
         found = FoundPetReportSerializer(
-            FoundPetReport.objects.filter(reporter=request.user), many=True
+            FoundPetReport.objects.filter(
+                status__in=["approved", "investigating", "matched"]
+            ).order_by("-created_at"),
+            many=True,
         ).data
         lost = LostPetReportSerializer(
-            LostPetReport.objects.filter(reporter=request.user), many=True
+            LostPetReport.objects.filter(
+                status__in=["approved", "investigating", "matched"]
+            ).order_by("-created_at"),
+            many=True,
         ).data
         return Response({"lost": lost, "found": found}, status=status.HTTP_200_OK)
+
+
+class PublicLostPetsView(generics.ListAPIView):
+    """Public view of all lost pets for dashboard display"""
+
+    serializer_class = LostPetReportSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return LostPetReport.objects.filter(
+            status__in=["approved", "investigating", "matched"]
+        ).order_by("-created_at")[:20]  # Show latest 20
+
+
+class PublicFoundPetsView(generics.ListAPIView):
+    """Public view of all found pets for dashboard display"""
+
+    serializer_class = FoundPetReportSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return FoundPetReport.objects.filter(
+            status__in=["approved", "investigating", "matched"]
+        ).order_by("-created_at")[:20]  # Show latest 20
 
 
 class AdminReportSummaryView(APIView):

@@ -1,8 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { clearTokens, getProfile, updateProfile } from "../services/api";
 import { useNavigate } from "react-router-dom";
+import { useViewportStandardization } from "../hooks/useViewportStandardization";
 
 export default function UserProfile() {
+  // Apply viewport standardization to ensure consistent 100% scaling
+  useViewportStandardization();
+
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -13,12 +17,15 @@ export default function UserProfile() {
     state: "",
     city: "",
     pincode: "",
+    landmark: "",
+    location_url: "",
     password: "",
   });
   const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState<
-    { type: "success" | "error"; message: string } | null
-  >(null);
+  const [feedback, setFeedback] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -49,6 +56,8 @@ export default function UserProfile() {
       state: profile?.state ?? "",
       city: profile?.city ?? "",
       pincode: profile?.pincode ?? "",
+      landmark: profile?.landmark ?? "",
+      location_url: profile?.location_url ?? "",
       password: "",
     });
   }, [profile]);
@@ -65,12 +74,32 @@ export default function UserProfile() {
 
   const infoRows = [
     { label: "Full name", value: profile?.full_name ?? "—" },
-    { label: "Username", value: profile?.user?.username ?? profile?.username ?? "—" },
+    {
+      label: "Username",
+      value: profile?.user?.username ?? profile?.username ?? "—",
+    },
     { label: "Email", value: profile?.user?.email ?? "—" },
     { label: "Phone number", value: profile?.phone_number ?? "—" },
     { label: "Address", value: profile?.address ?? "—" },
     { label: "State", value: profile?.state ?? "—" },
     { label: "City", value: profile?.city ?? "—" },
+    { label: "Pincode", value: profile?.pincode ?? "—" },
+    { label: "Landmark", value: profile?.landmark ?? "—" },
+    {
+      label: "Location",
+      value: profile?.location_url ? (
+        <a
+          href={profile.location_url}
+          target="_blank"
+          rel="noreferrer"
+          style={{ color: "#60a5fa", textDecoration: "underline" }}
+        >
+          Open in Maps
+        </a>
+      ) : (
+        "—"
+      ),
+    },
     { label: "Role", value: profile?.role ?? "—" },
     { label: "Verified", value: profile?.verified ? "Yes" : "No" },
     {
@@ -92,13 +121,12 @@ export default function UserProfile() {
     { key: "state", label: "State" },
     { key: "city", label: "City" },
     { key: "pincode", label: "Pincode" },
+    { key: "landmark", label: "Landmark" },
+    { key: "location_url", label: "Location URL (Google Maps)" },
     { key: "password", label: "Password", type: "password" },
   ];
 
-  function handleFieldChange(
-    key: keyof typeof editValues,
-    value: string
-  ) {
+  function handleFieldChange(key: keyof typeof editValues, value: string) {
     setEditValues((prev) => ({ ...prev, [key]: value }));
   }
 
@@ -112,6 +140,8 @@ export default function UserProfile() {
       state: profile?.state ?? "",
       city: profile?.city ?? "",
       pincode: profile?.pincode ?? "",
+      landmark: profile?.landmark ?? "",
+      location_url: profile?.location_url ?? "",
       password: "",
     });
   }
@@ -128,7 +158,10 @@ export default function UserProfile() {
     const res = await updateProfile(payload);
     if (res.ok) {
       setProfile(res.data);
-      setFeedback({ type: "success", message: "Profile updated successfully." });
+      setFeedback({
+        type: "success",
+        message: "Profile updated successfully.",
+      });
       setEditing(false);
     } else {
       setFeedback({ type: "error", message: res.error ?? "Update failed." });
@@ -183,7 +216,12 @@ export default function UserProfile() {
               <img
                 src="/pawreunite-logo.svg"
                 alt="PawReunite logo"
-                style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: "50%",
+                  objectFit: "cover",
+                }}
               />
               <span>PawReunite</span>
             </div>
@@ -367,14 +405,21 @@ export default function UserProfile() {
               style={{ display: "flex", flexDirection: "column", gap: 16 }}
             >
               {editableFields.map((field) => (
-                <label key={field.key} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <span style={{ color: "rgba(148,163,184,0.9)", fontWeight: 600 }}>
+                <label
+                  key={field.key}
+                  style={{ display: "flex", flexDirection: "column", gap: 6 }}
+                >
+                  <span
+                    style={{ color: "rgba(148,163,184,0.9)", fontWeight: 600 }}
+                  >
                     {field.label}
                   </span>
                   {field.type === "textarea" ? (
                     <textarea
                       value={editValues[field.key]}
-                      onChange={(e) => handleFieldChange(field.key, e.target.value)}
+                      onChange={(e) =>
+                        handleFieldChange(field.key, e.target.value)
+                      }
                       style={{
                         background: "rgba(15,23,42,0.6)",
                         border: "1px solid rgba(148,163,184,0.3)",
@@ -390,7 +435,9 @@ export default function UserProfile() {
                     <input
                       type={field.type ?? "text"}
                       value={editValues[field.key]}
-                      onChange={(e) => handleFieldChange(field.key, e.target.value)}
+                      onChange={(e) =>
+                        handleFieldChange(field.key, e.target.value)
+                      }
                       style={{
                         background: "rgba(15,23,42,0.6)",
                         border: "1px solid rgba(148,163,184,0.3)",
@@ -403,7 +450,9 @@ export default function UserProfile() {
                   )}
                 </label>
               ))}
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+              <div
+                style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}
+              >
                 <button
                   type="button"
                   onClick={resetEditing}
@@ -451,8 +500,16 @@ export default function UserProfile() {
                     paddingBottom: 8,
                   }}
                 >
-                  <div style={{ color: "rgba(148,163,184,0.9)" }}>{row.label}</div>
-                  <div style={{ fontWeight: 600, textAlign: "right", flex: "0 0 55%" }}>
+                  <div style={{ color: "rgba(148,163,184,0.9)" }}>
+                    {row.label}
+                  </div>
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      textAlign: "right",
+                      flex: "0 0 55%",
+                    }}
+                  >
                     {row.value}
                   </div>
                 </div>
@@ -485,4 +542,3 @@ export default function UserProfile() {
     </div>
   );
 }
-

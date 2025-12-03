@@ -11,8 +11,13 @@ import UserProfile from "./pages/UserProfile";
 import ReportFoundPet from "./pages/ReportFoundPet";
 import ReportLostPet from "./pages/ReportLostPet";
 import Home from "./pages/Home";
+import { useViewportStandardization } from "./hooks/useViewportStandardization";
+import "./App.css";
 
 export default function App() {
+  // Apply viewport standardization to ensure consistent 100% scaling across all pages
+  useViewportStandardization();
+
   return (
     <Routes>
       <Route path="/" element={<Home />} />

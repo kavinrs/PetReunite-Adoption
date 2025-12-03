@@ -10,6 +10,7 @@
 //   updateAdminLostReport,
 // } from "../services/api";
 // import { useNavigate } from "react-router-dom";
+// import { useViewportStandardization } from "../hooks/useViewportStandardization";
 
 // const STATUS_LABELS: Record<string, string> = {
 //   pending: "Pending",
@@ -435,7 +436,6 @@
 //   );
 // }
 
-
 // src/pages/AdminHome.tsx
 import { useEffect, useState } from "react";
 import {
@@ -448,6 +448,7 @@ import {
   updateAdminLostReport,
 } from "../services/api";
 import { useNavigate } from "react-router-dom";
+import { useViewportStandardization } from "../hooks/useViewportStandardization";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Pending",
@@ -472,6 +473,9 @@ const STATUS_COLORS: Record<string, string> = {
 type TabKey = "found" | "lost";
 
 export default function AdminHome() {
+  // Apply viewport standardization to ensure consistent 100% scaling
+  useViewportStandardization();
+
   const [profile, setProfile] = useState<any>(null);
   const [summary, setSummary] = useState<any | null>(null);
   const [foundReports, setFoundReports] = useState<any[]>([]);
@@ -566,14 +570,17 @@ export default function AdminHome() {
     setActionKey(`${kind}-${id}-${status}`);
     setError(null);
     try {
-      const fn = kind === "found" ? updateAdminFoundReport : updateAdminLostReport;
+      const fn =
+        kind === "found" ? updateAdminFoundReport : updateAdminLostReport;
       const res = await fn(id, { status });
       if (!res.ok) {
         if (res.error) setError(res.error);
         return;
       }
       if (kind === "found") {
-        setFoundReports((prev) => prev.map((r) => (r.id === id ? res.data : r)));
+        setFoundReports((prev) =>
+          prev.map((r) => (r.id === id ? res.data : r)),
+        );
       } else {
         setLostReports((prev) => prev.map((r) => (r.id === id ? res.data : r)));
       }
@@ -591,14 +598,17 @@ export default function AdminHome() {
     setActionKey(`${kind}-${id}-note`);
     setError(null);
     try {
-      const fn = kind === "found" ? updateAdminFoundReport : updateAdminLostReport;
+      const fn =
+        kind === "found" ? updateAdminFoundReport : updateAdminLostReport;
       const res = await fn(id, { admin_notes: note });
       if (!res.ok) {
         if (res.error) setError(res.error);
         return;
       }
       if (kind === "found") {
-        setFoundReports((prev) => prev.map((r) => (r.id === id ? res.data : r)));
+        setFoundReports((prev) =>
+          prev.map((r) => (r.id === id ? res.data : r)),
+        );
       } else {
         setLostReports((prev) => prev.map((r) => (r.id === id ? res.data : r)));
       }
@@ -746,26 +756,32 @@ export default function AdminHome() {
           <div>{renderStatusBadge(r.status)}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-              {(["pending", "approved", "rejected", "investigating", "resolved"] as const).map(
-                (s) => (
-                  <button
-                    key={s}
-                    onClick={() => handleChangeStatus(tab, r.id, s)}
-                    disabled={actionKey === `${tab}-${r.id}-${s}`}
-                    style={{
-                      fontSize: 11,
-                      padding: "4px 8px",
-                      borderRadius: 999,
-                      border: "1px solid #1f2937",
-                      background: r.status === s ? "#111827" : "transparent",
-                      color: "#e5e7eb",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {STATUS_LABELS[s] || s}
-                  </button>
-                )
-              )}
+              {(
+                [
+                  "pending",
+                  "approved",
+                  "rejected",
+                  "investigating",
+                  "resolved",
+                ] as const
+              ).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => handleChangeStatus(tab, r.id, s)}
+                  disabled={actionKey === `${tab}-${r.id}-${s}`}
+                  style={{
+                    fontSize: 11,
+                    padding: "4px 8px",
+                    borderRadius: 999,
+                    border: "1px solid #1f2937",
+                    background: r.status === s ? "#111827" : "transparent",
+                    color: "#e5e7eb",
+                    cursor: "pointer",
+                  }}
+                >
+                  {STATUS_LABELS[s] || s}
+                </button>
+              ))}
             </div>
             <button
               onClick={() => handleEditNotes(tab, r.id)}
@@ -822,10 +838,7 @@ export default function AdminHome() {
     );
   }
 
-  const displayName =
-    profile?.full_name ??
-    profile?.user?.username ??
-    "Admin";
+  const displayName = profile?.full_name ?? profile?.user?.username ?? "Admin";
   const email = profile?.user?.email ?? "—";
 
   if (loading) {
@@ -863,7 +876,12 @@ export default function AdminHome() {
             <img
               src="/pawreunite-logo.svg"
               alt="PawReunite logo"
-              style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: "50%",
+                objectFit: "cover",
+              }}
             />
             <span>PawReunite</span>
           </div>
@@ -920,7 +938,9 @@ export default function AdminHome() {
                   </svg>
                 </div>
                 <div style={{ textAlign: "left" }}>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{displayName}</div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>
+                    {displayName}
+                  </div>
                   <div style={{ fontSize: 12, color: "#6b7280" }}>{email}</div>
                 </div>
               </div>
@@ -953,7 +973,9 @@ export default function AdminHome() {
                 }}
               >
                 <div style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 16, fontWeight: 700 }}>{displayName}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700 }}>
+                    {displayName}
+                  </div>
                   <div style={{ fontSize: 13, color: "#6b7280" }}>{email}</div>
                 </div>
                 <div
@@ -1054,7 +1076,14 @@ export default function AdminHome() {
               </button>
             ))}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 13,
+            }}
+          >
             <span style={{ color: "#9ca3af" }}>Status:</span>
             <select
               value={statusFilter}

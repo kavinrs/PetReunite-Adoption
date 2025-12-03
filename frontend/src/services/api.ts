@@ -9,7 +9,11 @@ export type ApiResult = {
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
 async function parseJSONSafe(resp: Response) {
-  try { return await resp.json(); } catch { return null; }
+  try {
+    return await resp.json();
+  } catch {
+    return null;
+  }
 }
 
 function collectFirstError(errors: any): string | null {
@@ -48,15 +52,19 @@ export function saveTokens(data: any) {
   if (data?.access) localStorage.setItem("access_token", data.access);
   if (data?.refresh) localStorage.setItem("refresh_token", data.refresh);
 }
-export function getAccessToken(): string | null { return localStorage.getItem("access_token"); }
-export function getRefreshToken(): string | null { return localStorage.getItem("refresh_token"); }
+export function getAccessToken(): string | null {
+  return localStorage.getItem("access_token");
+}
+export function getRefreshToken(): string | null {
+  return localStorage.getItem("refresh_token");
+}
 export function clearTokens() {
   localStorage.removeItem("access_token");
   localStorage.removeItem("refresh_token");
 }
 
 /* basic auth header */
-export function authHeader(): Record<string,string> {
+export function authHeader(): Record<string, string> {
   const t = getAccessToken();
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
@@ -66,7 +74,10 @@ function isFormData(body: unknown): body is FormData {
 }
 
 /* User login (SimpleJWT TokenObtainPairView expects username+password by default) */
-export async function userLogin(username: string, password: string): Promise<ApiResult> {
+export async function userLogin(
+  username: string,
+  password: string,
+): Promise<ApiResult> {
   const url = `${API_BASE}/auth/token/`;
   const resp = await fetch(url, {
     method: "POST",
@@ -78,11 +89,19 @@ export async function userLogin(username: string, password: string): Promise<Api
     saveTokens(data);
     return { ok: true, status: resp.status, data };
   }
-  return { ok: false, status: resp.status, error: data?.detail || data?.error || "Login failed", data };
+  return {
+    ok: false,
+    status: resp.status,
+    error: data?.detail || data?.error || "Login failed",
+    data,
+  };
 }
 
 /* Admin login (your AdminLoginView returns tokens) */
-export async function adminLogin(username: string, password: string): Promise<ApiResult> {
+export async function adminLogin(
+  username: string,
+  password: string,
+): Promise<ApiResult> {
   const url = `${API_BASE}/admin/login/`;
   const resp = await fetch(url, {
     method: "POST",
@@ -94,13 +113,25 @@ export async function adminLogin(username: string, password: string): Promise<Ap
     saveTokens(data);
     return { ok: true, status: resp.status, data };
   }
-  return { ok: false, status: resp.status, error: data?.detail || data?.error || "Admin login failed", data };
+  return {
+    ok: false,
+    status: resp.status,
+    error: data?.detail || data?.error || "Admin login failed",
+    data,
+  };
 }
 
 /* Admin register (same fields as user plus a secret code) */
 export async function adminRegister(payload: {
-  username: string; email: string; password: string;
-  full_name: string; phone_number: string; state: string; city: string; address: string; pincode: string;
+  username: string;
+  email: string;
+  password: string;
+  full_name: string;
+  phone_number: string;
+  state: string;
+  city: string;
+  address: string;
+  pincode: string;
   code: string;
 }): Promise<ApiResult> {
   const url = `${API_BASE}/admin/register/`;
@@ -131,11 +162,19 @@ export async function refreshAccess(): Promise<ApiResult> {
     return { ok: true, status: resp.status, data };
   }
   clearTokens();
-  return { ok: false, status: resp.status, error: data?.detail || data?.error || "Refresh failed", data };
+  return {
+    ok: false,
+    status: resp.status,
+    error: data?.detail || data?.error || "Refresh failed",
+    data,
+  };
 }
 
 /* Generic fetch wrapper which auto-refreshes token on 401 once */
-export async function fetchWithAuth(input: RequestInfo, init: RequestInit = {}): Promise<Response> {
+export async function fetchWithAuth(
+  input: RequestInfo,
+  init: RequestInit = {},
+): Promise<Response> {
   const buildHeaders = () => {
     const base = new Headers(init.headers ?? {});
     if (!isFormData(init.body) && !base.has("Content-Type")) {
@@ -170,48 +209,58 @@ export async function getProfile(): Promise<ApiResult> {
   const url = `${API_BASE}/users/me/`;
   try {
     const token = getAccessToken();
-    console.log('Fetching profile with token:', token ? 'Token exists' : 'No token found');
-    
-    const resp = await fetchWithAuth(url, { 
+    console.log(
+      "Fetching profile with token:",
+      token ? "Token exists" : "No token found",
+    );
+
+    const resp = await fetchWithAuth(url, {
       method: "GET",
       headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
-      credentials: 'include' // Ensure cookies are sent with the request
+      credentials: "include", // Ensure cookies are sent with the request
     });
-    
+
     const data = await parseJSONSafe(resp);
-    console.log('Profile response status:', resp.status, 'data:', data);
-    
+    console.log("Profile response status:", resp.status, "data:", data);
+
     if (resp.ok) {
       return { ok: true, status: resp.status, data };
     } else {
-      console.error('Profile fetch failed:', { status: resp.status, statusText: resp.statusText, data });
+      console.error("Profile fetch failed:", {
+        status: resp.status,
+        statusText: resp.statusText,
+        data,
+      });
       if (resp.status === 403) {
         // If we get a 403, clear tokens as they might be invalid
         clearTokens();
-        return { 
-          ok: false, 
-          status: resp.status, 
-          error: 'Session expired or invalid. Please log in again.',
-          data 
+        return {
+          ok: false,
+          status: resp.status,
+          error: "Session expired or invalid. Please log in again.",
+          data,
         };
       }
-      return { 
-        ok: false, 
-        status: resp.status, 
-        error: data?.detail || data?.error || `Failed to fetch profile: ${resp.statusText}`,
-        data 
+      return {
+        ok: false,
+        status: resp.status,
+        error:
+          data?.detail ||
+          data?.error ||
+          `Failed to fetch profile: ${resp.statusText}`,
+        data,
       };
     }
   } catch (error) {
-    console.error('Error in getProfile:', error);
-    return { 
-      ok: false, 
-      status: 0, 
-      error: error instanceof Error ? error.message : 'Network error',
-      data: null 
+    console.error("Error in getProfile:", error);
+    return {
+      ok: false,
+      status: 0,
+      error: error instanceof Error ? error.message : "Network error",
+      data: null,
     };
   }
 }
@@ -223,6 +272,8 @@ export async function updateProfile(payload: {
   state?: string;
   city?: string;
   pincode?: string;
+  landmark?: string;
+  location_url?: string;
   password?: string;
 }): Promise<ApiResult> {
   const url = `${API_BASE}/users/me/`;
@@ -241,8 +292,17 @@ export async function updateProfile(payload: {
 
 /* Register - matches your RegisterSerializer required fields */
 export async function registerUser(payload: {
-  username: string; email: string; password: string;
-  full_name: string; phone_number: string; state: string; city: string; address: string; pincode: string;
+  username: string;
+  email: string;
+  password: string;
+  full_name: string;
+  phone_number: string;
+  state: string;
+  city: string;
+  address: string;
+  pincode: string;
+  landmark?: string;
+  location_url?: string;
 }): Promise<ApiResult> {
   const url = `${API_BASE}/auth/register/`;
   const resp = await fetch(url, {
@@ -267,8 +327,11 @@ export async function fetchAdminSummary(): Promise<ApiResult> {
   return { ok: false, status: resp.status, error: message, data };
 }
 
-export async function fetchAdminFoundReports(status?: string): Promise<ApiResult> {
-  const qs = status && status !== "all" ? `?status=${encodeURIComponent(status)}` : "";
+export async function fetchAdminFoundReports(
+  status?: string,
+): Promise<ApiResult> {
+  const qs =
+    status && status !== "all" ? `?status=${encodeURIComponent(status)}` : "";
   const url = `${PETS_BASE}/admin/reports/found/${qs}`;
   const resp = await fetchWithAuth(url, { method: "GET" });
   const data = await parseJSONSafe(resp);
@@ -277,8 +340,11 @@ export async function fetchAdminFoundReports(status?: string): Promise<ApiResult
   return { ok: false, status: resp.status, error: message, data };
 }
 
-export async function fetchAdminLostReports(status?: string): Promise<ApiResult> {
-  const qs = status && status !== "all" ? `?status=${encodeURIComponent(status)}` : "";
+export async function fetchAdminLostReports(
+  status?: string,
+): Promise<ApiResult> {
+  const qs =
+    status && status !== "all" ? `?status=${encodeURIComponent(status)}` : "";
   const url = `${PETS_BASE}/admin/reports/lost/${qs}`;
   const resp = await fetchWithAuth(url, { method: "GET" });
   const data = await parseJSONSafe(resp);
@@ -289,7 +355,7 @@ export async function fetchAdminLostReports(status?: string): Promise<ApiResult>
 
 export async function updateAdminFoundReport(
   id: number,
-  payload: { status?: string; admin_notes?: string }
+  payload: { status?: string; admin_notes?: string },
 ): Promise<ApiResult> {
   const url = `${PETS_BASE}/admin/reports/found/${id}/`;
   const resp = await fetchWithAuth(url, {
@@ -304,7 +370,7 @@ export async function updateAdminFoundReport(
 
 export async function updateAdminLostReport(
   id: number,
-  payload: { status?: string; admin_notes?: string }
+  payload: { status?: string; admin_notes?: string },
 ): Promise<ApiResult> {
   const url = `${PETS_BASE}/admin/reports/lost/${id}/`;
   const resp = await fetchWithAuth(url, {
@@ -335,7 +401,8 @@ export async function reportFoundPet(payload: {
   formData.append("description", payload.description);
   if (payload.breed) formData.append("breed", payload.breed);
   if (payload.color) formData.append("color", payload.color);
-  if (payload.estimated_age) formData.append("estimated_age", payload.estimated_age);
+  if (payload.estimated_age)
+    formData.append("estimated_age", payload.estimated_age);
   if (payload.photo) formData.append("photo", payload.photo);
 
   const resp = await fetchWithAuth(url, {
@@ -350,14 +417,77 @@ export async function reportFoundPet(payload: {
   return { ok: false, status: resp.status, error: message, data };
 }
 
+/* Fetch all reports for dashboard display */
+export async function fetchAllReports(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/reports/all/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to load reports";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/* Fetch public lost pet reports for dashboard */
+export async function fetchPublicLostPets(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/public/lost/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to load lost pets";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/* Fetch public found pet reports for dashboard */
+export async function fetchPublicFoundPets(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/public/found/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to load found pets";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/* Fetch user's own lost pet reports */
+export async function fetchMyLostPets(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/reports/lost/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to load your lost pets";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/* Fetch user's own found pet reports */
+export async function fetchMyFoundPets(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/reports/found/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to load your found pets";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
 export async function reportLostPet(payload: {
   pet_name?: string;
   pet_type: string;
   breed?: string;
   color?: string;
+  weight?: string;
+  vaccinated?: string;
   age?: string;
   city: string;
   state: string;
+  pincode?: string;
   description: string;
   photo?: File | null;
 }): Promise<ApiResult> {
@@ -367,9 +497,12 @@ export async function reportLostPet(payload: {
   formData.append("pet_type", payload.pet_type);
   if (payload.breed) formData.append("breed", payload.breed);
   if (payload.color) formData.append("color", payload.color);
+  if (payload.weight) formData.append("weight", payload.weight);
+  if (payload.vaccinated) formData.append("vaccinated", payload.vaccinated);
   if (payload.age) formData.append("age", payload.age);
   formData.append("city", payload.city);
   formData.append("state", payload.state);
+  if (payload.pincode) formData.append("pincode", payload.pincode);
   formData.append("description", payload.description);
   if (payload.photo) formData.append("photo", payload.photo);
 

@@ -7,6 +7,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { adminRegister, type ApiResult } from "../services/api";
+import { useViewportStandardization } from "../hooks/useViewportStandardization";
 
 // Local API base (duplicated from services/api.ts for simplicity)
 const API_BASE = (import.meta as any).env?.VITE_API_BASE ?? "/api";
@@ -187,6 +188,9 @@ const spinnerStyle: React.CSSProperties = {
 // .spinner { border-radius: 9999px; border: 2px solid rgba(59,130,246,0.4); border-top-color: #2563eb; animation: spin 0.8s linear infinite; }
 
 function AdminRegister() {
+  // Apply viewport standardization to ensure consistent 100% scaling
+  useViewportStandardization();
+
   const [form, setForm] = useState<FormState>(initialForm);
   const [loading, setLoading] = useState(false);
   const [formMsg, setFormMsg] = useState<string | null>(null);
@@ -205,14 +209,14 @@ function AdminRegister() {
   }, [verifyMsg]);
 
   const onChange = (key: keyof FormState, value: string) => {
-    setForm(prev => ({ ...prev, [key]: value }));
+    setForm((prev) => ({ ...prev, [key]: value }));
 
     if (key === "email") {
       window.__adminInviteVerified = null;
       setVerifyStatus("idle");
       setVerifyMsg("");
       setVerifyLabel("Verify Email");
-      setForm(prev => ({ ...prev, adminCode: "" }));
+      setForm((prev) => ({ ...prev, adminCode: "" }));
     }
   };
 
@@ -240,7 +244,7 @@ function AdminRegister() {
         {
           method: "GET",
           headers: { Accept: "application/json" },
-        }
+        },
       );
 
       let data: any = null;
@@ -255,14 +259,16 @@ function AdminRegister() {
         setVerifyMsg("Server error — try again later");
         setVerifyLabel("Verify Email");
         window.__adminInviteVerified = null;
-        setForm(prev => ({ ...prev, adminCode: "" }));
+        setForm((prev) => ({ ...prev, adminCode: "" }));
         return;
       }
 
       if (data.exists === true) {
         // Superuser email matched – backend has sent the admin code via email.
         setVerifyStatus("success");
-        setVerifyMsg("Admin email verified — admin code has been sent to your email.");
+        setVerifyMsg(
+          "Admin email verified — admin code has been sent to your email.",
+        );
         setVerifyLabel("Verified ✓");
         // Do NOT auto-fill the adminCode field; user will copy it from their inbox.
         // We only store a generic flag so validateBeforeSubmit() can skip the warning.
@@ -275,7 +281,7 @@ function AdminRegister() {
         setVerifyMsg("Email not authorized for admin access");
         setVerifyLabel("Not authorized ❌");
         window.__adminInviteVerified = null;
-        setForm(prev => ({ ...prev, adminCode: "" }));
+        setForm((prev) => ({ ...prev, adminCode: "" }));
         return;
       }
 
@@ -283,13 +289,13 @@ function AdminRegister() {
       setVerifyMsg("Server error — try again later");
       setVerifyLabel("Error");
       window.__adminInviteVerified = null;
-      setForm(prev => ({ ...prev, adminCode: "" }));
+      setForm((prev) => ({ ...prev, adminCode: "" }));
     } catch (err) {
       setVerifyStatus("error");
       setVerifyMsg("Server error — try again later");
       setVerifyLabel("Verify Email");
       window.__adminInviteVerified = null;
-      setForm(prev => ({ ...prev, adminCode: "" }));
+      setForm((prev) => ({ ...prev, adminCode: "" }));
     }
   }
 
@@ -306,7 +312,7 @@ function AdminRegister() {
     const isVerified = validateBeforeSubmit();
     if (!isVerified) {
       const proceed = window.confirm(
-        "Email is not verified. Server will likely reject this request. Do you still want to continue?"
+        "Email is not verified. Server will likely reject this request. Do you still want to continue?",
       );
       if (!proceed) return;
     }
@@ -346,11 +352,13 @@ function AdminRegister() {
   const statusClassName =
     verifyStatus === "success"
       ? "status-success"
-      : verifyStatus === "used" || verifyStatus === "not_found" || verifyStatus === "error"
-      ? "status-error"
-      : verifyStatus === "idle" || verifyStatus === "verifying"
-      ? ""
-      : "status-warning";
+      : verifyStatus === "used" ||
+          verifyStatus === "not_found" ||
+          verifyStatus === "error"
+        ? "status-error"
+        : verifyStatus === "idle" || verifyStatus === "verifying"
+          ? ""
+          : "status-warning";
 
   return (
     <div style={containerStyle}>
@@ -371,7 +379,7 @@ function AdminRegister() {
                   required
                   placeholder="username"
                   value={form.username}
-                  onChange={e => onChange("username", e.target.value)}
+                  onChange={(e) => onChange("username", e.target.value)}
                 />
               </div>
               <div>
@@ -381,7 +389,7 @@ function AdminRegister() {
                   required
                   placeholder="full name"
                   value={form.fullName}
-                  onChange={e => onChange("fullName", e.target.value)}
+                  onChange={(e) => onChange("fullName", e.target.value)}
                 />
               </div>
             </div>
@@ -395,7 +403,7 @@ function AdminRegister() {
                   type="email"
                   placeholder="email"
                   value={form.email}
-                  onChange={e => onChange("email", e.target.value)}
+                  onChange={(e) => onChange("email", e.target.value)}
                 />
                 <button
                   type="button"
@@ -403,12 +411,19 @@ function AdminRegister() {
                   style={{
                     ...verifyButtonBase,
                     opacity: verifyStatus === "verifying" ? 0.7 : 1,
-                    cursor: verifyStatus === "verifying" ? "default" : "pointer",
+                    cursor:
+                      verifyStatus === "verifying" ? "default" : "pointer",
                   }}
                   disabled={verifyStatus === "verifying"}
                 >
                   {verifyStatus === "verifying" ? (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                    >
                       <span style={spinnerStyle} className="spinner" />
                       Verifying...
                     </span>
@@ -435,7 +450,7 @@ function AdminRegister() {
                 required
                 placeholder="admin code"
                 value={form.adminCode}
-                onChange={e => onChange("adminCode", e.target.value)}
+                onChange={(e) => onChange("adminCode", e.target.value)}
               />
             </div>
 
@@ -447,7 +462,7 @@ function AdminRegister() {
                 type="password"
                 placeholder="password"
                 value={form.password}
-                onChange={e => onChange("password", e.target.value)}
+                onChange={(e) => onChange("password", e.target.value)}
               />
             </div>
 
@@ -459,7 +474,7 @@ function AdminRegister() {
                   required
                   placeholder="phone number"
                   value={form.phone}
-                  onChange={e => onChange("phone", e.target.value)}
+                  onChange={(e) => onChange("phone", e.target.value)}
                 />
               </div>
               <div>
@@ -469,7 +484,7 @@ function AdminRegister() {
                   required
                   placeholder="state"
                   value={form.state}
-                  onChange={e => onChange("state", e.target.value)}
+                  onChange={(e) => onChange("state", e.target.value)}
                 />
               </div>
             </div>
@@ -482,7 +497,7 @@ function AdminRegister() {
                   required
                   placeholder="city"
                   value={form.city}
-                  onChange={e => onChange("city", e.target.value)}
+                  onChange={(e) => onChange("city", e.target.value)}
                 />
               </div>
               <div>
@@ -492,7 +507,7 @@ function AdminRegister() {
                   required
                   placeholder="pincode"
                   value={form.pincode}
-                  onChange={e => onChange("pincode", e.target.value)}
+                  onChange={(e) => onChange("pincode", e.target.value)}
                 />
               </div>
             </div>
@@ -504,7 +519,7 @@ function AdminRegister() {
                 required
                 placeholder="address"
                 value={form.address}
-                onChange={e => onChange("address", e.target.value)}
+                onChange={(e) => onChange("address", e.target.value)}
               />
             </div>
 

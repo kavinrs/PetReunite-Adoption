@@ -1,8 +1,7 @@
 # users/serializers.py
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import UserProfile, FoundPetReport, LostPetReport
-
+from .models import UserProfile
 User = get_user_model()
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -15,6 +14,8 @@ class RegisterSerializer(serializers.ModelSerializer):
     pincode = serializers.CharField(required=True, write_only=True)
     state = serializers.CharField(required=True, write_only=True)
     city = serializers.CharField(required=True, write_only=True)
+    landmark = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    location_url = serializers.CharField(required=False, allow_blank=True, write_only=True)
 
 
     class Meta:
@@ -27,8 +28,10 @@ class RegisterSerializer(serializers.ModelSerializer):
             "phone_number",
             "state",
             "city",
+            "landmark",
             "address",
             "pincode",
+            "location_url",
         )
 
     def create(self, validated_data):
@@ -39,6 +42,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         state = validated_data.pop("state")
         city = validated_data.pop("city")
         pincode = validated_data.pop("pincode")
+        landmark = validated_data.pop("landmark", "")
+        location_url = validated_data.pop("location_url", "")
 
         # Create main Django User
         password = validated_data.pop("password")
@@ -55,6 +60,8 @@ class RegisterSerializer(serializers.ModelSerializer):
             state=state,
             city=city,
             pincode=pincode,
+            landmark=landmark,
+            location_url=location_url,
         )
 
         return user
@@ -79,6 +86,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "address",
             "state",
             "city",
+            "pincode",
+            "landmark",
+            "location_url",
             "role",
             "verified",
             "profile_photo",
@@ -88,46 +98,46 @@ class UserProfileSerializer(serializers.ModelSerializer):
         read_only_fields = ("role", "verified")
 
 
-class FoundPetReportSerializer(serializers.ModelSerializer):
-    reporter = UserSerializer(read_only=True)
+# class FoundPetReportSerializer(serializers.ModelSerializer):
+#     reporter = UserSerializer(read_only=True)
 
-    class Meta:
-        model = FoundPetReport
-        fields = (
-            "id",
-            "reporter",
-            "pet_type",
-            "breed",
-            "color",
-            "estimated_age",
-            "found_city",
-            "state",
-            "description",
-            "photo",
-            "created_at",
-            "updated_at",
-        )
-        read_only_fields = ("id", "reporter", "created_at", "updated_at")
+#     class Meta:
+#         model = FoundPetReport
+#         fields = (
+#             "id",
+#             "reporter",
+#             "pet_type",
+#             "breed",
+#             "color",
+#             "estimated_age",
+#             "found_city",
+#             "state",
+#             "description",
+#             "photo",
+#             "created_at",
+#             "updated_at",
+#         )
+#         read_only_fields = ("id", "reporter", "created_at", "updated_at")
 
 
-class LostPetReportSerializer(serializers.ModelSerializer):
-    reporter = UserSerializer(read_only=True)
+# class LostPetReportSerializer(serializers.ModelSerializer):
+#     reporter = UserSerializer(read_only=True)
 
-    class Meta:
-        model = LostPetReport
-        fields = (
-            "id",
-            "reporter",
-            "pet_name",
-            "pet_type",
-            "breed",
-            "color",
-            "age",
-            "city",
-            "state",
-            "description",
-            "photo",
-            "created_at",
-            "updated_at",
-        )
-        read_only_fields = ("id", "reporter", "created_at", "updated_at")
+#     class Meta:
+#         model = LostPetReport
+#         fields = (
+#             "id",
+#             "reporter",
+#             "pet_name",
+#             "pet_type",
+#             "breed",
+#             "color",
+#             "age",
+#             "city",
+#             "state",
+#             "description",
+#             "photo",
+#             "created_at",
+#             "updated_at",
+#         )
+#         read_only_fields = ("id", "reporter", "created_at", "updated_at")

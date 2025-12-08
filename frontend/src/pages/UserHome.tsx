@@ -1,5 +1,5 @@
 // src/pages/UserHome.tsx
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   getProfile,
   clearTokens,
@@ -288,8 +288,6 @@ export default function UserHome() {
     return () => window.removeEventListener("mousedown", handleClickOutside);
   }, [menuOpen]);
 
-  if (loading) return <div style={{ padding: 40 }}>Loading home...</div>;
-
   const displayName =
     profile?.full_name ??
     profile?.username ??
@@ -297,6 +295,56 @@ export default function UserHome() {
     "User";
   const avatarUrl = profile?.profile_photo || "/profile-avatar.svg";
   const email = profile?.user?.email ?? profile?.email ?? "";
+
+  // Derived activity lists respecting species + sort filters
+  const activityLostFiltered = useMemo(() => {
+    let items = (activity.lost ?? []) as any[];
+    if (selectedSpecies !== "All Species") {
+      const sp = selectedSpecies.toLowerCase();
+      items = items.filter((r) => (r.pet_type || "").toLowerCase() === sp);
+    }
+    if (sortBy === "Most Recent") {
+      items = [...items].sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+    }
+    return items;
+  }, [activity.lost, selectedSpecies, sortBy]);
+
+  const activityFoundFiltered = useMemo(() => {
+    let items = (activity.found ?? []) as any[];
+    if (selectedSpecies !== "All Species") {
+      const sp = selectedSpecies.toLowerCase();
+      items = items.filter((r) => (r.pet_type || "").toLowerCase() === sp);
+    }
+    if (sortBy === "Most Recent") {
+      items = [...items].sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+    }
+    return items;
+  }, [activity.found, selectedSpecies, sortBy]);
+
+  const activityAdoptionsFiltered = useMemo(() => {
+    let items = (activity.adoptions ?? []) as any[];
+    if (selectedSpecies !== "All Species") {
+      const sp = selectedSpecies.toLowerCase();
+      items = items.filter(
+        (a) => (a.pet?.species || "").toLowerCase() === sp,
+      );
+    }
+    if (sortBy === "Most Recent") {
+      items = [...items].sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+    }
+    return items;
+  }, [activity.adoptions, selectedSpecies, sortBy]);
+
+  if (loading) return <div style={{ padding: 40 }}>Loading home...</div>;
 
   const tabItems: { id: Tab; label: string }[] = [
     { id: "owner", label: "Pet Owner" },
@@ -312,7 +360,6 @@ export default function UserHome() {
         setPageTab("home");
         window.scrollTo({ top: 0, behavior: "smooth" });
       },
-      accent: true,
     },
     {
       label: "Report Lost Pet",
@@ -399,7 +446,11 @@ export default function UserHome() {
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {sidebarLinks.map((link) => (
+            {sidebarLinks.map((link) => {
+              const isActive =
+                (link.label === "Dashboard" && pageTab === "home") ||
+                (link.label === "My Activity" && pageTab === "activity");
+              return (
               <button
                 key={link.label}
                 onClick={link.onClick}
@@ -407,24 +458,24 @@ export default function UserHome() {
                   display: "flex",
                   alignItems: "center",
                   gap: 20,
-                  fontWeight: link.accent ? 800 : 700,
+                  fontWeight: isActive ? 800 : 700,
                   padding: "12px 16px",
                   borderRadius: 16,
                   cursor: "pointer",
-                  border: link.accent ? "none" : "2px solid rgba(15,23,42,0.1)",
-                  background: link.accent
+                  border: isActive ? "none" : "2px solid rgba(15,23,42,0.1)",
+                  background: isActive
                     ? "linear-gradient(135deg,#ff8a00,#ff2fab)"
                     : "rgba(15,23,42,0.03)",
-                  color: link.accent ? "white" : "#0f172a",
+                  color: isActive ? "white" : "#0f172a",
                   fontSize: 14,
                   textAlign: "left",
-                  boxShadow: link.accent
+                  boxShadow: isActive
                     ? "0 15px 35px rgba(255,138,0,0.4)"
                     : "0 4px 12px rgba(15,23,42,0.1)",
                   transition: "all 0.3s ease",
                 }}
                 onMouseEnter={(e) => {
-                  if (!link.accent) {
+                  if (!isActive) {
                     e.currentTarget.style.background = "rgba(15,23,42,0.08)";
                     e.currentTarget.style.transform = "translateY(-3px)";
                     e.currentTarget.style.boxShadow =
@@ -432,7 +483,7 @@ export default function UserHome() {
                   }
                 }}
                 onMouseLeave={(e) => {
-                  if (!link.accent) {
+                  if (!isActive) {
                     e.currentTarget.style.background = "rgba(15,23,42,0.03)";
                     e.currentTarget.style.transform = "translateY(0)";
                     e.currentTarget.style.boxShadow =
@@ -455,7 +506,7 @@ export default function UserHome() {
                 </span>
                 {link.label}
               </button>
-            ))}
+            );})}
           </div>
         </aside>
 
@@ -750,6 +801,7 @@ export default function UserHome() {
                     borderRadius: 6,
                     border: "1px solid rgba(15,23,42,0.15)",
                     fontSize: 12,
+                    color: "#0f172a",
                     background: "rgba(15,23,42,0.02)",
                     boxSizing: "border-box",
                   }}
@@ -884,11 +936,19 @@ export default function UserHome() {
                 {activityLoading && <div style={{ padding: 12 }}>Loading activity…</div>}
                 {!activityLoading && (
                   <>
-                    <div style={{ fontSize: 18, fontWeight: 800, marginTop: 8 }}>Lost Pet Reports</div>
-                    {(activity.lost ?? []).length === 0 ? (
-                      <div style={{ padding: 12, color: "#64748b" }}>No lost reports yet.</div>
-                    ) : (
-                      (activity.lost ?? []).map((r: any) => (
+                    {/* Lost reports section (respect category filter) */}
+                    {(selectedCategory === "All pets" ||
+                      selectedCategory === "Lost pet") && (
+                      <>
+                        <div style={{ fontSize: 18, fontWeight: 800, marginTop: 8 }}>
+                          Lost Pet Reports
+                        </div>
+                        {activityLostFiltered.length === 0 ? (
+                          <div style={{ padding: 12, color: "#64748b" }}>
+                            No lost reports yet.
+                          </div>
+                        ) : (
+                          activityLostFiltered.map((r: any) => (
                         <div key={`lost-${r.id}`} style={{ background: "white", border: "1px solid #f1f5f9", borderRadius: 16, padding: 16, display: "grid", gridTemplateColumns: "100px 1fr auto", gap: 16 }}>
                           {(() => {
                             const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
@@ -1038,13 +1098,23 @@ export default function UserHome() {
                         </div>
                         </div>
                       ))
+                        )}
+                      </>
                     )}
 
-                    <div style={{ fontSize: 18, fontWeight: 800, marginTop: 8 }}>Found Pet Reports</div>
-                    {(activity.found ?? []).length === 0 ? (
-                      <div style={{ padding: 12, color: "#64748b" }}>No found reports yet.</div>
-                    ) : (
-                      (activity.found ?? []).map((r: any) => (
+                    {/* Found reports section (respect category filter) */}
+                    {(selectedCategory === "All pets" ||
+                      selectedCategory === "Found pet") && (
+                      <>
+                        <div style={{ fontSize: 18, fontWeight: 800, marginTop: 8 }}>
+                          Found Pet Reports
+                        </div>
+                        {activityFoundFiltered.length === 0 ? (
+                          <div style={{ padding: 12, color: "#64748b" }}>
+                            No found reports yet.
+                          </div>
+                        ) : (
+                          activityFoundFiltered.map((r: any) => (
                         <div key={`found-${r.id}`} style={{ background: "white", border: "1px solid #f1f5f9", borderRadius: 16, padding: 16, display: "grid", gridTemplateColumns: "100px 1fr auto", gap: 16 }}>
                           {(() => {
                             const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
@@ -1164,13 +1234,23 @@ export default function UserHome() {
                         </div>
                         </div>
                       ))
+                        )}
+                      </>
                     )}
 
-                    <div style={{ fontSize: 18, fontWeight: 800, marginTop: 8 }}>Adoption Requests</div>
-                    {(activity.adoptions ?? []).length === 0 ? (
-                      <div style={{ padding: 12, color: "#64748b" }}>No adoption requests yet.</div>
-                    ) : (
-                      (activity.adoptions ?? []).map((a: any) => (
+                    {/* Adoption section (respect category filter) */}
+                    {(selectedCategory === "All pets" ||
+                      selectedCategory === "Adoption pet") && (
+                      <>
+                        <div style={{ fontSize: 18, fontWeight: 800, marginTop: 8 }}>
+                          Adoption Requests
+                        </div>
+                        {activityAdoptionsFiltered.length === 0 ? (
+                          <div style={{ padding: 12, color: "#64748b" }}>
+                            No adoption requests yet.
+                          </div>
+                        ) : (
+                          activityAdoptionsFiltered.map((a: any) => (
                         <div key={`adopt-${a.id}`} style={{ background: "white", border: "1px solid #f1f5f9", borderRadius: 16, padding: 16, display: "grid", gridTemplateColumns: "100px 1fr auto", gap: 16 }}>
                           {(() => {
                             const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
@@ -1203,6 +1283,8 @@ export default function UserHome() {
                         </div>
                         </div>
                       ))
+                        )}
+                      </>
                     )}
                   </>
                 )}

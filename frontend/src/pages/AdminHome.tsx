@@ -453,6 +453,7 @@ import {
   updateAdoptionRequestStatus,
   deleteAdoptionRequest,
   fetchAdminUsers,
+  fetchAvailablePets,
 } from "../services/api";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
@@ -507,12 +508,15 @@ export default function AdminHome() {
     "all",
   );
   const [userSearch, setUserSearch] = useState("");
-  const [userRoleFilter, setUserRoleFilter] = useState<"all" | "admin" | "user">(
-    "all",
-  );
+  const [userRoleFilter, setUserRoleFilter] = useState<"all" | "admin" | "user">("all");
   const [userActiveFilter, setUserActiveFilter] = useState<
     "all" | "active" | "inactive"
   >("all");
+  const [statsView, setStatsView] = useState<"default" | "recentPets">("default");
+  const [recentPets, setRecentPets] = useState<any[]>([]);
+  const [recentPetsSearch, setRecentPetsSearch] = useState("");
+  const [recentPetsSpecies, setRecentPetsSpecies] = useState("All Species");
+  const [recentPetsExpandedId, setRecentPetsExpandedId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -551,8 +555,8 @@ export default function AdminHome() {
 
       const [summaryRes, foundRes, lostRes, adoptionRes] = await Promise.all([
         fetchAdminSummary(),
-        fetchAdminFoundReports("pending"),
-        fetchAdminLostReports("pending"),
+        fetchAdminFoundReports(),
+        fetchAdminLostReports(),
         fetchAllAdoptionRequests(),
       ]);
       if (!mounted) return;
@@ -585,6 +589,10 @@ export default function AdminHome() {
     return () => window.clearInterval(id);
   }, []);
 
+  const isUpdated = (r: any) => {
+    return !!(r && r.has_user_update);
+  };
+
   useEffect(() => {
     if (tab !== "users") return;
     let cancelled = false;
@@ -611,7 +619,12 @@ export default function AdminHome() {
     } else if (tab === "pets") {
       reloadPets();
     } else {
-      reloadTable(tab, statusFilter);
+      // For lost/found/adoptions we always fetch full data and
+      // apply the statusFilter purely on the frontend so that
+      // pseudo-filters like "updated" work correctly.
+      const backendStatus =
+        tab === "lost" || tab === "found" ? "all" : statusFilter;
+      reloadTable(tab, backendStatus);
     }
   }, [refreshTick, tab, statusFilter]);
 
@@ -619,11 +632,11 @@ export default function AdminHome() {
     setTableLoading(true);
     setError(null);
     if (nextTab === "found") {
-      const res = await fetchAdminFoundReports(nextStatus);
+      const res = await fetchAdminFoundReports(nextStatus === "all" ? undefined : nextStatus);
       if (res.ok) setFoundReports(res.data ?? []);
       else if (res.error) setError(res.error);
     } else if (nextTab === "lost") {
-      const res = await fetchAdminLostReports(nextStatus);
+      const res = await fetchAdminLostReports(nextStatus === "all" ? undefined : nextStatus);
       if (res.ok) setLostReports(res.data ?? []);
       else if (res.error) setError(res.error);
     } else if (nextTab === "adoptions") {
@@ -639,6 +652,24 @@ export default function AdminHome() {
     setTableLoading(false);
   }
 
+  async function loadRecentPets() {
+    setTableLoading(true);
+    setError(null);
+    const res = await fetchAvailablePets();
+    if (res.ok) {
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      const rows = (res.data ?? []).filter((p: any) => {
+        const created = p.created_at ? new Date(p.created_at) : null;
+        return created && created >= weekAgo;
+      });
+      setRecentPets(rows);
+    } else if (res.error) {
+      setError(res.error);
+    }
+    setTableLoading(false);
+  }
+
   useEffect(() => {
     if (!summary) return;
     const sb = summary.status_breakdown || {};
@@ -647,14 +678,6 @@ export default function AdminHome() {
     const adoptionPending = Array.isArray(adoptionRequests)
       ? adoptionRequests.filter((r: any) => r.status === "pending").length
       : 0;
-
-    // Treat approved-but-edited reports as "updated" items
-    const isUpdated = (r: any) => {
-      if (!r) return false;
-      if (!r.updated_at || !r.created_at) return false;
-      if (r.status === "pending") return false;
-      return String(r.updated_at) !== String(r.created_at);
-    };
 
     const lostUpdated = Array.isArray(lostReports)
       ? lostReports.filter(isUpdated).length
@@ -686,13 +709,6 @@ export default function AdminHome() {
     const adoptionPending = Array.isArray(adoptionRequests)
       ? adoptionRequests.filter((r: any) => r.status === "pending").length
       : 0;
-
-    const isUpdated = (r: any) => {
-      if (!r) return false;
-      if (!r.updated_at || !r.created_at) return false;
-      if (r.status === "pending") return false;
-      return String(r.updated_at) !== String(r.created_at);
-    };
 
     const lostUpdated = Array.isArray(lostReports)
       ? lostReports.filter(isUpdated).length
@@ -895,13 +911,9 @@ export default function AdminHome() {
       return bySearch;
     }
 
-    // Special pseudo-filter: "updated" shows items that were changed after initial creation
+    // "updated" filter: items where user edited after initial approval
     if (statusFilter === "updated") {
-      return bySearch.filter((r: any) => {
-        if (!r.updated_at || !r.created_at) return false;
-        if (r.status === "pending") return false;
-        return String(r.updated_at) !== String(r.created_at);
-      });
+      return bySearch.filter((r: any) => isUpdated(r));
     }
 
     return bySearch.filter((r: any) => r.status === statusFilter);
@@ -923,6 +935,13 @@ export default function AdminHome() {
         );
       } else {
         setLostReports((prev) => prev.map((r) => (r.id === id ? res.data : r)));
+        // If a lost report was approved, the backend may have created a new
+        // adoption pet. Refresh the admin summary so 'Newly Added Pets (This
+        // Week)' updates immediately.
+        if (status === "approved") {
+          const summaryRes = await fetchAdminSummary();
+          if (summaryRes.ok) setSummary(summaryRes.data);
+        }
       }
     } finally {
     }
@@ -1400,12 +1419,10 @@ export default function AdminHome() {
     const adoptionTotal = Array.isArray(adoptionRequests)
       ? adoptionRequests.length
       : ((summary?.adoption_total ?? 0) as number);
-    const pendingApprovals = (() => {
-      const sb = summary?.status_breakdown;
-      const lostPending = sb?.lost?.pending ?? 0;
-      const foundPending = sb?.found?.pending ?? 0;
-      return lostPending + foundPending;
-    })();
+    const sb = summary?.status_breakdown;
+    const lostPending = sb?.lost?.pending ?? 0;
+    const foundPending = sb?.found?.pending ?? 0;
+    const pendingApprovals = lostPending + foundPending;
     const cards = [
       { title: "Pending Approvals", value: pendingApprovals, icon: "⏰", accent: "#f59e0b", background: "linear-gradient(135deg, #fef3c7, #fde68a)" },
       { title: "Total Lost Pets", value: totalLost, icon: "🚨", accent: "#ef4444", background: "linear-gradient(135deg, #fee2e2, #fecaca)" },
@@ -1430,10 +1447,18 @@ export default function AdminHome() {
               }}
               onClick={() => {
                 if (idx === 0) {
-                  setTab("lost");
-                  setStatusFilter("all");
-                  navigate("/admin?tab=lost", { replace: true });
-                  reloadTable("lost", "all");
+                  // Pending Approvals: prefer lost-pending; if none, go to found-pending
+                  if (lostPending > 0 || (lostPending === 0 && foundPending === 0)) {
+                    setTab("lost");
+                    setStatusFilter("pending");
+                    navigate("/admin?tab=lost&status=pending", { replace: true });
+                    reloadTable("lost", "pending");
+                  } else {
+                    setTab("found");
+                    setStatusFilter("pending");
+                    navigate("/admin?tab=found&status=pending", { replace: true });
+                    reloadTable("found", "pending");
+                  }
                 } else if (idx === 1) {
                   setTab("found");
                   setStatusFilter("all");
@@ -1514,30 +1539,57 @@ export default function AdminHome() {
           >
             {[
               {
+                key: "total-users" as const,
                 label: "Total Users",
                 value: summary.total_users ?? 0,
               },
               {
-                label: "Successful Adoptions",
-                value: summary.successful_adoptions ?? 0,
+                key: "update-requests" as const,
+                label: "Updation Requests",
+                value: summary.update_requests ?? 0,
               },
               {
+                key: "new-pets" as const,
                 label: "Newly Added Pets (This Week)",
                 value: summary.new_pets_this_week ?? 0,
               },
               {
-                label: "Total Volunteers",
-                value: summary.total_volunteers ?? 0,
+                key: "successful-adoptions" as const,
+                label: "Successful Adoptions",
+                value: summary.successful_adoptions ?? 0,
               },
-            ].map((item, idx) => (
-              <div
-                key={idx}
+            ].map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => {
+                  if (item.key === "total-users") {
+                    setTab("users");
+                    navigate("/admin?tab=users", { replace: true });
+                  } else if (item.key === "update-requests") {
+                    setTab("lost");
+                    setStatusFilter("updated");
+                    navigate("/admin?tab=lost&status=updated", { replace: true });
+                    reloadTable("lost", "all");
+                  } else if (item.key === "new-pets") {
+                    setTab("stats");
+                    setStatsView("recentPets");
+                    navigate("/admin?tab=stats&view=recentPets", { replace: true });
+                    loadRecentPets();
+                  }
+                }}
                 style={{
                   background: "#ecfdf3",
                   borderRadius: 14,
                   padding: "14px 18px",
                   textAlign: "center",
                   border: "1px solid #bbf7d0",
+                  cursor:
+                    item.key === "total-users" ||
+                    item.key === "update-requests" ||
+                    item.key === "new-pets"
+                      ? "pointer"
+                      : "default",
                 }}
               >
                 <div
@@ -1553,7 +1605,7 @@ export default function AdminHome() {
                 <div style={{ fontSize: 13, color: "#047857", fontWeight: 500 }}>
                   {item.label}
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -1563,11 +1615,226 @@ export default function AdminHome() {
 
   function renderStatisticsPanels() {
     if (!summary) return null;
+
+    if (statsView === "recentPets") {
+      const filtered = (recentPets || []).filter((p: any) => {
+        const q = recentPetsSearch.trim().toLowerCase();
+        if (q) {
+          const text = [p.name, p.species, p.breed, p.location_city, p.location_state]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          if (!text.includes(q)) return false;
+        }
+        if (recentPetsSpecies !== "All Species") {
+          return (p.species || "").toLowerCase() === recentPetsSpecies.toLowerCase();
+        }
+        return true;
+      });
+
+      return (
+        <div>
+          <div
+            style={{
+              marginBottom: 20,
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 16,
+              alignItems: "center",
+            }}
+          >
+            <div style={{ flex: 1 }}>
+              <input
+                value={recentPetsSearch}
+                onChange={(e) => setRecentPetsSearch(e.target.value)}
+                placeholder="Search by name, breed, or location..."
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  borderRadius: 12,
+                  border: "1px solid #e2e8f0",
+                  background: "white",
+                  color: "#374151",
+                  fontSize: 14,
+                  boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
+                }}
+              />
+            </div>
+            <div>
+              <select
+                value={recentPetsSpecies}
+                onChange={(e) => setRecentPetsSpecies(e.target.value)}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 999,
+                  border: "1px solid #e2e8f0",
+                  background: "white",
+                  color: "#374151",
+                  fontSize: 14,
+                  minWidth: 160,
+                }}
+              >
+                <option value="All Species">All Species</option>
+                <option value="Dog">Dogs</option>
+                <option value="Cat">Cats</option>
+                <option value="Rabbit">Rabbits</option>
+                <option value="Bird">Birds</option>
+              </select>
+            </div>
+          </div>
+
+          {tableLoading ? (
+            <div style={{ padding: 18, fontSize: 14, color: "#9ca3af" }}>Loading pets…</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ padding: 18, fontSize: 14, color: "#9ca3af" }}>
+              No pets added in the last 7 days.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {filtered.map((p: any) => {
+                const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
+                const origin = /^https?:/.test(apiBase)
+                  ? new URL(apiBase).origin
+                  : "http://localhost:8000";
+                const raw = p.photos || p.photo;
+                const src = raw
+                  ? (() => {
+                      const u = String(raw);
+                      if (u.startsWith("http")) return u;
+                      if (u.startsWith("/")) return origin + u;
+                      if (u.startsWith("media/")) return origin + "/" + u;
+                      return origin + "/media/" + u.replace(/^\/+/, "");
+                    })()
+                  : null;
+                return (
+                  <div
+                    key={p.id}
+                    style={{
+                      background: "white",
+                      borderRadius: 16,
+                      padding: 16,
+                      border: "1px solid #f1f5f9",
+                      display: "grid",
+                      gridTemplateColumns: "90px 1.5fr 1fr",
+                      gap: 16,
+                      alignItems: "center",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 90,
+                        height: 90,
+                        borderRadius: 12,
+                        overflow: "hidden",
+                        background: "#f3f4f6",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {src ? (
+                        <img
+                          src={src}
+                          alt={p.name || p.species || "Pet"}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      ) : (
+                        <span style={{ fontSize: 28 }}>🐾</span>
+                      )}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>
+                        {p.name || "Pet"}
+                      </div>
+                      <div style={{ fontSize: 13, color: "#6b7280", marginTop: 4 }}>
+                        {p.species} {p.breed ? `• ${p.breed}` : ""}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+                        Location: {p.location_city}
+                        {p.location_state ? ", " + p.location_state : ""}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12, color: "#64748b", justifySelf: "flex-end" }}>
+                      <div>
+                        Added on
+                        <div style={{ fontWeight: 600, marginTop: 4 }}>
+                          {p.created_at
+                            ? new Date(p.created_at).toLocaleString()
+                            : ""}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRecentPetsExpandedId((prev) =>
+                            prev === p.id ? null : p.id,
+                          )
+                        }
+                        style={{
+                          marginTop: 10,
+                          padding: "6px 12px",
+                          borderRadius: 999,
+                          border: "1px solid #111827",
+                          background: "#111827",
+                          color: "#f9fafb",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {recentPetsExpandedId === p.id ? "Hide Details" : "View Details"}
+                      </button>
+                    </div>
+                    {recentPetsExpandedId === p.id && (
+                      <div
+                        style={{
+                          gridColumn: "1 / span 3",
+                          marginTop: 8,
+                          fontSize: 12,
+                          color: "#374151",
+                        }}
+                      >
+                        {p.description && (
+                          <div style={{ marginBottom: 4 }}>
+                            <strong>Description:</strong> {p.description}
+                          </div>
+                        )}
+                        {p.age && (
+                          <div style={{ marginBottom: 2 }}>
+                            <strong>Age:</strong> {p.age}
+                          </div>
+                        )}
+                        {p.weight && (
+                          <div style={{ marginBottom: 2 }}>
+                            <strong>Weight:</strong> {p.weight}
+                          </div>
+                        )}
+                        {p.gender && (
+                          <div style={{ marginBottom: 2 }}>
+                            <strong>Gender:</strong> {p.gender}
+                          </div>
+                        )}
+                        {p.vaccinated != null && (
+                          <div style={{ marginBottom: 2 }}>
+                            <strong>Vaccinated:</strong> {String(p.vaccinated)}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    }
+
     return (
       <div>
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 24, marginBottom: 32 }}>
           <div style={{ background: "white", borderRadius: 16, padding: "24px", border: "1px solid #f1f5f9", boxShadow: "0 4px 24px rgba(0, 0, 0, 0.06)" }}>
-            <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#1e293b", margin: 0 }}>Lost and Found Pets (Weekly Trend)</h3>
+            <h3 style={{ fontSize: "18px", fontWeight: 700, color: "#1e293b", margin: 0 }}>Lost and Found Pets (Weekly Trend)</h3>
             <div style={{ height: 260, marginTop: 20 }}>
               {summary?.weekly_trend ? (
                 <WeeklyBarChart data={summary.weekly_trend as { date: string; lost: number; found: number }[]} />
@@ -1577,7 +1844,7 @@ export default function AdminHome() {
             </div>
           </div>
           <div style={{ background: "white", borderRadius: 16, padding: "24px", border: "1px solid #f1f5f9", boxShadow: "0 4px 24px rgba(0, 0, 0, 0.06)" }}>
-            <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#1e293b", margin: 0 }}>Pet Hotspots</h3>
+            <h3 style={{ fontSize: "18px", fontWeight: 700, color: "#1e293b", margin: 0 }}>Pet Hotspots</h3>
             <div style={{ height: 220, marginTop: 20 }}>
               {(summary?.hotspots ?? []).length === 0 ? (
                 <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: "#047857" }}>No hotspot data</div>
@@ -1589,7 +1856,7 @@ export default function AdminHome() {
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
           <div style={{ background: "white", borderRadius: 16, padding: "24px", border: "1px solid #f1f5f9", boxShadow: "0 4px 24px rgba(0, 0, 0, 0.06)" }}>
-            <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#1e293b", margin: "0 0 20px 0" }}>Most Reported Pet Types</h3>
+            <h3 style={{ fontSize: "18px", fontWeight: 700, color: "#1e293b", margin: "0 0 20px 0" }}>Most Reported Pet Types</h3>
             {(summary?.pet_types ?? []).map((item: any, idx: number) => (
               <div key={idx} style={{ marginBottom: "16px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
@@ -1613,7 +1880,7 @@ export default function AdminHome() {
             ))}
           </div>
           <div style={{ background: "white", borderRadius: 16, padding: "24px", border: "1px solid #f1f5f9", boxShadow: "0 4px 24px rgba(0, 0, 0, 0.06)" }}>
-            <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#1e293b", margin: "0 0 20px 0" }}>Recent Activity</h3>
+            <h3 style={{ fontSize: "18px", fontWeight: 700, color: "#1e293b", margin: "0 0 20px 0" }}>Recent Activity</h3>
             {(summary?.recent_activity ?? []).map((activity: any, idx: number) => (
               <div key={idx} style={{ display: "flex", alignItems: "center", marginBottom: "16px", paddingBottom: "16px", borderBottom: idx < 3 ? "1px solid #f1f5f9" : "none" }}>
                 <div style={{ width: "40px", height: "40px", borderRadius: "8px", background: "#e0e7ff", display: "flex", alignItems: "center", justifyContent: "center", marginRight: "12px", fontSize: "16px" }}>📝</div>
@@ -2775,8 +3042,8 @@ export default function AdminHome() {
                     boxShadow: "0 12px 30px rgba(15,23,42,0.18)",
                     padding: 12,
                     fontSize: 13,
-                    color: "#0f172a",
                     zIndex: 60,
+                    color: "#111827",
                   }}
                 >
                   <div
@@ -2799,24 +3066,51 @@ export default function AdminHome() {
                     const adoptionPending = Array.isArray(adoptionRequests)
                       ? adoptionRequests.filter((r: any) => r.status === "pending").length
                       : 0;
+                    const lostUpdated = Array.isArray(lostReports)
+                      ? lostReports.filter((r: any) => r.has_user_update).length
+                      : 0;
+                    const foundUpdated = Array.isArray(foundReports)
+                      ? foundReports.filter((r: any) => r.has_user_update).length
+                      : 0;
+
                     const items = [
                       {
                         label: "Lost reports",
                         count: lostPending,
                         tab: "lost" as TabKey,
+                        filter: "pending" as const,
                       },
                       {
                         label: "Found reports",
                         count: foundPending,
                         tab: "found" as TabKey,
+                        filter: "pending" as const,
+                      },
+                      {
+                        label: "Updated lost reports",
+                        count: lostUpdated,
+                        tab: "lost" as TabKey,
+                        filter: "updated" as const,
+                      },
+                      {
+                        label: "Updated found reports",
+                        count: foundUpdated,
+                        tab: "found" as TabKey,
+                        filter: "updated" as const,
                       },
                       {
                         label: "Adoption requests",
                         count: adoptionPending,
                         tab: "adoptions" as TabKey,
+                        filter: "pending" as const,
                       },
                     ];
-                    const total = lostPending + foundPending + adoptionPending;
+                    const total =
+                      lostPending +
+                      foundPending +
+                      adoptionPending +
+                      lostUpdated +
+                      foundUpdated;
                     if (total === 0) {
                       return (
                         <div style={{ fontSize: 12, color: "#6b7280", paddingTop: 4 }}>
@@ -2832,9 +3126,13 @@ export default function AdminHome() {
                             disabled={it.count === 0}
                             onClick={() => {
                               setTab(it.tab);
-                              setStatusFilter("pending");
+                              setStatusFilter(it.filter);
                               navigate(`/admin?tab=${it.tab}`, { replace: true });
-                              reloadTable(it.tab, "pending");
+                              const backendStatus =
+                                it.tab === "lost" || it.tab === "found"
+                                  ? "all"
+                                  : it.filter;
+                              reloadTable(it.tab, backendStatus);
                               setNotificationOpen(false);
                             }}
                             style={{
@@ -3299,16 +3597,15 @@ export default function AdminHome() {
               </div>
 
               {(() => {
-                const adoptRows = adoptionRequests
-                  .filter((a: any) => a.status === "approved")
-                  .map((a: any) => ({ ...a, __kind: "adoption" }));
+                // Only include lost and found reports in this consolidated list.
+                // Adoption requests are managed separately in the Adoptions tab.
                 const lostRows = lostReports
                   .filter((r: any) => r.status === "approved")
                   .map((r: any) => ({ ...r, __kind: "lost" }));
                 const foundRows = foundReports
                   .filter((r: any) => r.status === "approved")
                   .map((r: any) => ({ ...r, __kind: "found" }));
-                const allRows: any[] = [...lostRows, ...foundRows, ...adoptRows];
+                const allRows: any[] = [...lostRows, ...foundRows];
 
                 // apply type filter
                 let rows = allRows;
@@ -3359,20 +3656,17 @@ export default function AdminHome() {
                     {rows.map((r: any) => {
                       const isLost = r.__kind === "lost";
                       const isFound = r.__kind === "found";
-                      const isAdoption = r.__kind === "adoption";
                       const title = isLost
                         ? `${r.pet_name || r.pet_type || "Pet"}`
-                        : isFound
-                          ? `${r.pet_type || r.pet_name || "Pet"}`
-                          : r.pet?.name || "Adoption Request";
+                        : `${r.pet_type || r.pet_name || "Pet"}`;
                       const locationText = isLost
                         ? `${r.location || r.city || r.found_city || ""}${r.state ? ", " + r.state : ""}`
-                        : isFound
-                          ? `${r.found_city || r.city || ""}${r.state ? ", " + r.state : ""}`
-                          : `${r.pet?.location_city || ""}${r.pet?.location_state ? ", " + r.pet?.location_state : ""}`;
+                        : `${r.found_city || r.city || ""}${r.state ? ", " + r.state : ""}`;
                       const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
-                      const origin = /^https?:/.test(apiBase) ? new URL(apiBase).origin : "http://localhost:8000";
-                      const raw = isAdoption ? r.pet?.photos : (r.photo_url || r.photo);
+                      const origin = /^https?:/.test(apiBase)
+                        ? new URL(apiBase).origin
+                        : "http://localhost:8000";
+                      const raw = r.photo_url || r.photo;
                       const src = raw
                         ? (() => {
                             const u = String(raw);
@@ -3493,7 +3787,8 @@ export default function AdminHome() {
             </div>
           )}
 
-          {tab !== "dashboard" && renderCards()}
+          {(tab === "lost" || tab === "found" || tab === "adoptions") &&
+            renderCards()}
         </div>
       </div>
     </div>

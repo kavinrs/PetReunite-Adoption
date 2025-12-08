@@ -32,6 +32,8 @@ class FoundPetReportSerializer(serializers.ModelSerializer):
             "photo_url",
             "status",
             "admin_notes",
+            "has_user_update",
+            "previous_snapshot",
             "created_at",
             "updated_at",
         )
@@ -40,6 +42,8 @@ class FoundPetReportSerializer(serializers.ModelSerializer):
             "reporter",
             "status",
             "admin_notes",
+            "has_user_update",
+            "previous_snapshot",
             "created_at",
             "updated_at",
         )
@@ -78,6 +82,8 @@ class LostPetReportSerializer(serializers.ModelSerializer):
             "photo_url",
             "status",
             "admin_notes",
+            "has_user_update",
+            "previous_snapshot",
             "created_at",
             "updated_at",
         )
@@ -86,6 +92,8 @@ class LostPetReportSerializer(serializers.ModelSerializer):
             "reporter",
             "status",
             "admin_notes",
+            "has_user_update",
+            "previous_snapshot",
             "created_at",
             "updated_at",
         )
@@ -97,6 +105,32 @@ class LostPetReportSerializer(serializers.ModelSerializer):
         except Exception:
             pass
         return str(obj.photo) if obj.photo else None
+
+    def update(self, instance, validated_data):
+        """On user edits of already-reviewed reports, capture a snapshot.
+
+        This complements the view-level perform_update and guarantees that
+        previous_snapshot/has_user_update are populated even if the view hook
+        is bypassed for some reason.
+        """
+        if instance.status != "pending" and not instance.previous_snapshot:
+            instance.previous_snapshot = {
+                "pet_name": instance.pet_name,
+                "pet_type": instance.pet_type,
+                "breed": instance.breed,
+                "color": instance.color,
+                "weight": instance.weight,
+                "vaccinated": instance.vaccinated,
+                "age": instance.age,
+                "city": instance.city,
+                "state": instance.state,
+                "pincode": instance.pincode,
+                "description": instance.description,
+            }
+        if instance.status != "pending":
+            instance.has_user_update = True
+
+        return super().update(instance, validated_data)
 
 
 class AdminFoundPetReportSerializer(FoundPetReportSerializer):

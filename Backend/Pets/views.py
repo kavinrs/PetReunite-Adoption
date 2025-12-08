@@ -61,6 +61,37 @@ class LostPetReportDetailView(generics.RetrieveUpdateAPIView):
             return LostPetReport.objects.all()
         return LostPetReport.objects.filter(reporter=user)
 
+    def perform_update(self, serializer):
+        """When an already-reviewed report is edited, flag it as updated.
+
+        We capture a lightweight snapshot of the previous values so the admin can
+        compare "before" vs "after" in the dashboard. This runs for both
+        normal users and staff accounts, which keeps behaviour consistent even
+        if an admin happens to update from the user view.
+        """
+        instance = self.get_object()
+        if instance.status != "pending":
+            # If there is no snapshot yet, capture the current values so admin
+            # can always see what changed, even if has_user_update was toggled
+            # earlier (for example, via manual DB edits).
+            if not instance.previous_snapshot:
+                instance.previous_snapshot = {
+                    "pet_name": instance.pet_name,
+                    "pet_type": instance.pet_type,
+                    "breed": instance.breed,
+                    "color": instance.color,
+                    "weight": instance.weight,
+                    "vaccinated": instance.vaccinated,
+                    "age": instance.age,
+                    "city": instance.city,
+                    "state": instance.state,
+                    "pincode": instance.pincode,
+                    "description": instance.description,
+                }
+            instance.has_user_update = True
+
+        serializer.save()
+
 
 class FoundPetReportDetailView(generics.RetrieveUpdateAPIView):
     serializer_class = FoundPetReportSerializer
@@ -72,6 +103,28 @@ class FoundPetReportDetailView(generics.RetrieveUpdateAPIView):
         if user.is_staff or user.is_superuser:
             return FoundPetReport.objects.all()
         return FoundPetReport.objects.filter(reporter=user)
+
+    def perform_update(self, serializer):
+        """When an already-reviewed found report is edited, flag it as updated.
+
+        Mirrors LostPetReportDetailView so admins can see before/after details
+        for found reports as well.
+        """
+        instance = self.get_object()
+        if instance.status != "pending":
+            if not instance.previous_snapshot:
+                instance.previous_snapshot = {
+                    "pet_type": instance.pet_type,
+                    "breed": instance.breed,
+                    "color": instance.color,
+                    "estimated_age": instance.estimated_age,
+                    "found_city": instance.found_city,
+                    "state": instance.state,
+                    "description": instance.description,
+                }
+            instance.has_user_update = True
+
+        serializer.save()
 
 
 class LostPetReportView(generics.ListCreateAPIView):
@@ -265,7 +318,11 @@ class AdminReportSummaryView(APIView):
         total_users = User.objects.filter(is_active=True).count()
         successful_adoptions = AdoptionRequest.objects.filter(status="approved").count()
         new_pets_this_week = Pet.objects.filter(is_active=True, created_at__gte=week_start).count()
-        total_volunteers = User.objects.filter(is_staff=True, is_superuser=False).count()
+        # Total reports that have pending user updates (lost + found)
+        update_requests = (
+            LostPetReport.objects.filter(has_user_update=True).count()
+            + FoundPetReport.objects.filter(has_user_update=True).count()
+        )
 
         data = {
             "lost_total": lost_qs.filter(status="approved").count(),
@@ -283,7 +340,7 @@ class AdminReportSummaryView(APIView):
             "total_users": total_users,
             "successful_adoptions": successful_adoptions,
             "new_pets_this_week": new_pets_this_week,
-            "total_volunteers": total_volunteers,
+            "update_requests": update_requests,
         }
 
         return Response(data, status=status.HTTP_200_OK)
@@ -615,8 +672,9 @@ class AdminUserListView(APIView):
     permission_classes = [IsAdminOrStaff]
 
     def get(self, request):
+        # Only include active users so the table matches the real active user count
         users = (
-            User.objects.all()
+            User.objects.filter(is_active=True)
             .order_by("-date_joined")
             .values("id", "username", "email", "is_staff", "is_active", "date_joined")
         )

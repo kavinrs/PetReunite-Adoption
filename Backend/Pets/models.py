@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.db import models
+from django.db.models import JSONField
 
 User = get_user_model()
 
@@ -33,6 +34,8 @@ class FoundPetReport(models.Model):
     )
     status = models.CharField(max_length=32, choices=STATUS_CHOICES, default="pending")
     admin_notes = models.TextField(blank=True)
+    has_user_update = models.BooleanField(default=False)
+    previous_snapshot = JSONField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -65,6 +68,8 @@ class LostPetReport(models.Model):
     )
     status = models.CharField(max_length=32, choices=STATUS_CHOICES, default="pending")
     admin_notes = models.TextField(blank=True)
+    has_user_update = models.BooleanField(default=False)
+    previous_snapshot = JSONField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

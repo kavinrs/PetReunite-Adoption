@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
-import { fetchAdminLostReports } from "../services/api";
+import { fetchAdminLostReports, updateAdminLostReport } from "../services/api";
 
 export default function AdminLostReportDetail() {
   useViewportStandardization();
@@ -11,6 +11,9 @@ export default function AdminLostReportDetail() {
   const [report, setReport] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [savingAction, setSavingAction] = useState<null | "accept" | "reject">(
+    null,
+  );
 
   useEffect(() => {
     async function load() {
@@ -36,6 +39,63 @@ export default function AdminLostReportDetail() {
 
   const handleBack = () => {
     navigate("/admin?tab=lost");
+  };
+
+  const handleAcceptUpdate = async () => {
+    if (!id || !report || !report.has_user_update) return;
+    try {
+      setSavingAction("accept");
+      setError(null);
+      const numericId = Number(id);
+      const res = await updateAdminLostReport(numericId, {
+        has_user_update: false as any,
+        previous_snapshot: null as any,
+      });
+      if (!res.ok) {
+        if (res.error) setError(res.error);
+        return;
+      }
+      setReport(res.data);
+    } finally {
+      setSavingAction(null);
+    }
+  };
+
+  const handleRejectUpdate = async () => {
+    if (!id || !report || !report.has_user_update || !report.previous_snapshot)
+      return;
+    try {
+      setSavingAction("reject");
+      setError(null);
+      const numericId = Number(id);
+      const snap = report.previous_snapshot || {};
+
+      const payload: any = {
+        // restore original user-entered fields from the snapshot
+        pet_name: snap.pet_name,
+        pet_type: snap.pet_type,
+        breed: snap.breed,
+        color: snap.color,
+        weight: snap.weight,
+        vaccinated: snap.vaccinated,
+        age: snap.age,
+        city: snap.city,
+        state: snap.state,
+        pincode: snap.pincode,
+        description: snap.description,
+        has_user_update: false,
+        previous_snapshot: null,
+      };
+
+      const res = await updateAdminLostReport(numericId, payload);
+      if (!res.ok) {
+        if (res.error) setError(res.error);
+        return;
+      }
+      setReport(res.data);
+    } finally {
+      setSavingAction(null);
+    }
   };
 
   if (loading) return <div style={{ padding: 32 }}>Loading report...</div>;
@@ -239,47 +299,213 @@ export default function AdminLostReportDetail() {
               boxShadow: "0 10px 30px rgba(15,23,42,0.08)",
               display: "flex",
               flexDirection: "column",
-              gap: 12,
+              gap: 16,
             }}
           >
-            <div style={{ fontWeight: 700 }}>Pet Details</div>
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
                 gap: 12,
               }}
             >
-              {([
-                ["pet_name", "Pet Name"],
-                ["pet_type", "Pet Type"],
-                ["breed", "Breed"],
-                ["color", "Color"],
-                ["weight", "Weight"],
-                ["vaccinated", "Vaccinated"],
-                ["age", "Age (years)"],
-                ["city", "City"],
-                ["state", "State"],
-                ["pincode", "Pincode"],
-              ] as const).map(([key, label]) => (
-                <div key={key}>
-                  <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>{label}</div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>
-                    {report[key] || <span style={{ color: "#9ca3af" }}>—</span>}
-                  </div>
+              <div style={{ fontWeight: 700 }}>Pet Details</div>
+              {report.has_user_update && report.previous_snapshot && (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={handleAcceptUpdate}
+                    disabled={savingAction === "accept"}
+                    style={{
+                      borderRadius: 999,
+                      border: "none",
+                      padding: "6px 14px",
+                      background: "#16a34a",
+                      color: "white",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor:
+                        savingAction === "accept" ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {savingAction === "accept" ? "Accepting..." : "Accept"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRejectUpdate}
+                    disabled={savingAction === "reject"}
+                    style={{
+                      borderRadius: 999,
+                      border: "none",
+                      padding: "6px 14px",
+                      background: "#dc2626",
+                      color: "white",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor:
+                        savingAction === "reject" ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {savingAction === "reject" ? "Reverting..." : "Reject"}
+                  </button>
                 </div>
-              ))}
+              )}
             </div>
 
-            <div>
-              <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
-                Description
+            {report.has_user_update && report.previous_snapshot ? (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                  gap: 16,
+                }}
+              >
+                {["Previous details", "Updated details"].map((title, idx) => {
+                  const source = idx === 0 ? report.previous_snapshot : report;
+                  return (
+                    <div
+                      key={title}
+                      style={{
+                        borderRadius: 16,
+                        border: idx === 0 ? "1px solid #e5e7eb" : "1px solid #bfdbfe",
+                        background: idx === 0 ? "#f9fafb" : "#eff6ff",
+                        padding: 12,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 8,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 700,
+                          color: idx === 0 ? "#6b7280" : "#1d4ed8",
+                          textTransform: "uppercase",
+                          letterSpacing: 0.5,
+                        }}
+                      >
+                        {title}
+                      </div>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                          gap: 8,
+                        }}
+                      >
+                        {([
+                          ["pet_name", "Pet Name"],
+                          ["pet_type", "Pet Type"],
+                          ["breed", "Breed"],
+                          ["color", "Color"],
+                          ["weight", "Weight"],
+                          ["vaccinated", "Vaccinated"],
+                          ["age", "Age (years)"],
+                          ["city", "City"],
+                          ["state", "State"],
+                          ["pincode", "Pincode"],
+                        ] as const).map(([key, label]) => (
+                          <div key={key}>
+                            <div
+                              style={{
+                                fontSize: 11,
+                                color: "#6b7280",
+                                marginBottom: 2,
+                              }}
+                            >
+                              {label}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: "#111827",
+                              }}
+                            >
+                              {source[key] || (
+                                <span style={{ color: "#9ca3af" }}>—</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "#6b7280",
+                            marginBottom: 2,
+                          }}
+                        >
+                          Description
+                        </div>
+                        <div style={{ fontSize: 13, color: "#111827" }}>
+                          {source.description || (
+                            <span style={{ color: "#9ca3af" }}>No description</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <div style={{ fontSize: 13, color: "#111827" }}>
-                {report.description || <span style={{ color: "#9ca3af" }}>No description</span>}
-              </div>
-            </div>
+            ) : (
+              <>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                    gap: 12,
+                  }}
+                >
+                  {([
+                    ["pet_name", "Pet Name"],
+                    ["pet_type", "Pet Type"],
+                    ["breed", "Breed"],
+                    ["color", "Color"],
+                    ["weight", "Weight"],
+                    ["vaccinated", "Vaccinated"],
+                    ["age", "Age (years)"],
+                    ["city", "City"],
+                    ["state", "State"],
+                    ["pincode", "Pincode"],
+                  ] as const).map(([key, label]) => (
+                    <div key={key}>
+                      <div
+                        style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}
+                      >
+                        {label}
+                      </div>
+                      <div
+                        style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}
+                      >
+                        {report[key] || (
+                          <span style={{ color: "#9ca3af" }}>—</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div>
+                  <div
+                    style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}
+                  >
+                    Description
+                  </div>
+                  <div style={{ fontSize: 13, color: "#111827" }}>
+                    {report.description || (
+                      <span style={{ color: "#9ca3af" }}>No description</span>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
+          {error && (
+            <div style={{ fontSize: 12, color: "#b91c1c" }}>{error}</div>
+          )}
         </div>
       </div>
     </div>

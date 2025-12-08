@@ -523,6 +523,7 @@ export default function AdminHome() {
   const [tableLoading, setTableLoading] = useState(false);
   const [hasPendingNotification, setHasPendingNotification] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [dismissedNotifications, setDismissedNotifications] = useState<string[]>([]);
   const lastSeenPendingRef = useRef(0);
 
   const [error, setError] = useState<string | null>(null);
@@ -693,6 +694,90 @@ export default function AdminHome() {
       setHasPendingNotification(true);
     }
   }, [summary, adoptionRequests, lostReports, foundReports]);
+
+  const notificationFeed = useMemo(
+    () => {
+      const items: {
+        id: string;
+        context: string;
+        from: string;
+        createdAt: string | null;
+        tab: TabKey;
+        filter: string;
+        backendStatus: string;
+      }[] = [];
+
+      if (Array.isArray(lostReports)) {
+        for (const r of lostReports as any[]) {
+          const isUpdate = !!r.has_user_update;
+          const status: string = r.status || "pending";
+          const filter = isUpdate
+            ? "updated"
+            : status === "pending"
+              ? "pending"
+              : "all";
+          items.push({
+            id: `lost-${r.id}`,
+            context: isUpdate ? "Lost Updation" : "Lost Report",
+            from: r.reporter?.username || "Unknown user",
+            createdAt: r.updated_at || r.created_at || null,
+            tab: "lost",
+            filter,
+            backendStatus: "all",
+          });
+        }
+      }
+
+      if (Array.isArray(foundReports)) {
+        for (const r of foundReports as any[]) {
+          const isUpdate = !!r.has_user_update;
+          const status: string = r.status || "pending";
+          const filter = isUpdate
+            ? "updated"
+            : status === "pending"
+              ? "pending"
+              : "all";
+          items.push({
+            id: `found-${r.id}`,
+            context: isUpdate ? "Found Updation" : "Found Report",
+            from: r.reporter?.username || "Unknown user",
+            createdAt: r.updated_at || r.created_at || null,
+            tab: "found",
+            filter,
+            backendStatus: "all",
+          });
+        }
+      }
+
+      if (Array.isArray(adoptionRequests)) {
+        for (const r of adoptionRequests as any[]) {
+          const status: string = r.status || "pending";
+          const isUpdate =
+            !!r.updated_at && !!r.created_at && r.updated_at !== r.created_at;
+          const context = isUpdate ? "Adoption Updation" : "Adoption Report";
+          const filter = status === "pending" ? "pending" : status;
+          items.push({
+            id: `adoption-${r.id}`,
+            context,
+            from: r.requester?.username || "Unknown user",
+            createdAt: r.updated_at || r.created_at || null,
+            tab: "adoptions",
+            filter,
+            backendStatus: filter,
+          });
+        }
+      }
+
+      items.sort((a, b) => {
+        const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return tb - ta;
+      });
+
+      return items;
+    },
+    [lostReports, foundReports, adoptionRequests],
+  );
 
   function handleNotificationClick() {
     // Toggle panel visibility
@@ -2235,6 +2320,7 @@ export default function AdminHome() {
           const isLost = tab === "lost";
           const isFound = tab === "found";
           const isAdoption = tab === "adoptions";
+          const isPetsTab = tab === "pets";
           const title = isLost
             ? `${r.pet_name || r.pet_type || "Pet"}`
             : isFound
@@ -2366,7 +2452,9 @@ export default function AdminHome() {
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
                   <button
                     onClick={() => {
-                      if (isLost) {
+                      if (isPetsTab && r.pet?.id) {
+                        navigate(`/pets/${r.pet.id}`);
+                      } else if (isLost) {
                         navigate(`/admin/lost/${r.id}`);
                       } else {
                         setExpandedId((prev) => (prev === r.id ? null : r.id));
@@ -2785,7 +2873,7 @@ export default function AdminHome() {
                 marginBottom: "8px",
               }}
             >
-              <span>📊</span> Admin Dashboard
+              <span></span> Home
             </button>
 
             <button
@@ -3035,7 +3123,7 @@ export default function AdminHome() {
                     position: "absolute",
                     top: 48,
                     right: 80,
-                    width: 260,
+                    width: 380,
                     background: "#ffffff",
                     borderRadius: 12,
                     border: "1px solid #e5e7eb",
@@ -3056,115 +3144,108 @@ export default function AdminHome() {
                   >
                     <span style={{ fontWeight: 700 }}>Notifications</span>
                     <span style={{ fontSize: 11, color: "#6b7280" }}>
-                      Pending activity
+                      Latest activity
                     </span>
                   </div>
-                  {(() => {
-                    const sb = summary?.status_breakdown || {};
-                    const lostPending = sb.lost?.pending ?? 0;
-                    const foundPending = sb.found?.pending ?? 0;
-                    const adoptionPending = Array.isArray(adoptionRequests)
-                      ? adoptionRequests.filter((r: any) => r.status === "pending").length
-                      : 0;
-                    const lostUpdated = Array.isArray(lostReports)
-                      ? lostReports.filter((r: any) => r.has_user_update).length
-                      : 0;
-                    const foundUpdated = Array.isArray(foundReports)
-                      ? foundReports.filter((r: any) => r.has_user_update).length
-                      : 0;
-
-                    const items = [
-                      {
-                        label: "Lost reports",
-                        count: lostPending,
-                        tab: "lost" as TabKey,
-                        filter: "pending" as const,
-                      },
-                      {
-                        label: "Found reports",
-                        count: foundPending,
-                        tab: "found" as TabKey,
-                        filter: "pending" as const,
-                      },
-                      {
-                        label: "Updated lost reports",
-                        count: lostUpdated,
-                        tab: "lost" as TabKey,
-                        filter: "updated" as const,
-                      },
-                      {
-                        label: "Updated found reports",
-                        count: foundUpdated,
-                        tab: "found" as TabKey,
-                        filter: "updated" as const,
-                      },
-                      {
-                        label: "Adoption requests",
-                        count: adoptionPending,
-                        tab: "adoptions" as TabKey,
-                        filter: "pending" as const,
-                      },
-                    ];
-                    const total =
-                      lostPending +
-                      foundPending +
-                      adoptionPending +
-                      lostUpdated +
-                      foundUpdated;
-                    if (total === 0) {
-                      return (
-                        <div style={{ fontSize: 12, color: "#6b7280", paddingTop: 4 }}>
-                          No pending requests right now.
-                        </div>
-                      );
-                    }
-                    return (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        {items.map((it) => (
-                          <button
-                            key={it.label}
-                            disabled={it.count === 0}
-                            onClick={() => {
-                              setTab(it.tab);
-                              setStatusFilter(it.filter);
-                              navigate(`/admin?tab=${it.tab}`, { replace: true });
-                              const backendStatus =
-                                it.tab === "lost" || it.tab === "found"
-                                  ? "all"
-                                  : it.filter;
-                              reloadTable(it.tab, backendStatus);
-                              setNotificationOpen(false);
-                            }}
-                            style={{
-                              width: "100%",
-                              padding: "6px 8px",
-                              borderRadius: 8,
-                              border: "none",
-                              background:
-                                it.count > 0 ? "#eff6ff" : "transparent",
-                              color: it.count > 0 ? "#1d4ed8" : "#6b7280",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              fontSize: 12,
-                              fontWeight: 600,
-                              cursor: it.count > 0 ? "pointer" : "default",
-                            }}
-                          >
-                            <span>{it.label}</span>
-                            <span
+                  {notificationFeed.length === 0 ? (
+                    <div style={{ fontSize: 12, color: "#6b7280", paddingTop: 4 }}>
+                      No notifications yet.
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        maxHeight: 260,
+                        overflowY: "auto",
+                        paddingRight: 4,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6,
+                      }}
+                    >
+                      {notificationFeed
+                        .filter((n) => !dismissedNotifications.includes(n.id))
+                        .map((n) => {
+                          const dateLabel = n.createdAt
+                            ? new Date(n.createdAt).toLocaleString(undefined, {
+                                month: "short",
+                                day: "2-digit",
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })
+                            : "";
+                          return (
+                            <button
+                              key={n.id}
+                              onClick={() => {
+                                setDismissedNotifications((prev) =>
+                                  prev.includes(n.id)
+                                    ? prev
+                                    : [...prev, n.id],
+                                );
+                                setTab(n.tab);
+                                setStatusFilter(n.filter);
+                                navigate(`/admin?tab=${n.tab}`, { replace: true });
+                                const backendStatus =
+                                  n.tab === "lost" || n.tab === "found"
+                                    ? "all"
+                                    : n.backendStatus || n.filter;
+                                reloadTable(n.tab, backendStatus);
+                                setNotificationOpen(false);
+                              }}
                               style={{
-                                minWidth: 20,
-                                textAlign: "right",
+                                width: "100%",
+                                textAlign: "left",
+                                padding: "16px 18px",
+                                borderRadius: 12,
+                                border: "1px solid #e5e7eb",
+                                background: "#f9fafb",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: 14,
+                                fontSize: 14,
+                                cursor: "pointer",
                               }}
                             >
-                              {it.count}
-                            </span>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  alignItems: "flex-start",
+                                  gap: 4,
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: 14,
+                                    fontWeight: 700,
+                                    color: "#111827",
+                                  }}
+                                >
+                                  {n.context}
+                              </span>
+                              <span style={{ fontSize: 12, color: "#6b7280" }}>
+                                From {n.from}
+                              </span>
+                              {dateLabel && (
+                                <span style={{ fontSize: 12, color: "#9ca3af" }}>
+                                  {dateLabel}
+                                </span>
+                              )}
+                            </div>
+                            <span
+                              style={{
+                                width: 10,
+                                height: 10,
+                                borderRadius: "50%",
+                                background: "#ef4444",
+                              }}
+                            />
                           </button>
-                        ))}
-                      </div>
-                    );
-                  })()}
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -3759,8 +3840,36 @@ export default function AdminHome() {
                               <div style={{ fontSize: 13, color: "#374151" }}>{r.reporter?.username || r.requester?.username || "—"}</div>
                               <div style={{ fontSize: 12, color: "#64748b" }}>{r.reporter?.email || r.requester?.email || ""}</div>
                             </div>
-                            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: 8,
+                                justifyContent: "flex-end",
+                                alignItems: "center",
+                              }}
+                            >
                               <div>{renderStatusBadge(r.status)}</div>
+                              <button
+                                onClick={() => {
+                                  if ((r as any).pet?.id) {
+                                    navigate(`/pets/${(r as any).pet.id}`);
+                                  } else if (isLost) {
+                                    navigate(`/admin/lost/${r.id}`);
+                                  }
+                                }}
+                                style={{
+                                  padding: "8px 12px",
+                                  borderRadius: 999,
+                                  border: "1px solid #e5e7eb",
+                                  background: "#ffffff",
+                                  color: "#0f172a",
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                View details
+                              </button>
                               <button
                                 onClick={() => handleDeletePet(r)}
                                 style={{

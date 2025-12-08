@@ -28,5 +28,5 @@ class AdminProfile(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def __str__(self) -> str:  # pragma: no cover - simple representation
+    def __str__(self) -> str:  
         return f"AdminProfile for {self.user.username}"

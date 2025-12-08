@@ -12,7 +12,7 @@ from .serializers import (
 )
 from .models import UserProfile
 #  FoundPetReport, LostPetReport
-from django.contrib.auth import authenticate
+from django.contrib.auth import authenticate, get_user_model
 from rest_framework_simplejwt.tokens import RefreshToken
 
 
@@ -113,6 +113,49 @@ class AdminLoginView(APIView):
                 "is_admin": True
             },
             status=status.HTTP_200_OK
+        )
+
+
+class EmailLoginView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email")
+        password = request.data.get("password")
+
+        if not email or not password:
+            return Response(
+                {"detail": "Email and password are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        User = get_user_model()
+        qs = User.objects.filter(email__iexact=email).order_by("id")
+        user_obj = qs.first()
+        if not user_obj:
+            return Response({"detail": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        user = authenticate(username=user_obj.username, password=password)
+        if not user:
+            return Response({"detail": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        is_admin = user.is_staff or user.is_superuser
+        try:
+            if hasattr(user, "profile") and user.profile.role == "admin":
+                is_admin = True
+        except Exception:
+            pass
+
+        refresh = RefreshToken.for_user(user)
+        return Response(
+            {
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "username": user.username,
+                "email": user.email,
+                "is_admin": is_admin,
+            },
+            status=status.HTTP_200_OK,
         )
 
 

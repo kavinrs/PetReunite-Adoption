@@ -1,22 +1,15 @@
 // src/pages/Dashboard.tsx
 import React, { useState } from "react";
-import {
-  userLogin,
-  adminLogin,
-  registerUser,
-  adminRegister,
-  getProfile,
-} from "../services/api";
+import { emailLogin, registerUser, adminRegister, getProfile } from "../services/api";
 import { useNavigate } from "react-router-dom";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
-
 const SearchIcon = () => (
   <div
     style={{
-      width: 64,
-      height: 64,
-      margin: "0 auto 16px",
-      borderRadius: 12,
+      width: 40,
+      height: 40,
+      margin: "0 auto 12px",
+      borderRadius: 8,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -24,8 +17,8 @@ const SearchIcon = () => (
     }}
   >
     <svg
-      width="28"
-      height="28"
+      width="18"
+      height="18"
       viewBox="0 0 24 24"
       stroke="#fff"
       fill="none"
@@ -40,17 +33,17 @@ const SearchIcon = () => (
 const HeartIcon = () => (
   <div
     style={{
-      width: 64,
-      height: 64,
-      margin: "0 auto 16px",
-      borderRadius: 12,
+      width: 40,
+      height: 40,
+      margin: "0 auto 12px",
+      borderRadius: 8,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
       background: "linear-gradient(180deg,#ff6aa1,#ff3f90)",
     }}
   >
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="#fff">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff">
       <path d="M20.8 6.6c-1.6-1.8-4.3-1.9-6-.2l-.9.9-.9-.9c-1.7-1.7-4.4-1.6-6 .2-1.9 2.1-1.8 5.6.2 7.6L12 20.3l6.5-6.5c2-2 2.1-5.5.3-7.2z" />
     </svg>
   </div>
@@ -59,17 +52,17 @@ const HeartIcon = () => (
 const ShieldIcon = () => (
   <div
     style={{
-      width: 64,
-      height: 64,
-      margin: "0 auto 16px",
-      borderRadius: 12,
+      width: 40,
+      height: 40,
+      margin: "0 auto 12px",
+      borderRadius: 8,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
       background: "linear-gradient(180deg,#2ed573,#12c26a)",
     }}
   >
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="#fff">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff">
       <path d="M12 3l7 3v5c0 5-3.6 9.8-7 11-3.4-1.2-7-6-7-11V6l7-3z" />
     </svg>
   </div>
@@ -78,17 +71,17 @@ const ShieldIcon = () => (
 const PeopleIcon = () => (
   <div
     style={{
-      width: 64,
-      height: 64,
-      margin: "0 auto 16px",
-      borderRadius: 12,
+      width: 40,
+      height: 40,
+      margin: "0 auto 12px",
+      borderRadius: 8,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
       background: "linear-gradient(180deg,#8b5cf6,#6a5af9)",
     }}
   >
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="#fff">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff">
       <path d="M12 12a3 3 0 100-6 3 3 0 000 6zm6 1a4 4 0 00-8 0v1h8v-1zM6 13a4 4 0 00-4 4v1h8v-1a4 4 0 00-4-4z" />
     </svg>
   </div>
@@ -98,9 +91,7 @@ export default function Dashboard() {
   // Apply viewport standardization to ensure consistent 100% scaling
   useViewportStandardization();
 
-  const [activeTab, setActiveTab] = useState<
-    "home" | "userlogin" | "adminlogin"
-  >("userlogin");
+  const [activeTab, setActiveTab] = useState<"home" | "login">("login");
 
   // simplified: default background placed in public/dashboard.png
   const bgFile = "/bg2.jpeg";
@@ -110,16 +101,13 @@ export default function Dashboard() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // user login state
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showUserPass, setShowUserPass] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
-  const [showAdminRegister, setShowAdminRegister] = useState(false);
+  const [registerType, setRegisterType] = useState<"user" | "admin">("user");
 
-  // admin
-  const [adminUser, setAdminUser] = useState("");
-  const [adminPass, setAdminPass] = useState("");
-  const [showAdminPass, setShowAdminPass] = useState(false);
+  // admin login removed; using email-based login only
 
   const [adminVerifyStatus, setAdminVerifyStatus] = useState<
     "idle" | "verifying" | "success" | "not_found" | "error"
@@ -155,7 +143,6 @@ export default function Dashboard() {
     pincode: "",
     code: "",
   });
-  const [showAdminRegPass, setShowAdminRegPass] = useState(false);
 
   const [locating, setLocating] = useState(false);
   const [locError, setLocError] = useState<string | null>(null);
@@ -169,9 +156,7 @@ export default function Dashboard() {
     setLoading(true);
 
     try {
-      console.log("Attempting login with:", { username });
-      const res = await userLogin(username, password);
-      console.log("Login response:", res);
+      const res = await emailLogin(email, password);
 
       if (res.ok) {
         console.log("Login successful, navigating to /user");
@@ -186,21 +171,32 @@ export default function Dashboard() {
         );
         setServerMsg("✅ Login successful! Redirecting...");
 
-        // Test profile fetch immediately after login
         setTimeout(async () => {
           console.log("Testing profile fetch before navigation...");
           try {
             const profileTest = await getProfile();
             console.log("Profile test result:", profileTest);
+            if (profileTest.ok) {
+              const d = profileTest.data as any;
+              const toAdmin = !!(
+                d?.is_admin === true ||
+                d?.user?.is_staff === true ||
+                d?.user?.is_superuser === true ||
+                d?.role === "admin"
+              );
+              navigate(toAdmin ? "/admin" : "/user");
+              return;
+            }
           } catch (error) {
             console.error("Profile test error:", error);
           }
-          navigate("/user");
+          const toAdmin = !!res.data?.is_admin;
+          navigate(toAdmin ? "/admin" : "/user");
         }, 1500);
       } else {
         const errorMessage =
           res.status === 401
-            ? "Incorrect username or password"
+            ? "Incorrect email or password"
             : res.status === 0
               ? "❌ Cannot connect to server. Please check if the backend is running on http://localhost:8000"
               : res.error || "Login failed";
@@ -219,62 +215,7 @@ export default function Dashboard() {
     }
   }
 
-  async function handleAdminLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setErrorMsg(null);
-    setServerMsg(null);
-    setLoading(true);
-
-    try {
-      console.log("Attempting admin login with:", { username: adminUser });
-      const res = await adminLogin(adminUser, adminPass);
-      console.log("Admin login response:", res);
-
-      if (res.ok) {
-        console.log("Admin login successful, navigating to /admin");
-        console.log("Full admin login response data:", res.data);
-        console.log(
-          "Admin token saved:",
-          localStorage.getItem("access_token") ? "Yes" : "No",
-        );
-        console.log(
-          "Stored admin access token:",
-          localStorage.getItem("access_token")?.substring(0, 20) + "...",
-        );
-        setServerMsg("✅ Admin login successful! Redirecting...");
-
-        // Test profile fetch immediately after admin login
-        setTimeout(async () => {
-          console.log("Testing admin profile fetch before navigation...");
-          try {
-            const profileTest = await getProfile();
-            console.log("Admin profile test result:", profileTest);
-          } catch (error) {
-            console.error("Admin profile test error:", error);
-          }
-          navigate("/admin");
-        }, 1500);
-      } else {
-        const errorMessage =
-          res.status === 401
-            ? "Incorrect admin username or password"
-            : res.status === 0
-              ? "❌ Cannot connect to server. Please check if the backend is running on http://localhost:8000"
-              : res.error || "Admin login failed";
-        console.error("Admin login failed:", errorMessage);
-        console.log("Full admin response:", res);
-        setErrorMsg(errorMessage);
-      }
-    } catch (err: any) {
-      const errorMessage =
-        err?.message ||
-        "Network error - Please check your connection and try again";
-      console.error("Admin login error:", errorMessage, err);
-      setErrorMsg(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  }
+  
 
   async function handleAdminRegister(e: React.FormEvent) {
     e.preventDefault();
@@ -285,8 +226,8 @@ export default function Dashboard() {
       const res = await adminRegister(adminReg);
       if (res.ok) {
         setServerMsg("Admin registered successfully. Please login.");
-        setShowAdminRegister(false);
-        setActiveTab("adminlogin");
+        setShowRegister(false);
+        setActiveTab("login");
       } else setErrorMsg(res.error ?? "Admin registration failed");
     } catch (err: any) {
       setErrorMsg(err?.message ?? "Network error");
@@ -382,7 +323,7 @@ export default function Dashboard() {
       if (res.ok) {
         setServerMsg("Registered successfully. Please login.");
         setShowRegister(false);
-        setActiveTab("userlogin");
+        setActiveTab("login");
       } else setErrorMsg(res.error ?? "Registration failed");
     } catch (err: any) {
       setErrorMsg(err?.message ?? "Network error");
@@ -414,25 +355,26 @@ export default function Dashboard() {
     alignItems: "center",
     justifyContent: "center",
     boxSizing: "border-box",
-    padding: 24,
+    padding: 32,
     overflow: "hidden",
   };
 
   const splitCard: React.CSSProperties = {
     width: "100%",
-    maxWidth: "1120px",
+    maxWidth: "1180px",
     display: "grid",
-    gridTemplateColumns: "minmax(420px,560px) minmax(380px,520px)",
+    gridTemplateColumns: "minmax(380px,520px) minmax(380px,520px)",
     borderRadius: 18,
     boxShadow: "0 18px 45px rgba(15,23,42,0.12)",
     overflow: "hidden",
+    margin: "0 auto",
   };
 
   const leftPane: React.CSSProperties = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
+    padding: 16,
     background: "#ffffff",
     borderTopLeftRadius: 18,
     borderBottomLeftRadius: 18,
@@ -469,7 +411,7 @@ export default function Dashboard() {
     width: "100%",
     maxWidth: 480,
     background: "white",
-    padding: 44,
+    padding: 36,
     borderRadius: 18,
     boxShadow: "0 18px 45px rgba(15,23,42,0.12)",
     color: "#0f172a",
@@ -480,60 +422,60 @@ export default function Dashboard() {
   const titleStyle: React.CSSProperties = {
     textAlign: "center",
     margin: 0,
-    marginBottom: 20,
-    fontSize: 32,
-    fontWeight: 800,
+    marginBottom: 12,
+    fontSize: 18,
+    fontWeight: 700,
   };
   const input: React.CSSProperties = {
     width: "100%",
-    padding: "14px 16px",
-    marginTop: 8,
-    borderRadius: 10,
+    padding: "8px 10px",
+    marginTop: 4,
+    borderRadius: 6,
     border: "1px solid #e5e7eb",
     background: "#f8fafc",
     color: "#0f172a",
     boxSizing: "border-box",
-    fontSize: 16,
+    fontSize: 12,
   };
   const btn: React.CSSProperties = {
-    marginTop: 16,
-    padding: "14px 20px",
-    borderRadius: 10,
+    marginTop: 12,
+    padding: "8px 14px",
+    borderRadius: 8,
     border: "none",
     background: "linear-gradient(90deg,#0ea5e9,#2563eb)",
     color: "white",
-    fontWeight: 800,
+    fontWeight: 600,
     cursor: "pointer",
-    boxShadow: "0 14px 40px rgba(14,165,233,0.35)",
-    fontSize: 16,
+    boxShadow: "0 8px 24px rgba(14,165,233,0.25)",
+    fontSize: 12,
   };
   const smallText: React.CSSProperties = {
-    marginTop: 12,
+    marginTop: 10,
     textAlign: "center",
     color: "rgba(15,23,42,0.6)",
-    fontSize: 15,
+    fontSize: 11,
   };
   const blueLink: React.CSSProperties = {
     color: "#2563eb",
     textDecoration: "underline",
     cursor: "pointer",
-    fontWeight: 700,
-    fontSize: 15,
+    fontWeight: 600,
+    fontSize: 11,
   };
   const label: React.CSSProperties = {
     display: "block",
-    marginTop: 10,
-    marginBottom: 4,
-    fontSize: 15,
-    fontWeight: 600,
+    marginTop: 6,
+    marginBottom: 2,
+    fontSize: 11,
+    fontWeight: 500,
     color: "rgba(15,23,42,0.8)",
   };
   const field: React.CSSProperties = { position: "relative" };
   const revealBtn: React.CSSProperties = {
     position: "absolute",
     right: 8,
-    top: 12,
-    padding: 6,
+    top: 10,
+    padding: 5,
     borderRadius: 8,
     border: "1px solid #c7d2fe",
     background: "#eef2ff",
@@ -541,13 +483,13 @@ export default function Dashboard() {
     cursor: "pointer",
   };
   const verifyBtn: React.CSSProperties = {
-    padding: "8px 12px",
+    padding: "5px 8px",
     borderRadius: 999,
     border: "1px solid #e5e7eb",
     background: "#eff6ff",
     color: "#1d4ed8",
-    fontSize: 12,
-    fontWeight: 600,
+    fontSize: 10,
+    fontWeight: 500,
     cursor: "pointer",
     whiteSpace: "nowrap",
   };
@@ -560,13 +502,13 @@ export default function Dashboard() {
     animation: "spin 0.8s linear infinite",
   };
   const locationBtn: React.CSSProperties = {
-    padding: "8px 12px",
+    padding: "5px 8px",
     borderRadius: 999,
     border: "1px solid #e5e7eb",
     background: "#f1f5f9",
     color: "#0f172a",
-    fontSize: 12,
-    fontWeight: 600,
+    fontSize: 10,
+    fontWeight: 500,
     cursor: "pointer",
     whiteSpace: "nowrap",
   };
@@ -588,12 +530,12 @@ export default function Dashboard() {
   const menuBtnBase: React.CSSProperties = {
     background: "transparent",
     border: "none",
-    padding: "12px 18px",
-    borderRadius: 8,
+    padding: "8px 12px",
+    borderRadius: 6,
     color: "rgba(255,255,255,0.9)",
     cursor: "pointer",
-    fontWeight: 700,
-    fontSize: 18,
+    fontWeight: 600,
+    fontSize: 14,
   };
 
   const menuBtnActive: React.CSSProperties = {
@@ -605,34 +547,34 @@ export default function Dashboard() {
   const topRightText: React.CSSProperties = {
     display: "flex",
     alignItems: "center",
-    gap: 6,
+    gap: 4,
     color: "rgba(255,255,255,0.85)",
-    fontSize: 16,
+    fontSize: 13,
   };
 
   const topRightLink: React.CSSProperties = {
     background: "transparent",
     border: "none",
-    padding: "4px 8px",
-    marginLeft: 4,
+    padding: "3px 6px",
+    marginLeft: 3,
     color: "#38bdf8",
-    fontWeight: 700,
+    fontWeight: 600,
     textDecoration: "underline",
     cursor: "pointer",
-    fontSize: 16,
+    fontSize: 13,
   };
 
   const brandBadge: React.CSSProperties = {
     position: "absolute",
-    left: 16,
-    top: 16,
-    padding: "10px 18px",
-    borderRadius: 12,
+    left: 12,
+    top: 12,
+    padding: "6px 12px",
+    borderRadius: 8,
     background: "rgba(0,0,0,0.55)",
     color: "white",
-    fontWeight: 800,
-    fontSize: 20,
-    letterSpacing: 0.5,
+    fontWeight: 600,
+    fontSize: 13,
+    letterSpacing: 0.3,
     boxShadow: "0 6px 18px rgba(0,0,0,0.6)",
     zIndex: 3,
     border: "1px solid rgba(255,255,255,0.1)",
@@ -703,13 +645,12 @@ export default function Dashboard() {
           <button
             type="button"
             onClick={() => {
-              setActiveTab("userlogin");
+              setActiveTab("login");
               setShowRegister(false);
-              setShowAdminRegister(false);
             }}
             style={{
               ...menuBtnBase,
-              ...(activeTab === "userlogin" && !showRegister
+              ...(activeTab === "login" && !showRegister
                 ? menuBtnActive
                 : {}),
             }}
@@ -721,9 +662,9 @@ export default function Dashboard() {
             <button
               type="button"
               onClick={() => {
-                setActiveTab("userlogin");
+                setActiveTab("login");
+                setRegisterType("user");
                 setShowRegister(true);
-                setShowAdminRegister(false);
               }}
               style={topRightLink}
             >
@@ -750,8 +691,8 @@ export default function Dashboard() {
                   {/* Heading */}
                   <h1
                     style={{
-                      fontSize: "48px",
-                      fontWeight: 700,
+                      fontSize: "28px",
+                      fontWeight: 600,
                       lineHeight: "1.2",
                     }}
                   >
@@ -770,8 +711,8 @@ export default function Dashboard() {
                   {/* Subheading */}
                   <h3
                     style={{
-                      marginTop: 10,
-                      fontSize: "22px",
+                      marginTop: 8,
+                      fontSize: "16px",
                       fontWeight: 400,
                       opacity: 0.9,
                     }}
@@ -782,10 +723,10 @@ export default function Dashboard() {
                   {/* Description */}
                   <p
                     style={{
-                      marginTop: 8,
-                      fontSize: "18px",
+                      marginTop: 6,
+                      fontSize: "14px",
                       opacity: 0.85,
-                      lineHeight: 1.6,
+                      lineHeight: 1.5,
                     }}
                   >
                     Helping lost pets find their way home through our caring
@@ -803,18 +744,18 @@ export default function Dashboard() {
                     }}
                   >
                     <button
-                      onClick={() => setActiveTab("userlogin")} // ← IMPORTANT: GO TO LOGIN
+                      onClick={() => setActiveTab("login")}
                       style={{
                         background: "linear-gradient(90deg, #ff8a00, #ff2fab)",
-                        border: "2px solid rgba(255,255,255,0.8)",
-                        padding: "12px 32px",
-                        borderRadius: 30,
+                        border: "1px solid rgba(255,255,255,0.8)",
+                        padding: "8px 20px",
+                        borderRadius: 20,
                         color: "white",
-                        fontSize: 16,
-                        fontWeight: 700,
+                        fontSize: 13,
+                        fontWeight: 600,
                         cursor: "pointer",
-                        boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-                        width: 240,
+                        boxShadow: "0 3px 8px rgba(0,0,0,0.2)",
+                        width: 180,
                       }}
                     >
                       Start Your Search →
@@ -823,15 +764,50 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {activeTab === "userlogin" &&
-                (showRegister ? (
-                  <form onSubmit={handleRegister}>
-                    <h2 style={titleStyle}>Create User Account</h2>
+              {activeTab === "login" && showRegister && (
+                  <div>
+                    <h2 style={titleStyle}>Register</h2>
+                    <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 12 }}>
+                      <button
+                        type="button"
+                        onClick={() => setRegisterType("user")}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: 20,
+                          border: "1px solid #e5e7eb",
+                          background: registerType === "user" ? "#eef2ff" : "#fff",
+                          color: registerType === "user" ? "#1d4ed8" : "#0f172a",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          fontSize: 12,
+                        }}
+                      >
+                        User Register
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRegisterType("admin")}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: 20,
+                          border: "1px solid #e5e7eb",
+                          background: registerType === "admin" ? "#fee2e2" : "#fff",
+                          color: registerType === "admin" ? "#b91c1c" : "#0f172a",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          fontSize: 12,
+                        }}
+                      >
+                        Admin Register
+                      </button>
+                    </div>
+                    {registerType === "user" ? (
+                    <form onSubmit={handleRegister}>
                     <div
                       style={{
                         display: "grid",
                         gridTemplateColumns: "1fr 1fr",
-                        gap: "12px 20px",
+                        gap: "8px 12px",
                       }}
                     >
                       <div>
@@ -839,12 +815,12 @@ export default function Dashboard() {
                         <input
                           style={input}
                           placeholder="username"
-                          value={reg.username}
-                          onChange={(e) =>
-                            setReg((p) => ({ ...p, username: e.target.value }))
-                          }
-                          required
-                        />
+                      value={reg.username}
+                      onChange={(e) =>
+                        setReg((p) => ({ ...p, username: e.target.value }))
+                      }
+                      required
+                    />
                       </div>
                       <div>
                         <label style={label}>Email</label>
@@ -1046,12 +1022,12 @@ export default function Dashboard() {
                     {locError && (
                       <div
                         style={{
-                          marginTop: 4,
-                          fontSize: 12,
+                          marginTop: 3,
+                          fontSize: 10,
                           color: "#b91c1c",
                         }}
                       >
-                        {locError}
+                    {locError}
                       </div>
                     )}
                     <label style={label}>Address</label>
@@ -1081,403 +1057,351 @@ export default function Dashboard() {
                         Back to login
                       </button>
                     </div>
-                    <p style={{ ...smallText, marginTop: 8 }}>
-                      Admin user?
-                      <span
-                        style={blueLink}
-                        onClick={() => {
-                          setActiveTab("adminlogin");
-                          setShowRegister(false);
-                          setShowAdminRegister(true);
-                        }}
-                      >
-                        Go to Admin Registration
-                      </span>
-                    </p>
-                  </form>
-                ) : (
-                  <>
-                    <h2 style={titleStyle}>User Login</h2>
-                    <form onSubmit={handleUserLogin}>
-                      <label style={label}>Username</label>
-                      <input
-                        style={input}
-                        placeholder="username"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        required
-                      />
-                      <label style={label}>Password</label>
-                      <div style={field}>
-                        <input
-                          style={input}
-                          placeholder="password"
-                          type={showUserPass ? "text" : "password"}
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          required
-                        />
-                        <button
-                          type="button"
-                          style={revealBtn}
-                          aria-label={
-                            showUserPass ? "Hide password" : "Show password"
-                          }
-                          onClick={() => setShowUserPass((p) => !p)}
-                        >
-                          {showUserPass ? (
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 16 16"
-                              fill="none"
-                              xmlns="http://www.w3.org/2000/svg"
-                            >
-                              <path
-                                d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5"
-                                stroke="currentColor"
-                                strokeWidth="1.6"
-                              />
-                              <circle cx="8" cy="8" r="2" fill="currentColor" />
-                              <line
-                                x1="2"
-                                y1="2"
-                                x2="14"
-                                y2="14"
-                                stroke="currentColor"
-                                strokeWidth="1.6"
-                              />
-                            </svg>
-                          ) : (
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 16 16"
-                              fill="none"
-                              xmlns="http://www.w3.org/2000/svg"
-                            >
-                              <path
-                                d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5"
-                                stroke="currentColor"
-                                strokeWidth="1.6"
-                              />
-                              <circle cx="8" cy="8" r="2" fill="currentColor" />
-                            </svg>
-                          )}
-                        </button>
-                      </div>
-                      <button style={btn} type="submit" disabled={loading}>
-                        {loading ? "Logging in..." : "Login"}
-                      </button>
                     </form>
-                    <p style={smallText}>
-                      Don't have an account?
-                      <span
-                        style={blueLink}
-                        onClick={() => {
-                          setShowRegister(true);
-                          setShowAdminRegister(false);
-                        }}
-                      >
-                        Sign up
-                      </span>
-                    </p>
-                    <p style={smallText}>
-                      Admin user?
-                      <span
-                        style={blueLink}
-                        onClick={() => {
-                          setActiveTab("adminlogin");
-                          setShowAdminRegister(false);
-                        }}
-                      >
-                        Go to Admin Login
-                      </span>
-                    </p>
-                  </>
-                ))}
-
-              {activeTab === "adminlogin" &&
-                (showAdminRegister ? (
-                  <form onSubmit={handleAdminRegister}>
-                    <h2 style={titleStyle}>Create Admin Account</h2>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: "12px 20px",
-                      }}
-                    >
-                      <div>
-                        <label style={label}>Username</label>
-                        <input
-                          style={input}
-                          placeholder="username"
-                          value={adminReg.username}
-                          onChange={(e) =>
-                            setAdminReg((p) => ({
-                              ...p,
-                              username: e.target.value,
-                            }))
-                          }
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label style={label}>Full Name</label>
-                        <input
-                          style={input}
-                          placeholder="full name"
-                          value={adminReg.full_name}
-                          onChange={(e) =>
-                            setAdminReg((p) => ({
-                              ...p,
-                              full_name: e.target.value,
-                            }))
-                          }
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label style={label}>Email</label>
+                    ) : (
+                      <form onSubmit={handleAdminRegister}>
                         <div
                           style={{
                             display: "grid",
-                            gridTemplateColumns: "minmax(0, 1fr) auto",
-                            gap: 8,
-                            alignItems: "center",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: "8px 12px",
                           }}
                         >
-                          <input
-                            style={input}
-                            type="email"
-                            placeholder="email"
-                            value={adminReg.email}
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              setAdminReg((p) => ({ ...p, email: value }));
-                              setAdminVerifyStatus("idle");
-                              setAdminVerifyMsg("");
-                              setAdminVerifyLabel("Verify Email");
-                              (window as any).__adminInviteVerified = null;
-                            }}
-                            required
-                          />
-                          <button
-                            type="button"
-                            onClick={handleAdminEmailVerify}
-                            style={{
-                              ...verifyBtn,
-                              opacity:
-                                adminVerifyStatus === "verifying" ? 0.7 : 1,
-                              cursor:
-                                adminVerifyStatus === "verifying"
-                                  ? "default"
-                                  : "pointer",
-                            }}
-                            disabled={adminVerifyStatus === "verifying"}
-                          >
-                            {adminVerifyStatus === "verifying" ? (
-                              <span
+                          <div>
+                            <label style={label}>Username</label>
+                            <input
+                              style={input}
+                              placeholder="username"
+                              value={adminReg.username}
+                              onChange={(e) =>
+                                setAdminReg((p) => ({
+                                  ...p,
+                                  username: e.target.value,
+                                }))
+                              }
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label style={label}>Email</label>
+                            <div
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: "minmax(0, 1fr) auto",
+                                gap: 8,
+                                alignItems: "center",
+                              }}
+                            >
+                              <input
+                                style={input}
+                                type="email"
+                                placeholder="email"
+                                value={adminReg.email}
+                                onChange={(e) =>
+                                  setAdminReg((p) => ({
+                                    ...p,
+                                    email: e.target.value,
+                                  }))
+                                }
+                                required
+                              />
+                              <button
+                                type="button"
+                                onClick={handleAdminEmailVerify}
                                 style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: 6,
+                                  ...locationBtn,
+                                  color: adminVerifyColor,
                                 }}
                               >
-                                <span style={verifySpinner} />
-                                Verifying...
-                              </span>
-                            ) : (
-                              adminVerifyLabel
+                                {adminVerifyLabel}
+                              </button>
+                            </div>
+                            {adminVerifyMsg && (
+                              <div
+                                style={{ marginTop: 3, fontSize: 10, color: adminVerifyColor }}
+                              >
+                                {adminVerifyMsg}
+                              </div>
                             )}
+                          </div>
+                          <div>
+                            <label style={label}>Password</label>
+                            <div style={field}>
+                              <input
+                                style={input}
+                                type={showRegPass ? "text" : "password"}
+                                placeholder="password"
+                                value={adminReg.password}
+                                onChange={(e) =>
+                                  setAdminReg((p) => ({
+                                    ...p,
+                                    password: e.target.value,
+                                  }))
+                                }
+                                required
+                              />
+                              <button
+                                type="button"
+                                style={revealBtn}
+                                aria-label={
+                                  showRegPass ? "Hide password" : "Show password"
+                                }
+                                onClick={() => setShowRegPass((p) => !p)}
+                              >
+                                {showRegPass ? (
+                                  <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 16 16"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                  >
+                                    <path
+                                      d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5"
+                                      stroke="currentColor"
+                                      strokeWidth="1.6"
+                                    />
+                                    <circle cx="8" cy="8" r="2" fill="currentColor" />
+                                    <line
+                                      x1="2"
+                                      y1="2"
+                                      x2="14"
+                                      y2="14"
+                                      stroke="currentColor"
+                                      strokeWidth="1.6"
+                                    />
+                                  </svg>
+                                ) : (
+                                  <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 16 16"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                  >
+                                    <path
+                                      d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5"
+                                      stroke="currentColor"
+                                      strokeWidth="1.6"
+                                    />
+                                    <circle cx="8" cy="8" r="2" fill="currentColor" />
+                                  </svg>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                          <div>
+                            <label style={label}>Full Name</label>
+                            <input
+                              style={input}
+                              placeholder="full name"
+                              value={adminReg.full_name}
+                              onChange={(e) =>
+                                setAdminReg((p) => ({
+                                  ...p,
+                                  full_name: e.target.value,
+                                }))
+                              }
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label style={label}>Phone Number</label>
+                            <input
+                              style={input}
+                              placeholder="phone number"
+                              value={adminReg.phone_number}
+                              onChange={(e) =>
+                                setAdminReg((p) => ({
+                                  ...p,
+                                  phone_number: e.target.value,
+                                }))
+                              }
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label style={label}>State</label>
+                            <input
+                              style={input}
+                              placeholder="state"
+                              value={adminReg.state}
+                              onChange={(e) =>
+                                setAdminReg((p) => ({ ...p, state: e.target.value }))
+                              }
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label style={label}>City</label>
+                            <input
+                              style={input}
+                              placeholder="city"
+                              value={adminReg.city}
+                              onChange={(e) =>
+                                setAdminReg((p) => ({ ...p, city: e.target.value }))
+                              }
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label style={label}>Pincode</label>
+                            <input
+                              style={input}
+                              placeholder="pincode"
+                              value={adminReg.pincode}
+                              onChange={(e) =>
+                                setAdminReg((p) => ({
+                                  ...p,
+                                  pincode: e.target.value,
+                                }))
+                              }
+                              required
+                            />
+                          </div>
+                          <div style={{ gridColumn: "1 / -1" }}>
+                            <label style={label}>Address</label>
+                            <textarea
+                              style={{ ...input, height: 100 }}
+                              placeholder="address"
+                              value={adminReg.address}
+                              onChange={(e) =>
+                                setAdminReg((p) => ({
+                                  ...p,
+                                  address: e.target.value,
+                                }))
+                              }
+                              required
+                            />
+                          </div>
+                          <div style={{ gridColumn: "1 / -1" }}>
+                            <label style={label}>Admin Code</label>
+                            <input
+                              style={input}
+                              placeholder="code (emailed after verify)"
+                              value={adminReg.code}
+                              onChange={(e) =>
+                                setAdminReg((p) => ({
+                                  ...p,
+                                  code: e.target.value,
+                                }))
+                              }
+                              required
+                            />
+                          </div>
+                        </div>
+                        <button style={btn} type="submit" disabled={loading}>
+                          {loading ? "Registering..." : "Register as Admin"}
+                        </button>
+                        <div style={{ textAlign: "center", marginTop: 12 }}>
+                          <button
+                            type="button"
+                            onClick={() => setShowRegister(false)}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              color: "rgba(15,23,42,0.7)",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Back to login
                           </button>
                         </div>
-                      </div>
-                      <div>
-                        <label style={label}>Phone Number</label>
-                        <input
-                          style={input}
-                          placeholder="phone number"
-                          value={adminReg.phone_number}
-                          onChange={(e) =>
-                            setAdminReg((p) => ({
-                              ...p,
-                              phone_number: e.target.value,
-                            }))
-                          }
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label style={label}>State</label>
-                        <input
-                          style={input}
-                          placeholder="state"
-                          value={adminReg.state}
-                          onChange={(e) =>
-                            setAdminReg((p) => ({
-                              ...p,
-                              state: e.target.value,
-                            }))
-                          }
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label style={label}>City</label>
-                        <input
-                          style={input}
-                          placeholder="city"
-                          value={adminReg.city}
-                          onChange={(e) =>
-                            setAdminReg((p) => ({ ...p, city: e.target.value }))
-                          }
-                          required
-                        />
-                      </div>
-                      <div style={{ gridColumn: "span 2" }}>
-                        <label style={label}>Pincode</label>
-                        <input
-                          style={input}
-                          placeholder="pincode"
-                          value={adminReg.pincode}
-                          onChange={(e) =>
-                            setAdminReg((p) => ({
-                              ...p,
-                              pincode: e.target.value,
-                            }))
-                          }
-                          required
-                        />
-                      </div>
-                    </div>
-                    <label style={label}>Address</label>
-                    <textarea
-                      style={{ ...input, height: 100 }}
-                      placeholder="address"
-                      value={adminReg.address}
-                      onChange={(e) =>
-                        setAdminReg((p) => ({ ...p, address: e.target.value }))
-                      }
+                      </form>
+                    )}
+                  </div>
+              )}
+              {activeTab === "login" && !showRegister && (
+                <>
+                  <h2 style={titleStyle}>Login</h2>
+                  <form onSubmit={handleUserLogin}>
+                    <label style={label}>Email</label>
+                    <input
+                      style={input}
+                      type="email"
+                      placeholder="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                       required
                     />
-                    <button style={btn} type="submit" disabled={loading}>
-                      {loading ? "Registering..." : "Register"}
-                    </button>
-                    <div style={{ textAlign: "center", marginTop: 12 }}>
-                      <button
-                        type="button"
-                        onClick={() => setShowAdminRegister(false)}
-                        style={{
-                          background: "transparent",
-                          border: "none",
-                          color: "rgba(15,23,42,0.7)",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Back to login
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <>
-                    <h2 style={titleStyle}>Admin Login</h2>
-                    <form onSubmit={handleAdminLogin}>
-                      <label style={label}>Username</label>
+                    <label style={label}>Password</label>
+                    <div style={field}>
                       <input
                         style={input}
-                        placeholder="username"
-                        value={adminUser}
-                        onChange={(e) => setAdminUser(e.target.value)}
+                        placeholder="password"
+                        type={showUserPass ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
                         required
                       />
-                      <label style={label}>Password</label>
-                      <div style={field}>
-                        <input
-                          style={input}
-                          placeholder="password"
-                          type={showAdminPass ? "text" : "password"}
-                          value={adminPass}
-                          onChange={(e) => setAdminPass(e.target.value)}
-                          required
-                        />
-                        <button
-                          type="button"
-                          style={revealBtn}
-                          aria-label={
-                            showAdminPass ? "Hide password" : "Show password"
-                          }
-                          onClick={() => setShowAdminPass((p) => !p)}
-                        >
-                          {showAdminPass ? (
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 16 16"
-                              fill="none"
-                              xmlns="http://www.w3.org/2000/svg"
-                            >
-                              <path
-                                d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5"
-                                stroke="currentColor"
-                                strokeWidth="1.6"
-                              />
-                              <circle cx="8" cy="8" r="2" fill="currentColor" />
-                              <line
-                                x1="2"
-                                y1="2"
-                                x2="14"
-                                y2="14"
-                                stroke="currentColor"
-                                strokeWidth="1.6"
-                              />
-                            </svg>
-                          ) : (
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 16 16"
-                              fill="none"
-                              xmlns="http://www.w3.org/2000/svg"
-                            >
-                              <path
-                                d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5"
-                                stroke="currentColor"
-                                strokeWidth="1.6"
-                              />
-                              <circle cx="8" cy="8" r="2" fill="currentColor" />
-                            </svg>
-                          )}
-                        </button>
-                      </div>
-                      <button style={btn} type="submit" disabled={loading}>
-                        {loading ? "Logging in..." : "Login"}
+                      <button
+                        type="button"
+                        style={revealBtn}
+                        aria-label={
+                          showUserPass ? "Hide password" : "Show password"
+                        }
+                        onClick={() => setShowUserPass((p) => !p)}
+                      >
+                        {showUserPass ? (
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 16 16"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5"
+                              stroke="currentColor"
+                              strokeWidth="1.6"
+                            />
+                            <circle cx="8" cy="8" r="2" fill="currentColor" />
+                            <line
+                              x1="2"
+                              y1="2"
+                              x2="14"
+                              y2="14"
+                              stroke="currentColor"
+                              strokeWidth="1.6"
+                            />
+                          </svg>
+                        ) : (
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 16 16"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5"
+                              stroke="currentColor"
+                              strokeWidth="1.6"
+                            />
+                            <circle cx="8" cy="8" r="2" fill="currentColor" />
+                          </svg>
+                        )}
                       </button>
-                    </form>
-                    <p style={smallText}>
-                      Don't have an admin account?
-                      <span
-                        style={blueLink}
-                        onClick={() => setShowAdminRegister(!showAdminRegister)}
-                      >
-                        {showAdminRegister ? " Login" : " Register here"}
-                      </span>
-                    </p>
-                    <p style={smallText}>
-                      User Login?
-                      <span
-                        style={blueLink}
-                        onClick={() => {
-                          setActiveTab("userlogin");
-                          setShowAdminRegister(false);
-                        }}
-                      >
-                        Go to User Login
-                      </span>
-                    </p>
-                  </>
-                ))}
+                    </div>
+                    <button style={btn} type="submit" disabled={loading}>
+                      {loading ? "Logging in..." : "Login"}
+                    </button>
+                  </form>
+                  <p style={smallText}>
+                    Don't have an account?
+                    <span
+                      style={blueLink}
+                      onClick={() => {
+                        setRegisterType("user");
+                        setShowRegister(true);
+                      }}
+                    >
+                      Sign up
+                    </span>
+                  </p>
+                  
+                </>
+              )}
 
               {(errorMsg || serverMsg) && (
                 <p

@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "channels",
     "Users",
     "Pets",
     "AdminPortal",
@@ -105,6 +106,10 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "PetPortal.wsgi.application"
+ASGI_APPLICATION = "PetPortal.asgi.application"
+
+# Channel Layers
+CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
 
 
 # Database

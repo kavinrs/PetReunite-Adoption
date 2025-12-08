@@ -121,6 +121,29 @@ export async function adminLogin(
   };
 }
 
+export async function emailLogin(
+  email: string,
+  password: string,
+): Promise<ApiResult> {
+  const url = `${API_BASE}/auth/login/`;
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    saveTokens(data);
+    return { ok: true, status: resp.status, data };
+  }
+  return {
+    ok: false,
+    status: resp.status,
+    error: data?.detail || data?.error || "Login failed",
+    data,
+  };
+}
+
 /* Admin register (same fields as user plus a secret code) */
 export async function adminRegister(payload: {
   username: string;
@@ -327,6 +350,15 @@ export async function fetchAdminSummary(): Promise<ApiResult> {
   return { ok: false, status: resp.status, error: message, data };
 }
 
+export async function fetchAdminUsers(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/users/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to load users";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
 export async function fetchAdminFoundReports(
   status?: string,
 ): Promise<ApiResult> {
@@ -368,6 +400,27 @@ export async function updateAdminFoundReport(
   return { ok: false, status: resp.status, error: message, data };
 }
 
+// Admin delete helpers used by AdminHome Pets tab
+export async function deleteAdminFoundReport(id: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/reports/found/${id}/`;
+  const resp = await fetchWithAuth(url, { method: "DELETE" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message =
+    extractErrorMessage(data) ?? "Failed to delete found report";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function deleteAdminLostReport(id: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/reports/lost/${id}/`;
+  const resp = await fetchWithAuth(url, { method: "DELETE" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message =
+    extractErrorMessage(data) ?? "Failed to delete lost report";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
 export async function updateAdminLostReport(
   id: number,
   payload: { status?: string; admin_notes?: string },
@@ -391,6 +444,7 @@ export async function reportFoundPet(payload: {
   found_city: string;
   state: string;
   description: string;
+  location_url?: string;
   photo?: File | null;
 }): Promise<ApiResult> {
   const url = `${PETS_BASE}/reports/found/`;
@@ -399,6 +453,8 @@ export async function reportFoundPet(payload: {
   formData.append("found_city", payload.found_city);
   formData.append("state", payload.state);
   formData.append("description", payload.description);
+  if (payload.location_url)
+    formData.append("location_url", payload.location_url);
   if (payload.breed) formData.append("breed", payload.breed);
   if (payload.color) formData.append("color", payload.color);
   if (payload.estimated_age)
@@ -417,6 +473,58 @@ export async function reportFoundPet(payload: {
   return { ok: false, status: resp.status, error: message, data };
 }
 
+export async function updateMyLostReport(
+  id: number,
+  payload: Partial<{
+    pet_name: string;
+    pet_type: string;
+    breed: string;
+    color: string;
+    weight: string;
+    vaccinated: string;
+    age: string;
+    city: string;
+    state: string;
+    pincode: string;
+    description: string;
+    location_url: string;
+  }>,
+): Promise<ApiResult> {
+  const url = `${PETS_BASE}/reports/lost/${id}/`;
+  const resp = await fetchWithAuth(url, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to update report";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function updateMyFoundReport(
+  id: number,
+  payload: Partial<{
+    pet_type: string;
+    breed: string;
+    color: string;
+    estimated_age: string;
+    found_city: string;
+    state: string;
+    description: string;
+    location_url: string;
+  }>,
+): Promise<ApiResult> {
+  const url = `${PETS_BASE}/reports/found/${id}/`;
+  const resp = await fetchWithAuth(url, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to update report";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
 /* Fetch all reports for dashboard display */
 export async function fetchAllReports(): Promise<ApiResult> {
   const url = `${PETS_BASE}/reports/all/`;
@@ -426,6 +534,15 @@ export async function fetchAllReports(): Promise<ApiResult> {
     return { ok: true, status: resp.status, data };
   }
   const message = extractErrorMessage(data) ?? "Failed to load reports";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function fetchMyActivity(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/my-activity/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to load activity";
   return { ok: false, status: resp.status, error: message, data };
 }
 
@@ -489,6 +606,7 @@ export async function reportLostPet(payload: {
   state: string;
   pincode?: string;
   description: string;
+  location_url?: string;
   photo?: File | null;
 }): Promise<ApiResult> {
   const url = `${PETS_BASE}/reports/lost/`;
@@ -504,6 +622,8 @@ export async function reportLostPet(payload: {
   formData.append("state", payload.state);
   if (payload.pincode) formData.append("pincode", payload.pincode);
   formData.append("description", payload.description);
+  if (payload.location_url)
+    formData.append("location_url", payload.location_url);
   if (payload.photo) formData.append("photo", payload.photo);
 
   const resp = await fetchWithAuth(url, {
@@ -515,5 +635,163 @@ export async function reportLostPet(payload: {
     return { ok: true, status: resp.status, data };
   }
   const message = extractErrorMessage(data) ?? "Failed to submit report";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+// ===== ADOPTION FEATURE API FUNCTIONS =====
+
+/* Fetch pet details for adoption */
+export async function fetchPetDetails(petId: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/pets/${petId}/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to load pet details";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/* Fetch all available pets for adoption */
+export async function fetchAvailablePets(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/pets/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to load pets";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/* Submit adoption request */
+export async function submitAdoptionRequest(
+  petId: number,
+  payload: {
+    phone: string;
+    address: string;
+    household_info?: string;
+    experience_with_pets: string;
+    reason_for_adopting: string;
+    has_other_pets: boolean;
+    other_pets_details?: string;
+    home_ownership: "own" | "rent";
+    preferred_meeting?: string;
+  },
+): Promise<ApiResult> {
+  const url = `${PETS_BASE}/pets/${petId}/adoption-requests/`;
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message =
+    extractErrorMessage(data) ?? "Failed to submit adoption request";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/* Fetch user's adoption requests */
+export async function fetchMyAdoptionRequests(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/my-adoption-requests/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message =
+    extractErrorMessage(data) ?? "Failed to load adoption requests";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/* Fetch messages for adoption request */
+export async function fetchAdoptionMessages(
+  adoptionRequestId: number,
+): Promise<ApiResult> {
+  const url = `${PETS_BASE}/adoption-requests/${adoptionRequestId}/messages/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to load messages";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/* Send message in adoption request chat */
+export async function sendAdoptionMessage(
+  adoptionRequestId: number,
+  text: string,
+): Promise<ApiResult> {
+  const url = `${PETS_BASE}/adoption-requests/${adoptionRequestId}/messages/create/`;
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to send message";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/* Admin: Fetch all adoption requests */
+export async function fetchAllAdoptionRequests(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/adoption-requests/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message =
+    extractErrorMessage(data) ?? "Failed to load adoption requests";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/* Admin: Update adoption request status */
+export async function updateAdoptionRequestStatus(
+  requestId: number,
+  payload: {
+    status?: "pending" | "approved" | "rejected";
+    admin_notes?: string;
+  },
+): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/adoption-requests/${requestId}/`;
+  const resp = await fetchWithAuth(url, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message =
+    extractErrorMessage(data) ?? "Failed to update adoption request";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function deleteAdoptionRequest(
+  requestId: number,
+): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/adoption-requests/${requestId}/`;
+  const resp = await fetchWithAuth(url, { method: "DELETE" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message =
+    extractErrorMessage(data) ?? "Failed to delete adoption request";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function adminClearAllData(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/clear-data/`;
+  const resp = await fetchWithAuth(url, { method: "POST" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to clear data";
   return { ok: false, status: resp.status, error: message, data };
 }

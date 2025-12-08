@@ -17,6 +17,7 @@ const initialForm = {
   state: "",
   pincode: "",
   description: "",
+  location_url: "",
 };
 
 export default function ReportLostPet() {
@@ -27,10 +28,34 @@ export default function ReportLostPet() {
   const [photo, setPhoto] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const [locating, setLocating] = useState(false);
+  const [locError, setLocError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   function handleChange(field: keyof typeof initialForm, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function handleUseCurrentLocation() {
+    setLocError(null);
+    if (!navigator.geolocation) {
+      setLocError("Geolocation is not supported in this browser.");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        const url = `https://www.google.com/maps?q=${latitude},${longitude}`;
+        setForm((prev) => ({ ...prev, location_url: url }));
+        setLocating(false);
+      },
+      (err) => {
+        setLocating(false);
+        setLocError(err.message || "Unable to fetch current location.");
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -39,6 +64,7 @@ export default function ReportLostPet() {
     setFeedback(null);
     const res = await reportLostPet({
       ...form,
+      location_url: form.location_url,
       photo,
     });
     if (res.ok) {
@@ -260,6 +286,48 @@ export default function ReportLostPet() {
                 style={inputStyle}
                 placeholder="Postal/ZIP code"
               />
+            </div>
+            <div>
+              <label style={labelStyle}>Location URL</label>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <input
+                  type="text"
+                  value={form.location_url ?? ""}
+                  onChange={(e) => handleChange("location_url" as any, e.target.value)}
+                  style={inputStyle}
+                  placeholder="Paste a map link or use 'Get current location'"
+                />
+                <button
+                  type="button"
+                  onClick={handleUseCurrentLocation}
+                  disabled={locating}
+                  style={{
+                    alignSelf: "flex-start",
+                    borderRadius: 999,
+                    border: "none",
+                    padding: "8px 14px",
+                    background:
+                      "linear-gradient(90deg, rgba(59,130,246,1), rgba(56,189,248,1))",
+                    color: "white",
+                    fontWeight: 600,
+                    fontSize: 12,
+                    cursor: locating ? "not-allowed" : "pointer",
+                    boxShadow: "0 6px 18px rgba(59,130,246,0.35)",
+                  }}
+                >
+                  {locating ? "Getting location..." : "Get current location"}
+                </button>
+                {locError && (
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "#b91c1c",
+                    }}
+                  >
+                    {locError}
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <label style={labelStyle}>Upload Photo</label>

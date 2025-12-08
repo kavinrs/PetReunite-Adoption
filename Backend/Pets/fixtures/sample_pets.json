@@ -1,0 +1,110 @@
+[
+  {
+    "model": "Pets.pet",
+    "pk": 1,
+    "fields": {
+      "name": "Buddy",
+      "species": "Dog",
+      "breed": "Golden Retriever",
+      "description": "Buddy is a friendly 3-year-old Golden Retriever who loves playing fetch and swimming. He's great with kids and other dogs. House-trained and knows basic commands. Looking for an active family who can give him the attention he deserves.",
+      "age": "3 years",
+      "color": "Golden",
+      "location_city": "Mumbai",
+      "location_state": "Maharashtra",
+      "photos": "https://images.unsplash.com/photo-1552053831-71594a27632d?w=400&h=300&fit=crop",
+      "posted_by": 1,
+      "created_at": "2024-12-03T10:00:00Z",
+      "is_active": true
+    }
+  },
+  {
+    "model": "Pets.pet",
+    "pk": 2,
+    "fields": {
+      "name": "Whiskers",
+      "species": "Cat",
+      "breed": "Persian",
+      "description": "Whiskers is a calm and gentle Persian cat who loves to cuddle. She's 2 years old and has been spayed. Perfect for a quiet household looking for a loving companion. She gets along well with other cats.",
+      "age": "2 years",
+      "color": "White",
+      "location_city": "Delhi",
+      "location_state": "Delhi",
+      "photos": "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=400&h=300&fit=crop",
+      "posted_by": 1,
+      "created_at": "2024-12-03T11:30:00Z",
+      "is_active": true
+    }
+  },
+  {
+    "model": "Pets.pet",
+    "pk": 3,
+    "fields": {
+      "name": "Charlie",
+      "species": "Dog",
+      "breed": "Labrador Mix",
+      "description": "Charlie is an energetic 1-year-old Labrador mix who needs an active family. He's still learning commands but is very eager to please. Great with children and loves outdoor activities. Fully vaccinated and microchipped.",
+      "age": "1 year",
+      "color": "Black",
+      "location_city": "Bangalore",
+      "location_state": "Karnataka",
+      "photos": "https://images.unsplash.com/photo-1583337130417-3346a1be7dee?w=400&h=300&fit=crop",
+      "posted_by": 1,
+      "created_at": "2024-12-03T12:15:00Z",
+      "is_active": true
+    }
+  },
+  {
+    "model": "Pets.pet",
+    "pk": 4,
+    "fields": {
+      "name": "Luna",
+      "species": "Cat",
+      "breed": "Tabby",
+      "description": "Luna is a playful 6-month-old tabby kitten with beautiful orange and white markings. She's very social and loves attention. Would do well in a home with other cats or as an only pet. Litter trained and has all her shots.",
+      "age": "6 months",
+      "color": "Orange and White",
+      "location_city": "Pune",
+      "location_state": "Maharashtra",
+      "photos": "https://images.unsplash.com/photo-1573865526739-10659fec78a5?w=400&h=300&fit=crop",
+      "posted_by": 1,
+      "created_at": "2024-12-03T13:45:00Z",
+      "is_active": true
+    }
+  },
+  {
+    "model": "Pets.pet",
+    "pk": 5,
+    "fields": {
+      "name": "Rocky",
+      "species": "Dog",
+      "breed": "German Shepherd Mix",
+      "description": "Rocky is a loyal 4-year-old German Shepherd mix looking for his forever home. He's protective but gentle, great with older children. Needs an experienced owner who can provide consistent training and exercise. House-trained and well-behaved on walks.",
+      "age": "4 years",
+      "color": "Brown and Black",
+      "location_city": "Chennai",
+      "location_state": "Tamil Nadu",
+      "photos": "https://images.unsplash.com/photo-1518717758536-85ae29035b6d?w=400&h=300&fit=crop",
+      "posted_by": 1,
+      "created_at": "2024-12-03T14:20:00Z",
+      "is_active": true
+    }
+  },
+  {
+    "model": "Pets.pet",
+    "pk": 6,
+    "fields": {
+      "name": "Mittens",
+      "species": "Cat",
+      "breed": "Domestic Shorthair",
+      "description": "Mittens is a sweet 3-year-old domestic shorthair with distinctive white paws that give her name. She's independent but affectionate, perfect for someone who wants a loving but low-maintenance companion. Good with other cats.",
+      "age": "3 years",
+      "color": "Gray and White",
+      "location_city": "Kolkata",
+      "location_state": "West Bengal",
+      "photos": "https://images.unsplash.com/photo-1592194996308-7b43878e84a6?w=400&h=300&fit=crop",
+      "posted_by": 1,
+      "created_at": "2024-12-03T15:10:00Z",
+      "is_active": true
+    }
+  }
+]

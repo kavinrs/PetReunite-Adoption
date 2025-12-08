@@ -22,6 +22,8 @@ export default function UserProfile() {
     password: "",
   });
   const [saving, setSaving] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [locError, setLocError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     message: string;
@@ -144,6 +146,33 @@ export default function UserProfile() {
       location_url: profile?.location_url ?? "",
       password: "",
     });
+  }
+
+  function handleUseCurrentLocation() {
+    setLocError(null);
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setLocError("Location is not supported in this browser.");
+      return;
+    }
+
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const url = `https://www.google.com/maps?q=${latitude},${longitude}`;
+        setEditValues((prev) => ({ ...prev, location_url: url }));
+        setLocating(false);
+      },
+      (error) => {
+        console.error("Geolocation error", error);
+        setLocError(error?.message || "Unable to detect location.");
+        setLocating(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+      },
+    );
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -414,7 +443,54 @@ export default function UserProfile() {
                   >
                     {field.label}
                   </span>
-                  {field.type === "textarea" ? (
+                  {field.key === "location_url" ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        alignItems: "flex-start",
+                      }}
+                    >
+                      <input
+                        type={field.type ?? "text"}
+                        value={editValues[field.key]}
+                        onChange={(e) =>
+                          handleFieldChange(field.key, e.target.value)
+                        }
+                        style={{
+                          background: "rgba(15,23,42,0.6)",
+                          border: "1px solid rgba(148,163,184,0.3)",
+                          borderRadius: 10,
+                          padding: "10px 12px",
+                          color: "white",
+                          fontSize: 14,
+                          flex: 1,
+                        }}
+                        placeholder="Enter Google Maps URL or use location button"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleUseCurrentLocation}
+                        disabled={locating}
+                        style={{
+                          background: locating
+                            ? "rgba(99,102,241,0.4)"
+                            : "rgba(99,102,241,0.8)",
+                          border: "1px solid rgba(99,102,241,0.5)",
+                          borderRadius: 8,
+                          color: "white",
+                          padding: "10px 12px",
+                          cursor: locating ? "not-allowed" : "pointer",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          whiteSpace: "nowrap",
+                          opacity: locating ? 0.7 : 1,
+                        }}
+                      >
+                        {locating ? "Detecting..." : "📍 Use Current Location"}
+                      </button>
+                    </div>
+                  ) : field.type === "textarea" ? (
                     <textarea
                       value={editValues[field.key]}
                       onChange={(e) =>
@@ -447,6 +523,18 @@ export default function UserProfile() {
                         fontSize: 14,
                       }}
                     />
+                  )}
+                  {field.key === "location_url" && locError && (
+                    <div
+                      style={{
+                        marginTop: 4,
+                        fontSize: 12,
+                        color: "#f87171",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {locError}
+                    </div>
                   )}
                 </label>
               ))}

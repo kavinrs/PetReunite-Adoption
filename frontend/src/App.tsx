@@ -6,13 +6,20 @@ import UserHome from "./pages/UserHome";
 import AdminHome from "./pages/AdminHome";
 import AdminRegister from "./pages/AdminRegister";
 import AdminProfile from "./pages/AdminProfile";
+import AdminLostReportDetail from "./pages/AdminLostReportDetail";
 import PrivateRoute from "./components/PrivateRoute";
 import UserProfile from "./pages/UserProfile";
 import ReportFoundPet from "./pages/ReportFoundPet";
 import ReportLostPet from "./pages/ReportLostPet";
+import PetDetailsPage from "./pages/PetDetailsPage";
+import LostReportDetail from "./pages/LostReportDetail";
+import MyAdoptionRequests from "./pages/MyAdoptionRequests";
 import Home from "./pages/Home";
 import { useViewportStandardization } from "./hooks/useViewportStandardization";
 import "./App.css";
+
+// Admin Components
+// Legacy admin report pages are routed to AdminHome tabs via redirects
 
 export default function App() {
   // Apply viewport standardization to ensure consistent 100% scaling across all pages
@@ -30,6 +37,14 @@ export default function App() {
         element={
           <PrivateRoute role="user">
             <UserHome />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/user/lost/:id"
+        element={
+          <PrivateRoute role="user">
+            <LostReportDetail />
           </PrivateRoute>
         }
       />
@@ -58,10 +73,58 @@ export default function App() {
         }
       />
       <Route
+        path="/pets/:id"
+        element={
+          <PrivateRoute role="user">
+            <PetDetailsPage />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/user/adoption-requests"
+        element={
+          <PrivateRoute role="user">
+            <MyAdoptionRequests />
+          </PrivateRoute>
+        }
+      />
+      <Route
         path="/admin"
         element={
           <PrivateRoute role="admin">
             <AdminHome />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/admin/lost/:id"
+        element={
+          <PrivateRoute role="admin">
+            <AdminLostReportDetail />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/admin/found-pets"
+        element={
+          <PrivateRoute role="admin">
+            <Navigate to="/admin?tab=found" replace />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/admin/lost-pets"
+        element={
+          <PrivateRoute role="admin">
+            <Navigate to="/admin?tab=lost" replace />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/admin/adoption-requests"
+        element={
+          <PrivateRoute role="admin">
+            <Navigate to="/admin?tab=adoptions" replace />
           </PrivateRoute>
         }
       />

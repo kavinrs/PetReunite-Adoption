@@ -94,7 +94,7 @@ function HeroSection() {
               justifyContent: "center",
               width: "100%",
               maxWidth: "100%",
-              gap: "16px",
+              gap: "8px",
               marginTop: "12px",
               padding: "0",
             }}
@@ -108,26 +108,26 @@ function HeroSection() {
                 background:
                   "linear-gradient(90deg, #ff9d44 0%, #ff7755 33%, #ff4ba8 100%)",
                 backgroundColor: "#ff6666",
-                width: "100%",
-                maxWidth: "350px",
-                minWidth: "280px",
-                height: "56px",
-                padding: "0 32px",
+                width: "auto",
+                maxWidth: "220px",
+                minWidth: "160px",
+                height: "36px",
+                padding: "0 18px",
                 border: "none",
                 borderRadius: "999px",
                 color: "#ffffff",
-                fontWeight: "800",
-                fontSize: "1rem",
+                fontWeight: "600",
+                fontSize: "0.75rem",
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
-                gap: "12px",
+                gap: "6px",
                 cursor: "pointer",
                 boxSizing: "border-box",
                 textDecoration: "none",
                 whiteSpace: "nowrap",
-                boxShadow: "0 8px 25px rgba(255, 157, 68, 0.4)",
-                textShadow: "0 1px 3px rgba(0, 0, 0, 0.4)",
+                boxShadow: "0 3px 12px rgba(255, 157, 68, 0.25)",
+                textShadow: "0 1px 2px rgba(0, 0, 0, 0.2)",
                 transition: "all 0.3s ease",
                 backgroundSize: "100% 100%",
                 backgroundRepeat: "no-repeat",
@@ -135,8 +135,8 @@ function HeroSection() {
             >
               <span className="hero-btn__icon" aria-hidden="true">
                 <svg
-                  width="18"
-                  height="18"
+                  width="14"
+                  height="14"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -151,8 +151,8 @@ function HeroSection() {
               Start Your Search
               <span className="hero-btn__chevron" aria-hidden="true">
                 <svg
-                  width="16"
-                  height="16"
+                  width="12"
+                  height="12"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"

@@ -4,12 +4,16 @@ import {
   getProfile,
   clearTokens,
   fetchPublicLostPets,
-  fetchPublicFoundPets,
+  fetchAvailablePets,
+  fetchMyActivity,
+  updateMyLostReport,
+  updateMyFoundReport,
 } from "../services/api";
 import { useNavigate } from "react-router-dom";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
 
 type Tab = "owner" | "rescuer" | "adopter";
+type UserPageTab = "home" | "activity";
 
 export default function UserHome() {
   // Apply viewport standardization to ensure consistent 100% scaling
@@ -19,16 +23,21 @@ export default function UserHome() {
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("owner");
+  const [pageTab, setPageTab] = useState<UserPageTab>("home");
   const [allPets, setAllPets] = useState<any[]>([]);
   const [filteredPets, setFilteredPets] = useState<any[]>([]);
   const [petsLoading, setPetsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSpecies, setSelectedSpecies] = useState("All Species");
-  const [selectedAge, setSelectedAge] = useState("All Ages");
+  const [selectedCategory, setSelectedCategory] = useState("All pets");
   const [sortBy, setSortBy] = useState("Most Recent");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
+  const [activity, setActivity] = useState<{ lost: any[]; found: any[]; adoptions: any[] }>({ lost: [], found: [], adoptions: [] });
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityExpanded, setActivityExpanded] = useState<string | null>(null);
+  const [updatingReportId, setUpdatingReportId] = useState<string | null>(null);
 
   // Function to get sample pet images
   const getSamplePetImage = (petType: string, index: number): string => {
@@ -116,42 +125,89 @@ export default function UserHome() {
 
   useEffect(() => {
     let mounted = true;
+    async function loadActivity() {
+      if (pageTab !== "activity") return;
+      setActivityLoading(true);
+      const res = await fetchMyActivity();
+      if (!mounted) return;
+      if (res.ok) setActivity(res.data);
+      setActivityLoading(false);
+    }
+    loadActivity();
+    const id = window.setInterval(loadActivity, 15000);
+    return () => {
+      mounted = false;
+      window.clearInterval(id);
+    };
+  }, [pageTab]);
+
+  useEffect(() => {
+    let mounted = true;
     async function loadPets() {
       setPetsLoading(true);
       try {
-        const [lostRes, foundRes] = await Promise.all([
+        const [lostRes, adoptionRes] = await Promise.all([
           fetchPublicLostPets(),
-          fetchPublicFoundPets(),
+          fetchAvailablePets(),
         ]);
 
         if (!mounted) return;
 
-        let combinedPets = [];
+        const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
+        const origin = /^https?:/.test(apiBase)
+          ? new URL(apiBase).origin
+          : "http://localhost:8000";
+
+        const resolvePhoto = (raw: any, fallback: string): string => {
+          if (!raw) return fallback;
+          const s = String(raw);
+          if (s.startsWith("http")) return s;
+          if (s.startsWith("/")) return origin + s;
+          return origin + "/media/" + s;
+        };
+
+        let combinedPets: any[] = [];
         if (lostRes.ok) {
-          const lostPets = lostRes.data.map((pet: any, index: number) => ({
-            ...pet,
-            petCategory: "lost",
-            displayName: pet.pet_name || `${pet.pet_type}`,
-            location: `${pet.city}, ${pet.state}`,
-            photo: pet.photo
-              ? `/${pet.photo}`
-              : getSamplePetImage(pet.pet_type, index),
-          }));
+          const lostPets = lostRes.data.map((pet: any, index: number) => {
+            const raw = pet.photo_url || pet.photo;
+            return {
+              ...pet,
+              petCategory: "lost",
+              displayName: pet.pet_name || `${pet.pet_type}`,
+              location: `${pet.city}, ${pet.state}`,
+              photo: resolvePhoto(
+                raw,
+                getSamplePetImage(pet.pet_type, index),
+              ),
+            };
+          });
           combinedPets.push(...lostPets);
         }
-        if (foundRes.ok) {
-          const foundPets = foundRes.data.map((pet: any, index: number) => ({
-            ...pet,
-            petCategory: "found",
-            displayName: `Found ${pet.pet_type}`,
-            location: `${pet.found_city}, ${pet.state}`,
-            photo: pet.photo
-              ? `/${pet.photo}`
-              : getSamplePetImage(pet.pet_type, index + 10),
-          }));
-          combinedPets.push(...foundPets);
+
+        if (adoptionRes.ok) {
+          console.log("DEBUG: Adoption API response:", adoptionRes.data);
+          const adoptionPets = adoptionRes.data.map(
+            (pet: any, index: number) => {
+              const raw = pet.photos;
+              return {
+                ...pet,
+                petCategory: "adoption",
+                displayName: pet.name,
+                location: `${pet.location_city}, ${pet.location_state}`,
+                photo: resolvePhoto(
+                  raw,
+                  getSamplePetImage(pet.species, index + 20),
+                ),
+              };
+            },
+          );
+          console.log("DEBUG: Mapped adoption pets:", adoptionPets);
+          combinedPets.push(...adoptionPets);
+        } else {
+          console.log("DEBUG: Adoption API failed:", adoptionRes.error);
         }
 
+        console.log("DEBUG: All combined pets:", combinedPets);
         setAllPets(combinedPets);
         setFilteredPets(combinedPets);
       } catch (error) {
@@ -191,19 +247,19 @@ export default function UserHome() {
       );
     }
 
-    // Age filter
-    if (selectedAge !== "All Ages") {
+    // Category filter
+    if (selectedCategory !== "All pets") {
       filtered = filtered.filter((pet) => {
-        const age = pet.age || pet.estimated_age || "";
-        if (selectedAge === "Baby" && age.includes("months")) return true;
-        if (
-          selectedAge === "Adult" &&
-          age.includes("year") &&
-          !age.includes("5")
-        )
-          return true;
-        if (selectedAge === "Senior" && age.includes("5")) return true;
-        return false;
+        if (selectedCategory === "Lost pet") {
+          return pet.petCategory === "lost";
+        }
+        if (selectedCategory === "Found pet") {
+          return pet.petCategory === "found";
+        }
+        if (selectedCategory === "Adoption pet") {
+          return pet.petCategory === "adoption";
+        }
+        return true;
       });
     }
 
@@ -216,7 +272,7 @@ export default function UserHome() {
     }
 
     setFilteredPets(filtered);
-  }, [allPets, searchQuery, selectedSpecies, selectedAge, sortBy]);
+  }, [allPets, searchQuery, selectedSpecies, selectedCategory, sortBy]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -252,7 +308,10 @@ export default function UserHome() {
     {
       label: "Dashboard",
       icon: "🗂",
-      onClick: () => window.scrollTo({ top: 0, behavior: "smooth" }),
+      onClick: () => {
+        setPageTab("home");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      },
       accent: true,
     },
     {
@@ -265,634 +324,999 @@ export default function UserHome() {
       icon: "🐾",
       onClick: () => navigate("/user/report-found"),
     },
+    {
+      label: "My Activity",
+      icon: "📜",
+      onClick: () => setPageTab("activity"),
+    },
   ];
 
   return (
     <div
       style={{
         minHeight: "100vh",
-        display: "flex",
         background: "#f6f7fb",
         fontFamily: "'Inter', sans-serif",
         color: "#0f172a",
+        display: "flex",
+        justifyContent: "flex-start",
+        padding: "0",
       }}
     >
-      <aside
+      <div
         style={{
-          width: sidebarOpen ? 380 : 0,
-          background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
-          borderRight: "1px solid rgba(15,23,42,0.12)",
-          padding: sidebarOpen ? 36 : 0,
-          boxSizing: "border-box",
           display: "flex",
-          flexDirection: "column",
-          gap: 36,
-          boxShadow: "6px 0 25px rgba(15,23,42,0.08)",
-          transition: "all 0.3s ease",
-          overflow: "hidden",
+          width: "100%",
+          minHeight: "100vh",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-          <div
+        <aside
+          style={{
+            width: sidebarOpen ? 280 : 0,
+            background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+            borderRight: "1px solid rgba(15,23,42,0.12)",
+            padding: sidebarOpen ? 24 : 0,
+            boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column",
+            gap: 24,
+            boxShadow: "6px 0 25px rgba(15,23,42,0.08)",
+            transition: "all 0.3s ease",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, #ff8a00, #ff2fab)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 10px 25px rgba(255,138,0,0.35)",
+              }}
+            >
+              <span style={{ fontSize: 20, filter: "brightness(0) invert(1)" }}>
+                🐾
+              </span>
+            </div>
+            <div>
+              <div style={{ fontWeight: 900, fontSize: 20, color: "#0f172a" }}>
+                PetReunite
+              </div>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "rgba(15,23,42,0.6)",
+                  fontWeight: 500,
+                }}
+              >
+                Pet Rescue Platform
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {sidebarLinks.map((link) => (
+              <button
+                key={link.label}
+                onClick={link.onClick}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 20,
+                  fontWeight: link.accent ? 800 : 700,
+                  padding: "12px 16px",
+                  borderRadius: 16,
+                  cursor: "pointer",
+                  border: link.accent ? "none" : "2px solid rgba(15,23,42,0.1)",
+                  background: link.accent
+                    ? "linear-gradient(135deg,#ff8a00,#ff2fab)"
+                    : "rgba(15,23,42,0.03)",
+                  color: link.accent ? "white" : "#0f172a",
+                  fontSize: 14,
+                  textAlign: "left",
+                  boxShadow: link.accent
+                    ? "0 15px 35px rgba(255,138,0,0.4)"
+                    : "0 4px 12px rgba(15,23,42,0.1)",
+                  transition: "all 0.3s ease",
+                }}
+                onMouseEnter={(e) => {
+                  if (!link.accent) {
+                    e.currentTarget.style.background = "rgba(15,23,42,0.08)";
+                    e.currentTarget.style.transform = "translateY(-3px)";
+                    e.currentTarget.style.boxShadow =
+                      "0 6px 18px rgba(15,23,42,0.15)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!link.accent) {
+                    e.currentTarget.style.background = "rgba(15,23,42,0.03)";
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow =
+                      "0 4px 12px rgba(15,23,42,0.1)";
+                  }
+                }}
+              >
+                <span
+                  role="img"
+                  aria-label={link.label}
+                  style={{
+                    fontSize: 16,
+                    minWidth: 16,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {link.icon}
+                </span>
+                {link.label}
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        <main
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            padding: "24px 32px",
+            boxSizing: "border-box",
+            gap: 20,
+            transition: "all 0.3s ease",
+            width: "100%",
+          }}
+        >
+          {/* Toggle Sidebar Button */}
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
             style={{
-              width: 64,
-              height: 64,
-              borderRadius: "50%",
+              position: "fixed",
+              top: 20,
+              left: sidebarOpen ? 260 : 20,
+              zIndex: 1000,
               background: "linear-gradient(135deg, #ff8a00, #ff2fab)",
+              border: "none",
+              borderRadius: "50%",
+              width: 44,
+              height: 44,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 10px 25px rgba(255,138,0,0.35)",
+              cursor: "pointer",
+              boxShadow: "0 8px 20px rgba(255,138,0,0.35)",
+              transition: "all 0.3s ease",
+              color: "white",
+              fontSize: 16,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "scale(1.1)";
+              e.currentTarget.style.boxShadow =
+                "0 12px 25px rgba(255,138,0,0.45)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "scale(1)";
+              e.currentTarget.style.boxShadow =
+                "0 8px 20px rgba(255,138,0,0.35)";
             }}
           >
-            <span style={{ fontSize: 28, filter: "brightness(0) invert(1)" }}>
-              🐾
-            </span>
-          </div>
-          <div>
-            <div style={{ fontWeight: 900, fontSize: 28, color: "#0f172a" }}>
-              PawReunite
+            {sidebarOpen ? "◀" : "▶"}
+          </button>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 16,
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 24, fontWeight: 800 }}>{pageTab === "activity" ? "My Activity" : "Dashboard"}</div>
+              <div style={{ color: "rgba(15,23,42,0.6)", marginTop: 4 }}>
+                {pageTab === "activity" ? "Your reports and adoption history" : "Manage your pet rescue activities"}
+              </div>
             </div>
-            <div
-              style={{
-                fontSize: 14,
-                color: "rgba(15,23,42,0.6)",
-                fontWeight: 500,
-              }}
-            >
-              Pet Rescue Platform
-            </div>
-          </div>
-        </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {sidebarLinks.map((link) => (
-            <button
-              key={link.label}
-              onClick={link.onClick}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 20,
-                fontWeight: link.accent ? 800 : 700,
-                padding: "20px 24px",
-                borderRadius: 24,
-                cursor: "pointer",
-                border: link.accent ? "none" : "2px solid rgba(15,23,42,0.1)",
-                background: link.accent
-                  ? "linear-gradient(135deg,#ff8a00,#ff2fab)"
-                  : "rgba(15,23,42,0.03)",
-                color: link.accent ? "white" : "#0f172a",
-                fontSize: 18,
-                textAlign: "left",
-                boxShadow: link.accent
-                  ? "0 15px 35px rgba(255,138,0,0.4)"
-                  : "0 4px 12px rgba(15,23,42,0.1)",
-                transition: "all 0.3s ease",
-              }}
-              onMouseEnter={(e) => {
-                if (!link.accent) {
-                  e.currentTarget.style.background = "rgba(15,23,42,0.08)";
-                  e.currentTarget.style.transform = "translateY(-3px)";
+            <div ref={menuRef} style={{ position: "relative" }}>
+              <button
+                onClick={() => setMenuOpen((prev) => !prev)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 16,
+                  background: "white",
+                  borderRadius: 16,
+                  padding: "8px 16px",
+                  boxShadow: "0 12px 30px rgba(15,23,42,0.12)",
+                  border: "2px solid rgba(15,23,42,0.08)",
+                  cursor: "pointer",
+                  minWidth: 240,
+                  textAlign: "left",
+                  transition: "all 0.2s ease",
+                }}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-2px)";
                   e.currentTarget.style.boxShadow =
-                    "0 6px 18px rgba(15,23,42,0.15)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!link.accent) {
-                  e.currentTarget.style.background = "rgba(15,23,42,0.03)";
+                    "0 16px 40px rgba(15,23,42,0.15)";
+                }}
+                onMouseLeave={(e) => {
                   e.currentTarget.style.transform = "translateY(0)";
                   e.currentTarget.style.boxShadow =
-                    "0 4px 12px rgba(15,23,42,0.1)";
-                }
-              }}
-            >
-              <span
-                role="img"
-                aria-label={link.label}
-                style={{
-                  fontSize: 24,
-                  minWidth: 24,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
+                    "0 12px 30px rgba(15,23,42,0.12)";
                 }}
               >
-                {link.icon}
-              </span>
-              {link.label}
-            </button>
-          ))}
-        </div>
-      </aside>
-
-      <main
-        style={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          padding: "36px 44px",
-          boxSizing: "border-box",
-          gap: 28,
-          transition: "all 0.3s ease",
-        }}
-      >
-        {/* Toggle Sidebar Button */}
-        <button
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          style={{
-            position: "fixed",
-            top: 20,
-            left: sidebarOpen ? 360 : 20,
-            zIndex: 1000,
-            background: "linear-gradient(135deg, #ff8a00, #ff2fab)",
-            border: "none",
-            borderRadius: "50%",
-            width: 56,
-            height: 56,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            boxShadow: "0 8px 20px rgba(255,138,0,0.35)",
-            transition: "all 0.3s ease",
-            color: "white",
-            fontSize: 20,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "scale(1.1)";
-            e.currentTarget.style.boxShadow =
-              "0 12px 25px rgba(255,138,0,0.45)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "scale(1)";
-            e.currentTarget.style.boxShadow = "0 8px 20px rgba(255,138,0,0.35)";
-          }}
-        >
-          {sidebarOpen ? "◀" : "▶"}
-        </button>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: 16,
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 30, fontWeight: 800 }}>Dashboard</div>
-            <div style={{ color: "rgba(15,23,42,0.6)", marginTop: 4 }}>
-              Manage your pet rescue activities
-            </div>
-          </div>
-
-          <div ref={menuRef} style={{ position: "relative" }}>
-            <button
-              onClick={() => setMenuOpen((prev) => !prev)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 16,
-                background: "white",
-                borderRadius: 24,
-                padding: "12px 20px",
-                boxShadow: "0 12px 30px rgba(15,23,42,0.12)",
-                border: "2px solid rgba(15,23,42,0.08)",
-                cursor: "pointer",
-                minWidth: 300,
-                textAlign: "left",
-                transition: "all 0.2s ease",
-              }}
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = "translateY(-2px)";
-                e.currentTarget.style.boxShadow =
-                  "0 16px 40px rgba(15,23,42,0.15)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow =
-                  "0 12px 30px rgba(15,23,42,0.12)";
-              }}
-            >
-              <div
-                style={{
-                  borderRadius: "50%",
-                  width: 56,
-                  height: 56,
-                  overflow: "hidden",
-                  background: "linear-gradient(135deg,#6d5dfc,#58c4ff)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  boxShadow: "0 6px 15px rgba(109,93,252,0.3)",
-                }}
-              >
-                <img
-                  src={avatarUrl}
-                  alt={displayName}
-                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                />
-              </div>
-              <div
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  lineHeight: 1.3,
-                }}
-              >
-                <span
-                  style={{ fontWeight: 800, color: "#0f172a", fontSize: 18 }}
-                >
-                  {displayName}
-                </span>
-                <span
+                <div
                   style={{
-                    fontSize: 15,
-                    color: "rgba(15,23,42,0.6)",
-                    fontWeight: 500,
+                    borderRadius: "50%",
+                    width: 40,
+                    height: 40,
+                    overflow: "hidden",
+                    background: "linear-gradient(135deg,#6d5dfc,#58c4ff)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: "0 6px 15px rgba(109,93,252,0.3)",
                   }}
                 >
-                  {email}
-                </span>
-              </div>
-              <span style={{ fontSize: 20, color: "rgba(15,23,42,0.5)" }}>
-                {menuOpen ? "▴" : "▾"}
-              </span>
-            </button>
-            {menuOpen && (
-              <div
-                role="menu"
-                style={{
-                  position: "absolute",
-                  top: "120%",
-                  right: 0,
-                  width: 280,
-                  background: "white",
-                  borderRadius: 20,
-                  boxShadow: "0 20px 50px rgba(15,23,42,0.25)",
-                  padding: 20,
-                  color: "#0f172a",
-                  zIndex: 10,
-                  border: "1px solid rgba(15,23,42,0.08)",
-                }}
-              >
-                <div style={{ marginBottom: 16, textAlign: "center" }}>
-                  <div style={{ fontWeight: 800, fontSize: 18 }}>
-                    {displayName}
-                  </div>
-                  <div
+                  <img
+                    src={avatarUrl}
+                    alt={displayName}
                     style={{
-                      fontSize: 14,
-                      color: "rgba(15,23,42,0.6)",
-                      marginTop: 2,
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
                     }}
-                  >
-                    {email}
-                  </div>
+                  />
                 </div>
                 <div
                   style={{
-                    height: 1,
-                    background: "rgba(15,23,42,0.12)",
-                    marginBottom: 16,
-                  }}
-                />
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    navigate("/user/profile");
-                  }}
-                  style={{
-                    width: "100%",
-                    border: "2px solid rgba(99,102,241,0.3)",
-                    background: "rgba(99,102,241,0.1)",
-                    color: "#312e81",
-                    borderRadius: 16,
-                    padding: "16px 16px",
-                    cursor: "pointer",
-                    fontWeight: 700,
-                    marginBottom: 12,
-                    fontSize: 16,
-                    transition: "all 0.2s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "rgba(99,102,241,0.2)";
-                    e.currentTarget.style.transform = "translateY(-1px)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "rgba(99,102,241,0.1)";
-                    e.currentTarget.style.transform = "translateY(0)";
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    lineHeight: 1.3,
                   }}
                 >
-                  👤 View Profile
-                </button>
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    clearTokens();
-                    navigate("/", { replace: true });
-                  }}
-                  style={{
-                    width: "100%",
-                    border: "2px solid rgba(248,113,113,0.4)",
-                    background: "rgba(248,113,113,0.15)",
-                    borderRadius: 16,
-                    padding: "16px 16px",
-                    cursor: "pointer",
-                    fontWeight: 700,
-                    color: "#b91c1c",
-                    fontSize: 16,
-                    transition: "all 0.2s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "rgba(248,113,113,0.25)";
-                    e.currentTarget.style.transform = "translateY(-1px)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "rgba(248,113,113,0.15)";
-                    e.currentTarget.style.transform = "translateY(0)";
-                  }}
-                >
-                  🚪 Logout
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Find Your Perfect Pet Section */}
-        <div
-          style={{
-            background: "white",
-            borderRadius: 24,
-            padding: 28,
-            boxShadow: "0 24px 60px rgba(15,23,42,0.08)",
-            border: "1px solid rgba(15,23,42,0.05)",
-          }}
-        >
-          {/* Header */}
-          <div style={{ marginBottom: 32 }}>
-            <div
-              style={{
-                fontSize: 32,
-                fontWeight: 800,
-                color: "#0f172a",
-                marginBottom: 8,
-              }}
-            >
-              Discover Pets Looking for Loving Homes
-            </div>
-            <div style={{ color: "rgba(15,23,42,0.6)", fontSize: 16 }}>
-              Discover pets ready for adoption and help lost pets find their way
-              home
-            </div>
-          </div>
-
-          {/* Search and Filters */}
-          <div style={{ marginBottom: 32 }}>
-            {/* Search Bar */}
-            <div style={{ marginBottom: 20 }}>
-              <input
-                type="text"
-                placeholder="Search by name or breed..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "16px 20px",
-                  borderRadius: 16,
-                  border: "1px solid rgba(15,23,42,0.15)",
-                  fontSize: 16,
-                  background: "rgba(15,23,42,0.02)",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-
-            {/* Filter Row */}
-            <div
-              style={{
-                display: "flex",
-                gap: 16,
-                flexWrap: "wrap",
-                alignItems: "center",
-                marginBottom: 20,
-              }}
-            >
-              {/* Age Filter Buttons */}
-              <div style={{ display: "flex", gap: 8 }}>
-                {["All Ages", "Baby", "Adult", "Senior"].map((age) => (
-                  <button
-                    key={age}
-                    onClick={() => setSelectedAge(age)}
+                  <span
+                    style={{ fontWeight: 800, color: "#0f172a", fontSize: 14 }}
+                  >
+                    {displayName}
+                  </span>
+                  <span
                     style={{
-                      padding: "10px 20px",
-                      borderRadius: 25,
-                      border:
-                        selectedAge === age
-                          ? "2px solid #ff8a00"
-                          : "1px solid rgba(15,23,42,0.15)",
-                      background:
-                        selectedAge === age ? "rgba(255,138,0,0.1)" : "white",
-                      color:
-                        selectedAge === age ? "#ff8a00" : "rgba(15,23,42,0.8)",
-                      cursor: "pointer",
-                      fontWeight: selectedAge === age ? 700 : 500,
-                      fontSize: 14,
+                      fontSize: 12,
+                      color: "rgba(15,23,42,0.6)",
+                      fontWeight: 500,
                     }}
                   >
-                    {age}
-                  </button>
-                ))}
-              </div>
-
-              {/* Species Dropdown */}
-              <select
-                value={selectedSpecies}
-                onChange={(e) => setSelectedSpecies(e.target.value)}
-                style={{
-                  padding: "12px 16px",
-                  borderRadius: 12,
-                  border: "1px solid rgba(15,23,42,0.15)",
-                  background: "white",
-                  fontSize: 14,
-                  cursor: "pointer",
-                }}
-              >
-                <option value="All Species">All Species</option>
-                <option value="Dog">Dogs</option>
-                <option value="Cat">Cats</option>
-                <option value="Rabbit">Rabbits</option>
-                <option value="Bird">Birds</option>
-              </select>
-
-              {/* Sort Dropdown */}
-              <div
-                style={{
-                  marginLeft: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                <span style={{ fontSize: 14, color: "rgba(15,23,42,0.6)" }}>
-                  Sort by:
+                    {email}
+                  </span>
+                </div>
+                <span style={{ fontSize: 16, color: "rgba(15,23,42,0.5)" }}>
+                  {menuOpen ? "▴" : "▾"}
                 </span>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  style={{
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    border: "1px solid rgba(15,23,42,0.15)",
-                    background: "white",
-                    fontSize: 14,
-                    cursor: "pointer",
-                  }}
-                >
-                  <option value="Most Recent">Most Recent</option>
-                  <option value="Alphabetical">Alphabetical</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Results Count */}
-            <div style={{ fontSize: 18, fontWeight: 600, color: "#0f172a" }}>
-              {filteredPets.length} Pet{filteredPets.length !== 1 ? "s" : ""}{" "}
-              Available
-            </div>
-          </div>
-
-          {/* Pet Grid */}
-          {petsLoading ? (
-            <div
-              style={{
-                textAlign: "center",
-                padding: 60,
-                color: "rgba(15,23,42,0.6)",
-              }}
-            >
-              Loading pets...
-            </div>
-          ) : filteredPets.length > 0 ? (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-                gap: 24,
-              }}
-            >
-              {filteredPets.map((pet) => (
+              </button>
+              {menuOpen && (
                 <div
-                  key={`${pet.petCategory}-${pet.id}`}
+                  role="menu"
                   style={{
-                    border: `2px solid ${pet.petCategory === "lost" ? "rgba(220,38,38,0.3)" : "rgba(34,197,94,0.3)"}`,
-                    borderRadius: 20,
-                    padding: 20,
-                    background:
-                      pet.petCategory === "lost"
-                        ? "rgba(254,242,242,0.8)"
-                        : "rgba(240,253,244,0.8)",
-                    transition: "all 0.3s ease",
-                    cursor: "pointer",
-                    position: "relative",
-                    overflow: "hidden",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "translateY(-4px)";
-                    e.currentTarget.style.boxShadow = `0 12px 30px ${pet.petCategory === "lost" ? "rgba(220,38,38,0.15)" : "rgba(34,197,94,0.15)"}`;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "translateY(0)";
-                    e.currentTarget.style.boxShadow = "none";
+                    position: "absolute",
+                    top: "120%",
+                    right: 0,
+                    width: 180,
+                    background: "white",
+                    borderRadius: 8,
+                    boxShadow: "0 12px 30px rgba(15,23,42,0.2)",
+                    padding: 12,
+                    color: "#0f172a",
+                    zIndex: 10,
+                    border: "1px solid rgba(15,23,42,0.08)",
                   }}
                 >
-                  {/* Category Badge */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: 12,
-                      right: 12,
-                      padding: "6px 14px",
-                      borderRadius: 20,
-                      background:
-                        pet.petCategory === "lost" ? "#dc2626" : "#16a34a",
-                      color: "white",
-                      fontSize: 13,
-                      fontWeight: 800,
-                      textTransform: "uppercase",
-                      boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-                    }}
-                  >
-                    {pet.petCategory === "lost" ? "🚨 Lost" : "🐾 Adoption"}
-                  </div>
-
-                  {/* Pet Image */}
-                  {pet.photo && (
+                  <div style={{ marginBottom: 10, textAlign: "center" }}>
+                    <div style={{ fontWeight: 800, fontSize: 13 }}>
+                      {displayName}
+                    </div>
                     <div
                       style={{
-                        marginBottom: 16,
-                        borderRadius: 16,
-                        overflow: "hidden",
+                        fontSize: 11,
+                        color: "rgba(15,23,42,0.6)",
+                        marginTop: 1,
                       }}
                     >
-                      <img
-                        src={pet.photo}
-                        alt={pet.displayName}
-                        style={{
-                          width: "100%",
-                          height: 220,
-                          objectFit: "contain",
-                          objectPosition: "center",
-                          backgroundColor: "rgba(0, 0, 0, 0.05)",
-                        }}
-                      />
+                      {email}
                     </div>
-                  )}
-
-                  {/* Pet Info */}
+                  </div>
                   <div
                     style={{
-                      fontWeight: 900,
-                      fontSize: 20,
-                      color: "#111827",
+                      height: 1,
+                      background: "rgba(15,23,42,0.12)",
                       marginBottom: 8,
-                      textShadow: "0 1px 2px rgba(0,0,0,0.1)",
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      navigate("/user/profile");
+                    }}
+                    style={{
+                      width: "100%",
+                      border: "2px solid rgba(99,102,241,0.3)",
+                      background: "rgba(99,102,241,0.1)",
+                      color: "#312e81",
+                      borderRadius: 12,
+                      padding: "10px 12px",
+                      cursor: "pointer",
+                      fontWeight: 700,
+                      marginBottom: 6,
+                      fontSize: 12,
+                      transition: "all 0.2s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "rgba(99,102,241,0.2)";
+                      e.currentTarget.style.transform = "translateY(-1px)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "rgba(99,102,241,0.1)";
+                      e.currentTarget.style.transform = "translateY(0)";
                     }}
                   >
-                    {pet.displayName}
-                  </div>
-
-                  <div
+                    👤 View Profile
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      clearTokens();
+                      navigate("/", { replace: true });
+                    }}
                     style={{
-                      color: "rgba(15,23,42,0.9)",
-                      marginBottom: 4,
-                      fontSize: 16,
+                      width: "100%",
+                      border: "2px solid rgba(248,113,113,0.4)",
+                      background: "rgba(248,113,113,0.15)",
+                      borderRadius: 12,
+                      padding: "10px 12px",
+                      cursor: "pointer",
+                      fontWeight: 700,
+                      color: "#b91c1c",
+                      fontSize: 12,
+                      transition: "all 0.2s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background =
+                        "rgba(248,113,113,0.25)";
+                      e.currentTarget.style.transform = "translateY(-1px)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background =
+                        "rgba(248,113,113,0.15)";
+                      e.currentTarget.style.transform = "translateY(0)";
                     }}
                   >
-                    <strong>{pet.breed || "Mixed Breed"}</strong>
-                  </div>
+                    🚪 Logout
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
 
-                  <div
+          {/* Find Your Perfect Pet Section */}
+          <div
+            style={{
+              background: "white",
+              borderRadius: 16,
+              padding: 20,
+              boxShadow: "0 24px 60px rgba(15,23,42,0.08)",
+              border: "1px solid rgba(15,23,42,0.05)",
+              overflow: "visible",
+              position: "relative",
+            }}
+          >
+            {/* Header */}
+            <div style={{ marginBottom: 24 }}>
+              <div
+                style={{
+                  fontSize: 24,
+                  fontWeight: 800,
+                  color: "#0f172a",
+                  marginBottom: 6,
+                }}
+              >
+                Discover Pets Looking for Loving Homes
+              </div>
+              <div style={{ color: "rgba(15,23,42,0.6)", fontSize: 14 }}>
+                Discover pets ready for adoption and help lost pets find their
+                way home
+              </div>
+            </div>
+
+            {/* Search and Filters */}
+            <div style={{ marginBottom: 24 }}>
+              {/* Search Bar */}
+              <div style={{ marginBottom: 16 }}>
+                <input
+                  type="text"
+                  placeholder="Search by name or breed..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "6px 10px",
+                    borderRadius: 6,
+                    border: "1px solid rgba(15,23,42,0.15)",
+                    fontSize: 12,
+                    background: "rgba(15,23,42,0.02)",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              {/* Filter Row */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: 16,
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  marginBottom: 16,
+                  position: "relative",
+                  zIndex: 1000,
+                  overflow: "visible",
+                }}
+              >
+                {/* Category Filter Buttons */}
+                <div style={{ display: "flex", gap: 8 }}>
+                  {["All pets", "Lost pet", "Found pet", "Adoption pet"].map((category) => (
+                    <button
+                      key={category}
+                      onClick={() => setSelectedCategory(category)}
+                      style={{
+                        padding: "8px 16px",
+                        borderRadius: 20,
+                        border:
+                          selectedCategory === category
+                            ? "2px solid #ff8a00"
+                            : "1px solid rgba(15,23,42,0.15)",
+                        background:
+                          selectedCategory === category
+                            ? "rgba(255,138,0,0.1)"
+                            : "white",
+                        color:
+                          selectedCategory === category
+                            ? "#ff8a00"
+                            : "rgba(15,23,42,0.8)",
+                        cursor: "pointer",
+                        fontWeight: selectedCategory === category ? 700 : 500,
+                        fontSize: 12,
+                      }}
+                    >
+                      {category}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Species Dropdown */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 12, color: "rgba(15,23,42,0.6)" }}>
+                    Species:
+                  </span>
+                  <div style={{ position: "relative", zIndex: 1001 }}>
+                    <select
+                      value={selectedSpecies}
+                      onChange={(e) => setSelectedSpecies(e.target.value)}
+                      style={{
+                        padding: "12px 16px",
+                        borderRadius: 12,
+                        border: "1px solid rgba(15,23,42,0.25)",
+                        background: "#ffffff",
+                        fontSize: 12,
+                        cursor: "pointer",
+                        minWidth: "140px",
+                        position: "relative",
+                        zIndex: 1002,
+                        color: "#0f172a",
+                        fontWeight: 600,
+                      }}
+                    >
+                      <option value="All Species">All Species</option>
+                      <option value="Dog">Dogs</option>
+                      <option value="Cat">Cats</option>
+                      <option value="Rabbit">Rabbits</option>
+                      <option value="Bird">Birds</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Sort Dropdown */}
+                <div
+                  style={{
+                    marginLeft: "auto",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    position: "relative",
+                    zIndex: 1001,
+                  }}
+                >
+                  <span style={{ fontSize: 12, color: "rgba(15,23,42,0.6)" }}>
+                    Sort by:
+                  </span>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
                     style={{
-                      color: "#374151",
-                      marginBottom: 8,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 4,
+                      padding: "8px 12px",
+                      borderRadius: 8,
+                      border: "1px solid rgba(15,23,42,0.25)",
+                      background: "#ffffff",
+                      fontSize: 12,
+                      cursor: "pointer",
+                      minWidth: "120px",
+                      position: "relative",
+                      zIndex: 1002,
+                      color: "#0f172a",
                       fontWeight: 600,
-                      fontSize: 15,
                     }}
                   >
-                    <span>📍</span> {pet.location}
-                  </div>
+                    <option value="Most Recent">Most Recent</option>
+                    <option value="Alphabetical">Alphabetical</option>
+                  </select>
+                </div>
+              </div>
 
-                  {(pet.age || pet.estimated_age) && (
+              {/* Results Count (only show on Dashboard view, not My Activity) */}
+              {pageTab !== "activity" && (
+                <div style={{ fontSize: 16, fontWeight: 600, color: "#0f172a" }}>
+                  {filteredPets.length} Pet
+                  {filteredPets.length !== 1 ? "s" : ""} Available
+                </div>
+              )}
+            </div>
+
+            {/* Activity view */}
+            {pageTab === "activity" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {activityLoading && <div style={{ padding: 12 }}>Loading activity…</div>}
+                {!activityLoading && (
+                  <>
+                    <div style={{ fontSize: 18, fontWeight: 800, marginTop: 8 }}>Lost Pet Reports</div>
+                    {(activity.lost ?? []).length === 0 ? (
+                      <div style={{ padding: 12, color: "#64748b" }}>No lost reports yet.</div>
+                    ) : (
+                      (activity.lost ?? []).map((r: any) => (
+                        <div key={`lost-${r.id}`} style={{ background: "white", border: "1px solid #f1f5f9", borderRadius: 16, padding: 16, display: "grid", gridTemplateColumns: "100px 1fr auto", gap: 16 }}>
+                          {(() => {
+                            const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
+                            const origin = /^https?:/.test(apiBase) ? new URL(apiBase).origin : "http://localhost:8000";
+                            const raw = r.photo_url || r.photo;
+                            const src = raw ? (String(raw).startsWith("http") ? String(raw) : (String(raw).startsWith("/") ? origin + String(raw) : origin + "/media/" + String(raw))) : null;
+                            return src ? (
+                              <img src={src} alt={r.pet_name || r.pet_type || "Pet"} style={{ width: 100, height: 100, borderRadius: 12, objectFit: "cover" }} />
+                            ) : (
+                              <div style={{ width: 100, height: 100, borderRadius: 12, background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center" }}>🐾</div>
+                            );
+                          })()}
+                          <div>
+                            <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                              <span
+                                style={{
+                                  padding: "2px 8px",
+                                  borderRadius: 999,
+                                  background: "#fee2e2",
+                                  color: "#b91c1c",
+                                  fontSize: 12,
+                                  fontWeight: 800,
+                                }}
+                              >
+                                LOST
+                              </span>
+                              {(() => {
+                                const colors: Record<string, { bg: string; text: string; border: string }> = {
+                                  pending: { bg: "#fef3c7", text: "#92400e", border: "#f59e0b" },
+                                  approved: { bg: "#d1fae5", text: "#065f46", border: "#10b981" },
+                                  rejected: { bg: "#fee2e2", text: "#991b1b", border: "#ef4444" },
+                                };
+                                const c = colors[(r.status || "").toLowerCase()] || colors.pending;
+                                return (
+                                  <span
+                                    style={{
+                                      padding: "2px 10px",
+                                      borderRadius: 999,
+                                      background: c.bg,
+                                      color: c.text,
+                                      border: `1px solid ${c.border}`,
+                                      fontSize: 12,
+                                      fontWeight: 700,
+                                      textTransform: "uppercase",
+                                    }}
+                                  >
+                                    {r.status}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                            <div style={{ fontSize: 16, fontWeight: 800 }}>{r.pet_name || r.pet_type || "Pet"}</div>
+                          <div style={{ fontSize: 12, color: "#64748b" }}>{r.city}{r.state ? ", " + r.state : ""}</div>
+                          <div style={{ fontSize: 12, color: "#374151", marginTop: 4 }}>Last seen: {r.city}{r.state ? ", " + r.state : ""}</div>
+                          {activityExpanded === `lost-${r.id}` && (
+                            <div style={{ fontSize: 12, color: "#374151", marginTop: 6 }}>
+                              {r.pet_name && (
+                                <div>
+                                  <strong>Pet name:</strong> {r.pet_name}
+                                </div>
+                              )}
+                              <div>
+                                <strong>Pet type:</strong> {r.pet_type}
+                              </div>
+                              {r.breed && (
+                                <div>
+                                  <strong>Breed:</strong> {r.breed}
+                                </div>
+                              )}
+                              {r.color && (
+                                <div>
+                                  <strong>Color:</strong> {r.color}
+                                </div>
+                              )}
+                              {r.weight && (
+                                <div>
+                                  <strong>Weight:</strong> {r.weight}
+                                </div>
+                              )}
+                              {r.vaccinated && (
+                                <div>
+                                  <strong>Vaccinated:</strong> {r.vaccinated}
+                                </div>
+                              )}
+                              {r.age && (
+                                <div>
+                                  <strong>Age:</strong> {r.age}
+                                </div>
+                              )}
+                              {r.pincode && (
+                                <div>
+                                  <strong>Pincode:</strong> {r.pincode}
+                                </div>
+                              )}
+                              {r.location_url && (
+                                <div>
+                                  <strong>Location URL:</strong>{" "}
+                                  <a href={r.location_url} target="_blank" rel="noreferrer">
+                                    {r.location_url}
+                                  </a>
+                                </div>
+                              )}
+                              <div>
+                                <strong>Description:</strong> {r.description || "No additional details"}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ alignSelf: "center", color: "#64748b", fontSize: 12 }}>
+                          {new Date(r.created_at).toLocaleString()}
+                          <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+                            <button
+                              onClick={() =>
+                                navigate(`/user/lost/${r.id}?mode=view`)
+                              }
+                              style={{
+                                padding: "6px 12px",
+                                borderRadius: 999,
+                                border: "1px solid #4b5563",
+                                background: "#111827",
+                                color: "#f9fafb",
+                                cursor: "pointer",
+                                fontWeight: 600,
+                                fontSize: 12,
+                              }}
+                            >
+                              View Details
+                            </button>
+                            <button
+                              onClick={() =>
+                                navigate(`/user/lost/${r.id}?mode=edit`)
+                              }
+                              style={{
+                                padding: "6px 12px",
+                                borderRadius: 999,
+                                border: "1px solid #1d4ed8",
+                                background: "#2563eb",
+                                color: "white",
+                                cursor: "pointer",
+                                fontWeight: 600,
+                                fontSize: 12,
+                              }}
+                            >
+                              Update
+                            </button>
+                          </div>
+                        </div>
+                        </div>
+                      ))
+                    )}
+
+                    <div style={{ fontSize: 18, fontWeight: 800, marginTop: 8 }}>Found Pet Reports</div>
+                    {(activity.found ?? []).length === 0 ? (
+                      <div style={{ padding: 12, color: "#64748b" }}>No found reports yet.</div>
+                    ) : (
+                      (activity.found ?? []).map((r: any) => (
+                        <div key={`found-${r.id}`} style={{ background: "white", border: "1px solid #f1f5f9", borderRadius: 16, padding: 16, display: "grid", gridTemplateColumns: "100px 1fr auto", gap: 16 }}>
+                          {(() => {
+                            const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
+                            const origin = /^https?:/.test(apiBase) ? new URL(apiBase).origin : "http://localhost:8000";
+                            const raw = r.photo_url || r.photo;
+                            const src = raw ? (String(raw).startsWith("http") ? String(raw) : (String(raw).startsWith("/") ? origin + String(raw) : origin + "/media/" + String(raw))) : null;
+                            return src ? (
+                              <img src={src} alt={r.pet_type || r.pet_name || "Pet"} style={{ width: 100, height: 100, borderRadius: 12, objectFit: "cover" }} />
+                            ) : (
+                              <div style={{ width: 100, height: 100, borderRadius: 12, background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center" }}>🐾</div>
+                            );
+                          })()}
+                          <div>
+                            <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                              <span style={{ padding: "2px 8px", borderRadius: 999, background: "#dbeafe", color: "#1d4ed8", fontSize: 12, fontWeight: 800 }}>FOUND</span>
+                              <span style={{ padding: "2px 8px", borderRadius: 999, background: "#f1f5f9", color: "#0f172a", fontSize: 12, fontWeight: 700 }}>{r.status}</span>
+                            </div>
+                            <div style={{ fontSize: 16, fontWeight: 800 }}>{r.pet_type || r.pet_name || "Pet"}</div>
+                          <div style={{ fontSize: 12, color: "#64748b" }}>{r.found_city}{r.state ? ", " + r.state : ""}</div>
+                          <div style={{ fontSize: 12, color: "#374151", marginTop: 4 }}>Last seen: {r.found_city}{r.state ? ", " + r.state : ""}</div>
+                          {activityExpanded === `found-${r.id}` && (
+                            <div style={{ fontSize: 12, color: "#374151", marginTop: 6 }}>
+                              <div>
+                                <strong>Pet type:</strong> {r.pet_type}
+                              </div>
+                              {r.breed && (
+                                <div>
+                                  <strong>Breed:</strong> {r.breed}
+                                </div>
+                              )}
+                              {r.color && (
+                                <div>
+                                  <strong>Color:</strong> {r.color}
+                                </div>
+                              )}
+                              {r.estimated_age && (
+                                <div>
+                                  <strong>Estimated age:</strong> {r.estimated_age}
+                                </div>
+                              )}
+                              <div>
+                                <strong>Description:</strong> {r.description || "No additional details"}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ alignSelf: "center", color: "#64748b", fontSize: 12 }}>
+                          {new Date(r.created_at).toLocaleString()}
+                          <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+                            <button
+                              onClick={() =>
+                                setActivityExpanded(
+                                  activityExpanded === `found-${r.id}`
+                                    ? null
+                                    : `found-${r.id}`,
+                                )
+                              }
+                              style={{
+                                padding: "6px 12px",
+                                borderRadius: 999,
+                                border: "1px solid #4b5563",
+                                background: "#111827",
+                                color: "#f9fafb",
+                                cursor: "pointer",
+                                fontWeight: 600,
+                                fontSize: 12,
+                              }}
+                            >
+                              View Details
+                            </button>
+                            <button
+                              onClick={async () => {
+                                const current = r.description || "";
+                                const next = window.prompt(
+                                  "Update description for this found pet report",
+                                  current,
+                                );
+                                if (next == null || next === current) return;
+                                setUpdatingReportId(`found-${r.id}`);
+                                try {
+                                  const res = await updateMyFoundReport(r.id, {
+                                    description: next,
+                                  });
+                                  if (res.ok) {
+                                    const refreshed = await fetchMyActivity();
+                                    if (refreshed.ok) setActivity(refreshed.data);
+                                  } else {
+                                    alert(res.error || "Failed to update report");
+                                  }
+                                } finally {
+                                  setUpdatingReportId(null);
+                                }
+                              }}
+                              disabled={updatingReportId === `found-${r.id}`}
+                              style={{
+                                padding: "6px 12px",
+                                borderRadius: 999,
+                                border: "1px solid #1d4ed8",
+                                background:
+                                  updatingReportId === `found-${r.id}`
+                                    ? "#bfdbfe"
+                                    : "#2563eb",
+                                color: "white",
+                                cursor:
+                                  updatingReportId === `found-${r.id}`
+                                    ? "not-allowed"
+                                    : "pointer",
+                                fontWeight: 600,
+                                fontSize: 12,
+                              }}
+                            >
+                              {updatingReportId === `found-${r.id}`
+                                ? "Saving..."
+                                : "Update"}
+                            </button>
+                          </div>
+                        </div>
+                        </div>
+                      ))
+                    )}
+
+                    <div style={{ fontSize: 18, fontWeight: 800, marginTop: 8 }}>Adoption Requests</div>
+                    {(activity.adoptions ?? []).length === 0 ? (
+                      <div style={{ padding: 12, color: "#64748b" }}>No adoption requests yet.</div>
+                    ) : (
+                      (activity.adoptions ?? []).map((a: any) => (
+                        <div key={`adopt-${a.id}`} style={{ background: "white", border: "1px solid #f1f5f9", borderRadius: 16, padding: 16, display: "grid", gridTemplateColumns: "100px 1fr auto", gap: 16 }}>
+                          {(() => {
+                            const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
+                            const origin = /^https?:/.test(apiBase) ? new URL(apiBase).origin : "http://localhost:8000";
+                            const raw = a.pet?.photos;
+                            const src = raw ? (String(raw).startsWith("http") ? String(raw) : (String(raw).startsWith("/") ? origin + String(raw) : origin + "/media/" + String(raw))) : null;
+                            return src ? (
+                              <img src={src} alt={a.pet?.name || "Pet"} style={{ width: 100, height: 100, borderRadius: 12, objectFit: "cover" }} />
+                            ) : (
+                              <div style={{ width: 100, height: 100, borderRadius: 12, background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center" }}>🐾</div>
+                            );
+                          })()}
+                          <div>
+                            <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                              <span style={{ padding: "2px 8px", borderRadius: 999, background: "#ede9fe", color: "#6d28d9", fontSize: 12, fontWeight: 800 }}>ADOPTION</span>
+                              <span style={{ padding: "2px 8px", borderRadius: 999, background: "#f1f5f9", color: "#0f172a", fontSize: 12, fontWeight: 700 }}>{a.status}</span>
+                            </div>
+                            <div style={{ fontSize: 16, fontWeight: 800 }}>{a.pet?.name || "Pet"}</div>
+                          <div style={{ fontSize: 12, color: "#64748b" }}>{a.pet?.location_city}{a.pet?.location_state ? ", " + a.pet?.location_state : ""}</div>
+                          {activityExpanded === `adopt-${a.id}` && (
+                            <div style={{ fontSize: 12, color: "#374151", marginTop: 6 }}>{a.pet?.description || "No additional details"}</div>
+                          )}
+                        </div>
+                        <div style={{ alignSelf: "center", color: "#64748b", fontSize: 12 }}>
+                          {new Date(a.created_at).toLocaleString()}
+                          <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+                            <button onClick={() => setActivityExpanded(activityExpanded === `adopt-${a.id}` ? null : `adopt-${a.id}`)} style={{ padding: "6px 10px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#f9fafb", cursor: "pointer" }}>View Details</button>
+                            <button onClick={() => navigate("/user/profile")} style={{ padding: "6px 10px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#eef2ff", cursor: "pointer" }}>Update</button>
+                          </div>
+                        </div>
+                        </div>
+                      ))
+                    )}
+                  </>
+                )}
+              </div>
+            ) : petsLoading ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: 40,
+                  color: "rgba(15,23,42,0.6)",
+                }}
+              >
+                Loading pets...
+              </div>
+            ) : filteredPets.length > 0 ? (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                  gap: 16,
+                  width: "100%",
+                }}
+              >
+                {filteredPets.map((pet) => (
+                  <div
+                    key={`${pet.petCategory}-${pet.id}`}
+                    style={{
+                      border: `2px solid ${pet.petCategory === "lost" ? "rgba(220,38,38,0.3)" : "rgba(34,197,94,0.3)"}`,
+                      borderRadius: 12,
+                      padding: 16,
+                      background:
+                        pet.petCategory === "lost"
+                          ? "rgba(254,242,242,0.8)"
+                          : "rgba(240,253,244,0.8)",
+                      transition: "all 0.3s ease",
+                      cursor: "pointer",
+                      position: "relative",
+                      overflow: "hidden",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = "translateY(-4px)";
+                      e.currentTarget.style.boxShadow = `0 12px 30px ${pet.petCategory === "lost" ? "rgba(220,38,38,0.15)" : "rgba(34,197,94,0.15)"}`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = "translateY(0)";
+                      e.currentTarget.style.boxShadow = "none";
+                    }}
+                  >
+                    {/* Category Badge */}
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: 12,
+                        right: 12,
+                        padding: "4px 10px",
+                        borderRadius: 12,
+                        background:
+                          pet.petCategory === "lost" ? "#dc2626" : "#16a34a",
+                        color: "white",
+                        fontSize: 11,
+                        fontWeight: 800,
+                        textTransform: "uppercase",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+                      }}
+                    >
+                      {pet.petCategory === "lost" ? "🚨 Lost" : "🐾 Adoption"}
+                    </div>
+
+                    {/* Pet Image */}
+                    {pet.photo && (
+                      <div
+                        style={{
+                          marginBottom: 12,
+                          borderRadius: 12,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <img
+                          src={pet.photo}
+                          alt={pet.displayName}
+                          style={{
+                            width: "100%",
+                            height: 200,
+                            objectFit: "cover",
+                            objectPosition: "center top",
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Pet Info */}
+                    <div
+                      style={{
+                        fontWeight: 900,
+                        fontSize: 12,
+                        color: "#111827",
+                        marginBottom: 6,
+                        textShadow: "0 1px 2px rgba(0,0,0,0.1)",
+                      }}
+                    >
+                      {pet.displayName}
+                    </div>
+
+                    <div
+                      style={{
+                        color: "rgba(15,23,42,0.9)",
+                        marginBottom: 4,
+                        fontSize: 16,
+                      }}
+                    >
+                      <strong>{pet.breed || "Mixed Breed"}</strong>
+                    </div>
+
                     <div
                       style={{
                         color: "#374151",
@@ -901,101 +1325,126 @@ export default function UserHome() {
                         alignItems: "center",
                         gap: 4,
                         fontWeight: 600,
-                        fontSize: 15,
+                        fontSize: 11,
                       }}
                     >
-                      <span>🎂</span> {pet.age || pet.estimated_age}
+                      <span>📍</span> {pet.location}
                     </div>
-                  )}
 
-                  {pet.color && (
+                    {(pet.age || pet.estimated_age) && (
+                      <div
+                        style={{
+                          color: "#374151",
+                          marginBottom: 8,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                          fontWeight: 600,
+                          fontSize: 13,
+                        }}
+                      >
+                        <span>🎂</span> {pet.age || pet.estimated_age}
+                      </div>
+                    )}
+
+                    {pet.color && (
+                      <div
+                        style={{
+                          color: "#374151",
+                          marginBottom: 12,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                          fontWeight: 600,
+                          fontSize: 13,
+                        }}
+                      >
+                        <span>🎨</span> {pet.color}
+                      </div>
+                    )}
+
                     <div
                       style={{
-                        color: "#374151",
+                        color: "#4b5563",
+                        fontSize: 13,
+                        lineHeight: 1.5,
                         marginBottom: 12,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 4,
-                        fontWeight: 600,
-                        fontSize: 15,
+                        display: "-webkit-box",
+                        WebkitLineClamp: 3,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                        fontWeight: 500,
                       }}
                     >
-                      <span>🎨</span> {pet.color}
+                      {pet.description}
                     </div>
-                  )}
 
-                  <div
-                    style={{
-                      color: "#4b5563",
-                      fontSize: 15,
-                      lineHeight: 1.5,
-                      marginBottom: 16,
-                      display: "-webkit-box",
-                      WebkitLineClamp: 3,
-                      WebkitBoxOrient: "vertical",
-                      overflow: "hidden",
-                      fontWeight: 500,
-                    }}
-                  >
-                    {pet.description}
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color: "#6b7280",
+                        marginBottom: 12,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {pet.petCategory === "lost" ? "Reported" : "Found"}:{" "}
+                      {new Date(pet.created_at).toLocaleDateString()}
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        console.log(
+                          "DEBUG: Button clicked for pet:",
+                          pet.displayName,
+                          "Category:",
+                          pet.petCategory,
+                          "ID:",
+                          pet.id,
+                        );
+                        if (pet.petCategory === "lost") {
+                          navigate("/user/report-found");
+                        } else if (pet.petCategory === "adoption") {
+                          // Navigate to pet details page for adoption pets
+                          console.log("DEBUG: Navigating to /pets/" + pet.id);
+                          navigate(`/pets/${pet.id}`);
+                        }
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "10px",
+                        borderRadius: 8,
+                        border: "none",
+                        background:
+                          pet.petCategory === "lost"
+                            ? "linear-gradient(135deg, #dc2626, #ef4444)"
+                            : "linear-gradient(135deg, #8b5cf6, #a855f7)",
+                        color: "white",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        fontSize: 14,
+                      }}
+                    >
+                      {pet.petCategory === "lost"
+                        ? "Help Find This Pet"
+                        : "View Details & Adopt"}
+                    </button>
                   </div>
-
-                  <div
-                    style={{
-                      fontSize: 13,
-                      color: "#6b7280",
-                      marginBottom: 16,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {pet.petCategory === "lost" ? "Reported" : "Found"}:{" "}
-                    {new Date(pet.created_at).toLocaleDateString()}
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      if (pet.petCategory === "lost") {
-                        navigate("/user/report-found");
-                      } else {
-                        // Handle contact functionality for found pets
-                        console.log("Contact about pet:", pet.displayName);
-                      }
-                    }}
-                    style={{
-                      width: "100%",
-                      padding: "12px",
-                      borderRadius: 12,
-                      border: "none",
-                      background:
-                        pet.petCategory === "lost"
-                          ? "linear-gradient(135deg, #dc2626, #ef4444)"
-                          : "linear-gradient(135deg, #16a34a, #22c55e)",
-                      color: "white",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      fontSize: 14,
-                    }}
-                  >
-                    {pet.petCategory === "lost"
-                      ? "Help Find This Pet"
-                      : "Contact About This Pet"}
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div
-              style={{
-                textAlign: "center",
-                padding: 60,
-                color: "rgba(15,23,42,0.6)",
-              }}
-            >
-              No pets found matching your criteria
-            </div>
-          )}
-        </div>
-      </main>
+                ))}
+              </div>
+            ) : (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: 40,
+                  color: "rgba(15,23,42,0.6)",
+                }}
+              >
+                No pets found matching your criteria
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

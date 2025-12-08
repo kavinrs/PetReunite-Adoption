@@ -26,7 +26,11 @@ class FoundPetReport(models.Model):
     found_city = models.CharField(max_length=100)
     state = models.CharField(max_length=100)
     description = models.TextField()
-    photo = models.URLField(max_length=500, blank=True, null=True)
+    photo = models.ImageField(
+        upload_to="found_pets/%Y/%m/%d/",
+        blank=True,
+        null=True,
+    )
     status = models.CharField(max_length=32, choices=STATUS_CHOICES, default="pending")
     admin_notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -54,7 +58,11 @@ class LostPetReport(models.Model):
     state = models.CharField(max_length=100)
     pincode = models.CharField(max_length=10, blank=True)
     description = models.TextField()
-    photo = models.URLField(max_length=500, blank=True, null=True)
+    photo = models.ImageField(
+        upload_to="lost_pets/%Y/%m/%d/",
+        blank=True,
+        null=True,
+    )
     status = models.CharField(max_length=32, choices=STATUS_CHOICES, default="pending")
     admin_notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -65,3 +73,88 @@ class LostPetReport(models.Model):
 
     def __str__(self):
         return f"[Pets] Lost {self.pet_type} by {self.reporter.username}"
+
+
+class Pet(models.Model):
+    """Pet model for adoption listings"""
+
+    name = models.CharField(max_length=150)
+    species = models.CharField(max_length=50)  # Dog, Cat, Bird, etc.
+    breed = models.CharField(max_length=120, blank=True)
+    description = models.TextField()
+    age = models.CharField(max_length=60, blank=True)
+    color = models.CharField(max_length=80, blank=True)
+    location_city = models.CharField(max_length=100)
+    location_state = models.CharField(max_length=100)
+    photos = models.URLField(max_length=500, blank=True, null=True)
+    posted_by = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="posted_pets"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.name} - {self.species} ({self.breed})"
+
+
+class AdoptionRequest(models.Model):
+    """Adoption request model"""
+
+    HOME_OWNERSHIP_CHOICES = [
+        ("own", "Own"),
+        ("rent", "Rent"),
+    ]
+
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+    ]
+
+    pet = models.ForeignKey(
+        Pet, on_delete=models.CASCADE, related_name="adoption_requests"
+    )
+    requester = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="adoption_requests"
+    )
+    phone = models.CharField(max_length=20)
+    address = models.TextField()
+    household_info = models.TextField(blank=True)
+    experience_with_pets = models.TextField()
+    reason_for_adopting = models.TextField()
+    has_other_pets = models.BooleanField(default=False)
+    other_pets_details = models.TextField(blank=True)
+    home_ownership = models.CharField(max_length=10, choices=HOME_OWNERSHIP_CHOICES)
+    preferred_meeting = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    admin_notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        unique_together = ["pet", "requester"]  # One request per user per pet
+
+    def __str__(self):
+        return f"Adoption Request for {self.pet.name} by {self.requester.username}"
+
+
+class Message(models.Model):
+    """Chat message model for adoption requests"""
+
+    adoption_request = models.ForeignKey(
+        AdoptionRequest, on_delete=models.CASCADE, related_name="messages"
+    )
+    sender = models.ForeignKey(User, on_delete=models.CASCADE)
+    text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    read = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"Message from {self.sender.username} in {self.adoption_request}"

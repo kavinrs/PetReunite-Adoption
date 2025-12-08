@@ -9,15 +9,15 @@ html {
 .hero-banner {
     position: relative;
     width: 100%;
-    min-height: 85vh;
+    min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: clamp(32px, 8vw, 96px) clamp(20px, 6vw, 80px);
+    padding: clamp(20px, 4vw, 60px);
     color: #fff;
     background-color: #0b1220;
     background-size: cover;
-    background-position: center;
+    background-position: center 40%;
     background-repeat: no-repeat;
     overflow: hidden;
 }
@@ -25,6 +25,14 @@ html {
 @media (min-width: 768px) {
     .hero-banner {
         background-attachment: fixed;
+        background-position: center center;
+    }
+}
+
+@media (max-width: 768px) {
+    .hero-banner {
+        background-position: center 35%;
+        min-height: 80vh;
     }
 }
 
@@ -53,23 +61,27 @@ html {
 .hero-content {
     position: relative;
     z-index: 1;
-    max-width: 780px;
+    max-width: 800px;
+    width: 100%;
     text-align: center;
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 0 20px;
     animation: heroFade 0.6s ease-out both;
 }
 
 .hero-brand-badge {
     position: absolute;
-    top: clamp(16px, 4vw, 36px);
-    left: clamp(16px, 4vw, 36px);
-    padding: 12px 22px;
+    top: clamp(8px, 1vw, 16px);
+    left: clamp(8px, 1vw, 16px);
+    padding: 6px 12px;
     border-radius: 999px;
-    font-size: 1.1rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
     background: rgba(0, 0, 0, 0.65);
     backdrop-filter: blur(10px);
     color: #fff;
@@ -79,40 +91,99 @@ html {
 }
 
 .hero-label {
-    font-size: 0.85rem;
-    letter-spacing: 0.5em;
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
     text-transform: uppercase;
     color: rgba(255, 255, 255, 0.8);
 }
 
 .hero-title {
-    font-size: clamp(2.8rem, 6vw, 5rem);
-    line-height: 1.05;
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    line-height: 1.1;
     margin: 0;
-    font-weight: 800;
+    font-weight: 900;
+    font-family:
+        "Inter",
+        "Poppins",
+        "Montserrat",
+        system-ui,
+        -apple-system,
+        sans-serif;
+    text-align: center;
+    letter-spacing: -0.02em;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .hero-gradient {
-    background: linear-gradient(100deg, #ffa947, #ff6ac1);
+    background: linear-gradient(
+        135deg,
+        #ff9d44 0%,
+        #ff7755 25%,
+        #ff5577 50%,
+        #ff4ba8 75%,
+        #ff44cc 100%
+    );
     -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
     background-clip: text;
     color: transparent;
     display: inline-block;
+    font-weight: 900;
+    font-family:
+        "Inter",
+        "Poppins",
+        "Montserrat",
+        system-ui,
+        -apple-system,
+        sans-serif;
+    text-shadow: none;
+    background-size: 200% 200%;
+    animation: gradientShift 3s ease-in-out infinite;
+}
+
+@keyframes gradientShift {
+    0%,
+    100% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
 }
 
 .hero-subtitle {
-    margin: 0;
-    font-size: clamp(1.2rem, 2vw, 1.6rem);
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.85);
+    margin: 8px 0 0 0;
+    font-size: clamp(1rem, 2.5vw, 1.5rem);
+    font-weight: 700;
+    font-family:
+        "Inter",
+        "Poppins",
+        "Montserrat",
+        system-ui,
+        -apple-system,
+        sans-serif;
+    color: rgba(255, 255, 255, 0.95);
+    text-align: center;
+    letter-spacing: -0.01em;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .hero-text {
-    margin: 0 auto;
-    max-width: 560px;
-    font-size: 1rem;
-    line-height: 1.7;
-    color: rgba(255, 255, 255, 0.78);
+    margin: 16px auto 0 auto;
+    max-width: 500px;
+    font-size: clamp(0.9rem, 1.5vw, 1rem);
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.85);
+    text-align: center;
+    font-weight: 500;
+    font-family:
+        "Inter",
+        "Poppins",
+        "Montserrat",
+        system-ui,
+        -apple-system,
+        sans-serif;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .hero-actions {
@@ -126,16 +197,16 @@ html {
 .hero-btn {
     border: none !important;
     border-radius: 999px !important;
-    padding: 16px 30px !important;
-    font-size: 1rem !important;
-    font-weight: 700;
+    padding: 8px 18px !important;
+    font-size: 0.75rem !important;
+    font-weight: 600;
     cursor: pointer !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 12px !important;
-    min-width: 250px !important;
-    max-width: 350px !important;
+    gap: 6px !important;
+    min-width: 160px !important;
+    max-width: 220px !important;
     box-sizing: border-box !important;
     text-decoration: none !important;
     white-space: nowrap !important;

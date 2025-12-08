@@ -517,7 +517,10 @@ export default function AdminHome() {
   const [refreshTick, setRefreshTick] = useState(0);
   const [loading, setLoading] = useState(true);
   const [tableLoading, setTableLoading] = useState(false);
-  
+  const [hasPendingNotification, setHasPendingNotification] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const lastSeenPendingRef = useRef(0);
+
   const [error, setError] = useState<string | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const navigate = useNavigate();
@@ -634,6 +637,75 @@ export default function AdminHome() {
       } else if (res.error) setError(res.error);
     }
     setTableLoading(false);
+  }
+
+  useEffect(() => {
+    if (!summary) return;
+    const sb = summary.status_breakdown || {};
+    const lostPending = sb.lost?.pending ?? 0;
+    const foundPending = sb.found?.pending ?? 0;
+    const adoptionPending = Array.isArray(adoptionRequests)
+      ? adoptionRequests.filter((r: any) => r.status === "pending").length
+      : 0;
+
+    // Treat approved-but-edited reports as "updated" items
+    const isUpdated = (r: any) => {
+      if (!r) return false;
+      if (!r.updated_at || !r.created_at) return false;
+      if (r.status === "pending") return false;
+      return String(r.updated_at) !== String(r.created_at);
+    };
+
+    const lostUpdated = Array.isArray(lostReports)
+      ? lostReports.filter(isUpdated).length
+      : 0;
+    const foundUpdated = Array.isArray(foundReports)
+      ? foundReports.filter(isUpdated).length
+      : 0;
+
+    const totalAttention =
+      lostPending + foundPending + adoptionPending + lostUpdated + foundUpdated;
+
+    if (totalAttention > lastSeenPendingRef.current) {
+      setHasPendingNotification(true);
+    }
+  }, [summary, adoptionRequests, lostReports, foundReports]);
+
+  function handleNotificationClick() {
+    // Toggle panel visibility
+    setNotificationOpen((open) => !open);
+
+    // Mark current attention total (pending + updated) as seen so the dot can clear
+    if (!summary) {
+      setHasPendingNotification(false);
+      return;
+    }
+    const sb = summary.status_breakdown || {};
+    const lostPending = sb.lost?.pending ?? 0;
+    const foundPending = sb.found?.pending ?? 0;
+    const adoptionPending = Array.isArray(adoptionRequests)
+      ? adoptionRequests.filter((r: any) => r.status === "pending").length
+      : 0;
+
+    const isUpdated = (r: any) => {
+      if (!r) return false;
+      if (!r.updated_at || !r.created_at) return false;
+      if (r.status === "pending") return false;
+      return String(r.updated_at) !== String(r.created_at);
+    };
+
+    const lostUpdated = Array.isArray(lostReports)
+      ? lostReports.filter(isUpdated).length
+      : 0;
+    const foundUpdated = Array.isArray(foundReports)
+      ? foundReports.filter(isUpdated).length
+      : 0;
+
+    const totalAttention =
+      lostPending + foundPending + adoptionPending + lostUpdated + foundUpdated;
+
+    lastSeenPendingRef.current = totalAttention;
+    setHasPendingNotification(false);
   }
 
   async function reloadPets() {
@@ -815,7 +887,23 @@ export default function AdminHome() {
           .toLowerCase();
         return text.includes(q);
       });
-    if (statusFilter === "all") return bySearch;
+    // In Lost Pet Reports, "All" should hide pending items
+    if (statusFilter === "all") {
+      if (tab === "lost") {
+        return bySearch.filter((r: any) => r.status !== "pending");
+      }
+      return bySearch;
+    }
+
+    // Special pseudo-filter: "updated" shows items that were changed after initial creation
+    if (statusFilter === "updated") {
+      return bySearch.filter((r: any) => {
+        if (!r.updated_at || !r.created_at) return false;
+        if (r.status === "pending") return false;
+        return String(r.updated_at) !== String(r.created_at);
+      });
+    }
+
     return bySearch.filter((r: any) => r.status === statusFilter);
   }, [tab, adoptionRequests, foundReports, lostReports, search, statusFilter]);
 
@@ -1794,7 +1882,7 @@ export default function AdminHome() {
               <RL.CircleMarker
                 key={idx}
                 center={[p.lat, p.lon]}
-                radius={7}
+                radius={4}
                 pathOptions={{
                   color,
                   fillColor: color,
@@ -1838,7 +1926,7 @@ export default function AdminHome() {
                     <RL.CircleMarker
                       key={`big-${idx}`}
                       center={[p.lat, p.lon]}
-                      radius={9}
+                      radius={7}
                       pathOptions={{
                         color,
                         fillColor: color,
@@ -2636,8 +2724,152 @@ export default function AdminHome() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "flex-end",
+                gap: 12,
               }}
             >
+              <button
+                type="button"
+                onClick={handleNotificationClick}
+                aria-label="Notifications"
+                style={{
+                  position: "relative",
+                  width: 40,
+                  height: 40,
+                  borderRadius: "50%",
+                  border: "1px solid #e5e7eb",
+                  background: "#ffffff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  boxShadow: "0 4px 12px rgba(15,23,42,0.16)",
+                }}
+              >
+                <span style={{ fontSize: 18 }}>🔔</span>
+                {hasPendingNotification && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: 6,
+                      right: 6,
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: "#ef4444",
+                      boxShadow: "0 0 0 2px #ffffff",
+                    }}
+                  />
+                )}
+              </button>
+
+              {notificationOpen && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 48,
+                    right: 80,
+                    width: 260,
+                    background: "#ffffff",
+                    borderRadius: 12,
+                    border: "1px solid #e5e7eb",
+                    boxShadow: "0 12px 30px rgba(15,23,42,0.18)",
+                    padding: 12,
+                    fontSize: 13,
+                    color: "#0f172a",
+                    zIndex: 60,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: 8,
+                    }}
+                  >
+                    <span style={{ fontWeight: 700 }}>Notifications</span>
+                    <span style={{ fontSize: 11, color: "#6b7280" }}>
+                      Pending activity
+                    </span>
+                  </div>
+                  {(() => {
+                    const sb = summary?.status_breakdown || {};
+                    const lostPending = sb.lost?.pending ?? 0;
+                    const foundPending = sb.found?.pending ?? 0;
+                    const adoptionPending = Array.isArray(adoptionRequests)
+                      ? adoptionRequests.filter((r: any) => r.status === "pending").length
+                      : 0;
+                    const items = [
+                      {
+                        label: "Lost reports",
+                        count: lostPending,
+                        tab: "lost" as TabKey,
+                      },
+                      {
+                        label: "Found reports",
+                        count: foundPending,
+                        tab: "found" as TabKey,
+                      },
+                      {
+                        label: "Adoption requests",
+                        count: adoptionPending,
+                        tab: "adoptions" as TabKey,
+                      },
+                    ];
+                    const total = lostPending + foundPending + adoptionPending;
+                    if (total === 0) {
+                      return (
+                        <div style={{ fontSize: 12, color: "#6b7280", paddingTop: 4 }}>
+                          No pending requests right now.
+                        </div>
+                      );
+                    }
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {items.map((it) => (
+                          <button
+                            key={it.label}
+                            disabled={it.count === 0}
+                            onClick={() => {
+                              setTab(it.tab);
+                              setStatusFilter("pending");
+                              navigate(`/admin?tab=${it.tab}`, { replace: true });
+                              reloadTable(it.tab, "pending");
+                              setNotificationOpen(false);
+                            }}
+                            style={{
+                              width: "100%",
+                              padding: "6px 8px",
+                              borderRadius: 8,
+                              border: "none",
+                              background:
+                                it.count > 0 ? "#eff6ff" : "transparent",
+                              color: it.count > 0 ? "#1d4ed8" : "#6b7280",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              cursor: it.count > 0 ? "pointer" : "default",
+                            }}
+                          >
+                            <span>{it.label}</span>
+                            <span
+                              style={{
+                                minWidth: 20,
+                                textAlign: "right",
+                              }}
+                            >
+                              {it.count}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
               <button
                 onClick={() => setProfileOpen((prev) => !prev)}
                 style={{
@@ -2919,6 +3151,7 @@ export default function AdminHome() {
                       : [
                           "all",
                           "pending",
+                          "updated",
                           "approved",
                           "rejected",
                           "investigating",

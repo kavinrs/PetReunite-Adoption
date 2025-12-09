@@ -1,6 +1,10 @@
 from django.urls import path
 
 from .views import (
+    AdminClearDataView,
+    AdminConversationAcceptView,
+    AdminConversationCloseView,
+    AdminConversationListView,
     AdminFoundPetDetailView,
     AdminFoundPetListView,
     AdminLostPetDetailView,
@@ -18,13 +22,15 @@ from .views import (
     LostPetReportView,
     LostPetReportDetailView,
     MessageListView,
+    MyActivityView,
     PetDetailView,
     PetListView,
     PublicFoundPetsView,
     PublicLostPetsView,
     UserAdoptionRequestsView,
-    MyActivityView,
-    AdminClearDataView,
+    UserChatMessageListCreateView,
+    UserConversationConfirmView,
+    UserConversationListCreateView,
 )
 
 urlpatterns = [
@@ -116,5 +122,36 @@ urlpatterns = [
         "admin/clear-data/",
         AdminClearDataView.as_view(),
         name="admin-clear-data",
+    ),
+    # General chat endpoints
+    path(
+        "chat/conversations/",
+        UserConversationListCreateView.as_view(),
+        name="chat-conversations",
+    ),
+    path(
+        "chat/conversations/<int:pk>/confirm/",
+        UserConversationConfirmView.as_view(),
+        name="chat-conversation-confirm",
+    ),
+    path(
+        "chat/conversations/<int:conversation_id>/messages/",
+        UserChatMessageListCreateView.as_view(),
+        name="chat-messages-user",
+    ),
+    path(
+        "admin/chat/conversations/",
+        AdminConversationListView.as_view(),
+        name="chat-conversations-admin",
+    ),
+    path(
+        "admin/chat/conversations/<int:pk>/accept/",
+        AdminConversationAcceptView.as_view(),
+        name="chat-conversation-accept",
+    ),
+    path(
+        "admin/chat/conversations/<int:pk>/close/",
+        AdminConversationCloseView.as_view(),
+        name="chat-conversation-close",
     ),
 ]

@@ -163,3 +163,68 @@ class Message(models.Model):
 
     def __str__(self):
         return f"Message from {self.sender.username} in {self.adoption_request}"
+
+
+class Conversation(models.Model):
+    """Generic user-admin chat conversation.
+
+    Supports multiple conversations per user; each conversation may be claimed
+    by a specific admin user. Status values:
+      - requested: user requested chat, no admin has accepted yet
+      - pending_user: admin accepted, waiting for user confirmation
+      - active: both parties can chat
+      - closed: conversation finished (history is read-only)
+    """
+
+    STATUS_CHOICES = [
+        ("requested", "Requested"),
+        ("pending_user", "Pending User Confirmation"),
+        ("active", "Active"),
+        ("closed", "Closed"),
+    ]
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="chat_conversations",
+    )
+    admin = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        related_name="admin_chat_conversations",
+        null=True,
+        blank=True,
+    )
+    status = models.CharField(max_length=32, choices=STATUS_CHOICES, default="requested")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+    def __str__(self) -> str:  # pragma: no cover - string repr
+        label = self.user.username if self.user_id else "?"
+        return f"Conversation with {label} ({self.status})"
+
+
+class ChatMessage(models.Model):
+    """Message in a generic user-admin conversation."""
+
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name="messages",
+    )
+    sender = models.ForeignKey(User, on_delete=models.CASCADE)
+    text = models.TextField()
+    is_system = models.BooleanField(
+        default=False,
+        help_text="True for system-generated messages like status changes.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self) -> str:  # pragma: no cover - string repr
+        return f"ChatMessage[{self.conversation_id}] from {self.sender_id}"

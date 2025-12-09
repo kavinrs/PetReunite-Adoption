@@ -1,7 +1,15 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from .models import AdoptionRequest, FoundPetReport, LostPetReport, Message, Pet
+from .models import (
+    AdoptionRequest,
+    ChatMessage,
+    Conversation,
+    FoundPetReport,
+    LostPetReport,
+    Message,
+    Pet,
+)
 
 User = get_user_model()
 
@@ -286,6 +294,62 @@ class MessageSerializer(serializers.ModelSerializer):
 class MessageCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Message
+        fields = ("text",)
+
+    def validate_text(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Message cannot be empty.")
+        return value.strip()
+
+
+class ConversationSerializer(serializers.ModelSerializer):
+    user = UserSummarySerializer(read_only=True)
+    admin = UserSummarySerializer(read_only=True)
+
+    class Meta:
+        model = Conversation
+        fields = (
+            "id",
+            "user",
+            "admin",
+            "status",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "user", "admin", "created_at", "updated_at")
+
+
+class ConversationCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Conversation
+        fields = ()
+
+    def create(self, validated_data):
+        request = self.context["request"]
+        user = request.user
+        # Allow multiple conversations; just create a fresh one in requested state.
+        return Conversation.objects.create(user=user)
+
+
+class ChatMessageSerializer(serializers.ModelSerializer):
+    sender = UserSummarySerializer(read_only=True)
+
+    class Meta:
+        model = ChatMessage
+        fields = (
+            "id",
+            "conversation",
+            "sender",
+            "text",
+            "is_system",
+            "created_at",
+        )
+        read_only_fields = ("id", "conversation", "sender", "is_system", "created_at")
+
+
+class ChatMessageCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChatMessage
         fields = ("text",)
 
     def validate_text(self, value):

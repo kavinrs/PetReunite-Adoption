@@ -738,6 +738,125 @@ export async function sendAdoptionMessage(
   return { ok: false, status: resp.status, error: message, data };
 }
 
+// General chat (user-admin) helpers
+
+export async function fetchChatConversations(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chat/conversations/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to load conversations";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function createChatConversation(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chat/conversations/`;
+  const resp = await fetchWithAuth(url, { method: "POST", body: JSON.stringify({}) });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to request chat";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function confirmChatConversation(id: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chat/conversations/${id}/confirm/`;
+  const resp = await fetchWithAuth(url, { method: "POST", body: JSON.stringify({}) });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to confirm chat";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function fetchChatMessagesUser(conversationId: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chat/conversations/${conversationId}/messages/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to load messages";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function sendChatMessageUser(conversationId: number, text: string): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chat/conversations/${conversationId}/messages/`;
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to send message";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function fetchAdminChatConversations(statusFilter?: string): Promise<ApiResult> {
+  const qs = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : "";
+  const url = `${PETS_BASE}/admin/chat/conversations/${qs}`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to load admin conversations";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function acceptAdminConversation(id: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/chat/conversations/${id}/accept/`;
+  const resp = await fetchWithAuth(url, { method: "POST", body: JSON.stringify({}) });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to accept chat";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function closeAdminConversation(id: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/chat/conversations/${id}/close/`;
+  const resp = await fetchWithAuth(url, { method: "POST", body: JSON.stringify({}) });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to close chat";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function fetchChatMessagesAdmin(conversationId: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/chat/conversations/${conversationId}/messages/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to load messages";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function sendChatMessageAdmin(conversationId: number, text: string): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/chat/conversations/${conversationId}/messages/`;
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to send message";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
 /* Admin: Fetch all adoption requests */
 export async function fetchAllAdoptionRequests(): Promise<ApiResult> {
   const url = `${PETS_BASE}/adoption-requests/`;

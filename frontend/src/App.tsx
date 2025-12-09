@@ -7,12 +7,14 @@ import AdminHome from "./pages/AdminHome";
 import AdminRegister from "./pages/AdminRegister";
 import AdminProfile from "./pages/AdminProfile";
 import AdminLostReportDetail from "./pages/AdminLostReportDetail";
+import AdminFoundReportDetail from "./pages/AdminFoundReportDetail";
 import PrivateRoute from "./components/PrivateRoute";
 import UserProfile from "./pages/UserProfile";
 import ReportFoundPet from "./pages/ReportFoundPet";
 import ReportLostPet from "./pages/ReportLostPet";
 import PetDetailsPage from "./pages/PetDetailsPage";
 import LostReportDetail from "./pages/LostReportDetail";
+import FoundReportDetail from "./pages/FoundReportDetail";
 import MyAdoptionRequests from "./pages/MyAdoptionRequests";
 import Home from "./pages/Home";
 import { useViewportStandardization } from "./hooks/useViewportStandardization";
@@ -37,6 +39,14 @@ export default function App() {
         element={
           <PrivateRoute role="user">
             <UserHome />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/user/found/:id"
+        element={
+          <PrivateRoute role="user">
+            <FoundReportDetail />
           </PrivateRoute>
         }
       />
@@ -101,6 +111,14 @@ export default function App() {
         element={
           <PrivateRoute role="admin">
             <AdminLostReportDetail />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/admin/found/:id"
+        element={
+          <PrivateRoute role="admin">
+            <AdminFoundReportDetail />
           </PrivateRoute>
         }
       />

@@ -454,6 +454,11 @@ import {
   deleteAdoptionRequest,
   fetchAdminUsers,
   fetchAvailablePets,
+  fetchAdminChatConversations,
+  fetchChatMessagesAdmin,
+  sendChatMessageAdmin,
+  acceptAdminConversation,
+  closeAdminConversation,
 } from "../services/api";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
@@ -462,6 +467,7 @@ import { useMap } from "react-leaflet";
 import * as RL from "react-leaflet";
 const AnyMapContainer = RL.MapContainer as any;
 const AnyTileLayer = RL.TileLayer as any;
+const AnyMarker = RL.Marker as any;
 import L from "leaflet";
 import "leaflet.heat";
 
@@ -485,7 +491,15 @@ const STATUS_COLORS: Record<string, string> = {
   closed: "#6b7280",
 };
 
-type TabKey = "dashboard" | "found" | "lost" | "adoptions" | "pets" | "users" | "stats";
+type TabKey =
+  | "dashboard"
+  | "found"
+  | "lost"
+  | "adoptions"
+  | "pets"
+  | "users"
+  | "chat"
+  | "stats";
 
 export default function AdminHome() {
   // Apply viewport standardization to ensure consistent 100% scaling
@@ -513,6 +527,14 @@ export default function AdminHome() {
     "all" | "active" | "inactive"
   >("all");
   const [statsView, setStatsView] = useState<"default" | "recentPets">("default");
+  const [chatConversations, setChatConversations] = useState<any[]>([]);
+  const [chatStatusFilter, setChatStatusFilter] = useState<string>("requested");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const [selectedChatId, setSelectedChatId] = useState<number | null>(null);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatMessagesLoading, setChatMessagesLoading] = useState(false);
+  const [chatInput, setChatInput] = useState("");
   const [recentPets, setRecentPets] = useState<any[]>([]);
   const [recentPetsSearch, setRecentPetsSearch] = useState("");
   const [recentPetsSpecies, setRecentPetsSpecies] = useState("All Species");
@@ -628,6 +650,78 @@ export default function AdminHome() {
       reloadTable(tab, backendStatus);
     }
   }, [refreshTick, tab, statusFilter]);
+
+  async function reloadAdminChats(statusFilter: string) {
+    setChatLoading(true);
+    setChatError(null);
+    const res = await fetchAdminChatConversations(statusFilter === "all" ? undefined : statusFilter);
+    if (res.ok) {
+      setChatConversations(res.data ?? []);
+    } else if (res.error) {
+      setChatError(res.error);
+    }
+    setChatLoading(false);
+  }
+
+  useEffect(() => {
+    if (tab !== "chat" || !selectedChatId) {
+      setChatMessages([]);
+      return;
+    }
+    let cancelled = false;
+    async function loadMessages() {
+      setChatMessagesLoading(true);
+      const res = await fetchChatMessagesAdmin(selectedChatId as number);
+      if (cancelled) return;
+      if (res.ok) setChatMessages(res.data ?? []);
+      setChatMessagesLoading(false);
+    }
+    loadMessages();
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, selectedChatId]);
+
+  const handleAdminSendMessage = async () => {
+    if (!selectedChatId || !chatInput.trim()) return;
+    const text = chatInput.trim();
+    setChatInput("");
+    const optimistic = {
+      id: `local-${Date.now()}`,
+      conversation: selectedChatId,
+      sender: { username: profile?.username || "Admin" },
+      text,
+      is_system: false,
+      created_at: new Date().toISOString(),
+    };
+    setChatMessages((prev) => [...prev, optimistic]);
+    const res = await sendChatMessageAdmin(selectedChatId, text);
+    if (!res.ok) {
+      setChatError(res.error || "Failed to send message");
+    } else if (res.data) {
+      setChatMessages((prev) => prev.map((m) => (m.id === optimistic.id ? res.data : m)));
+    }
+  };
+
+  const handleAdminAcceptChat = async (id: number) => {
+    const res = await acceptAdminConversation(id);
+    if (!res.ok) {
+      setChatError(res.error || "Failed to accept conversation");
+      return;
+    }
+    reloadAdminChats(chatStatusFilter);
+    setSelectedChatId(id);
+  };
+
+  const handleAdminCloseChat = async (id: number) => {
+    const res = await closeAdminConversation(id);
+    if (!res.ok) {
+      setChatError(res.error || "Failed to close conversation");
+      return;
+    }
+    reloadAdminChats(chatStatusFilter);
+    if (selectedChatId === id) setSelectedChatId(null);
+  };
 
   async function reloadTable(nextTab: TabKey, nextStatus: string) {
     setTableLoading(true);
@@ -2103,7 +2197,15 @@ export default function AdminHome() {
 
   function MapHeat({ summary }: { summary: any }) {
     const [points, setPoints] = useState<
-      { lat: number; lon: number; kind: "lost" | "found" | "adoption"; location: string; count: number }[]
+      {
+        lat: number;
+        lon: number;
+        kind: "lost" | "found" | "adoption";
+        location: string;
+        title: string;
+        photo: string | null;
+        url: string;
+      }[]
     >([]);
     const [expanded, setExpanded] = useState(false);
     const CITY_COORDS: Record<string, [number, number]> = {
@@ -2143,13 +2245,65 @@ export default function AdminHome() {
     useEffect(() => {
       let cancelled = false;
       async function geocodeAll() {
-        const cacheKey = "geocodeCache";
+        const cacheKey = "geocodeCachePets";
         const cache = JSON.parse(localStorage.getItem(cacheKey) || "{}");
-        const next: { lat: number; lon: number; kind: "lost" | "found" | "adoption"; location: string; count: number }[] = [];
-        const hotspots: any[] = summary?.hotspots ?? [];
-        for (const h of hotspots) {
-          const q = h.location as string;
+        const next: {
+          lat: number;
+          lon: number;
+          kind: "lost" | "found" | "adoption";
+          location: string;
+          title: string;
+          photo: string | null;
+          url: string;
+        }[] = [];
+
+        type RawRecord = {
+          __kind: "lost" | "found" | "adoption";
+          id: number;
+          pet_name?: string;
+          pet_type?: string;
+          breed?: string;
+          city?: string;
+          found_city?: string;
+          state?: string;
+          photo?: string;
+          photo_url?: string;
+          pet?: { id?: number; name?: string; photos?: string; location_city?: string; location_state?: string };
+        };
+
+        const records: RawRecord[] = [];
+
+        // Lost reports
+        (lostReports as any[] | undefined)?.forEach((r: any) => {
+          records.push({ __kind: "lost", ...(r as any) });
+        });
+
+        // Found reports
+        (foundReports as any[] | undefined)?.forEach((r: any) => {
+          records.push({ __kind: "found", ...(r as any) });
+        });
+
+        // Adoption pets (approved only) – use underlying pet
+        (adoptionRequests as any[] | undefined)?.forEach((r: any) => {
+          if (r.pet) {
+            records.push({ __kind: "adoption", ...(r as any) });
+          }
+        });
+
+        for (const r of records) {
+          const isLost = r.__kind === "lost";
+          const isFound = r.__kind === "found";
+          const isAdoption = r.__kind === "adoption";
+
+          const location = isAdoption
+            ? `${r.pet?.location_city || ""}${r.pet?.location_state ? ", " + r.pet.location_state : ""}`
+            : isLost
+              ? `${r.city || ""}${r.state ? ", " + r.state : ""}`
+              : `${r.found_city || r.city || ""}${r.state ? ", " + r.state : ""}`;
+
+          const q = (location || "").trim();
           if (!q) continue;
+
           let entry = cache[q];
           if (!entry) {
             try {
@@ -2180,21 +2334,53 @@ export default function AdminHome() {
             }
           }
           if (!entry) continue;
-          const base = { lat: entry.lat, lon: entry.lon, location: q };
-          const lost = Number(h.lost || 0);
-          const found = Number(h.found || 0);
-          const adoption = Number(h.adoption || 0);
-          if (lost > 0) next.push({ ...base, kind: "lost", count: lost });
-          if (found > 0) next.push({ ...base, kind: "found", count: found });
-          if (adoption > 0) next.push({ ...base, kind: "adoption", count: adoption });
+
+          const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
+          const origin = /^https?:/.test(apiBase)
+            ? new URL(apiBase).origin
+            : "http://localhost:8000";
+
+          const rawPhoto = isAdoption
+            ? r.pet?.photos
+            : (r as any).photo_url || (r as any).photo;
+
+          const photo = (() => {
+            if (!rawPhoto) return null;
+            const u = String(rawPhoto);
+            if (u.startsWith("http")) return u;
+            if (u.startsWith("/")) return origin + u;
+            if (u.startsWith("media/")) return origin + "/" + u;
+            return origin + "/media/" + u.replace(/^\/+/, "");
+          })();
+
+          const title = isAdoption
+            ? r.pet?.name || "Adoption Pet"
+            : r.pet_name || r.pet_type || "Pet";
+
+          const url = isAdoption && r.pet?.id
+            ? `/pets/${r.pet.id}`
+            : isLost
+              ? `/admin/lost/${r.id}`
+              : `/admin/found/${r.id}`;
+
+          next.push({
+            lat: entry.lat,
+            lon: entry.lon,
+            kind: r.__kind,
+            location: q,
+            title,
+            photo,
+            url,
+          });
         }
+
         if (!cancelled) setPoints(next);
       }
       geocodeAll();
       return () => {
         cancelled = true;
       };
-    }, [summary]);
+    }, [summary, lostReports, foundReports, adoptionRequests]);
 
     return (
       <div style={{ position: "relative" }}>
@@ -2222,30 +2408,47 @@ export default function AdminHome() {
             attribution="&copy; OpenStreetMap contributors"
           />
           {points.map((p, idx) => {
-            const color =
-              p.kind === "lost" ? "#dc2626" : p.kind === "found" ? "#16a34a" : "#eab308";
-            const label =
-              (p.kind === "lost"
-                ? "Lost reports"
-                : p.kind === "found"
-                  ? "Found reports"
-                  : "Adoption pets") + ` • ${p.location} (${p.count})`;
+            const borderColor =
+              p.kind === "lost" ? "#dc2626" : p.kind === "found" ? "#3b82f6" : "#8b5cf6";
+            const icon = L.divIcon({
+              className: "",
+              html: `
+                <div style="width:36px;height:36px;border-radius:50%;border:3px solid ${borderColor};overflow:hidden;box-shadow:0 0 0 2px #ffffff;background:#e5e7eb;display:flex;align-items:center;justify-content:center;">
+                  ${p.photo ? `<img src="${p.photo}" style="width:100%;height:100%;object-fit:cover;" />` : "🐾"}
+                </div>
+              `,
+              iconSize: [36, 36],
+              iconAnchor: [18, 18],
+            });
             return (
-              <RL.CircleMarker
-                key={idx}
-                center={[p.lat, p.lon]}
-                radius={4}
-                pathOptions={{
-                  color,
-                  fillColor: color,
-                  fillOpacity: 0.9,
-                  weight: 2,
-                }}
-              >
-                <RL.Tooltip direction="top" offset={[0, -4]} opacity={0.9}>
-                  {label}
-                </RL.Tooltip>
-              </RL.CircleMarker>
+              <AnyMarker key={idx} position={[p.lat, p.lon]} icon={icon}>
+                <RL.Popup>
+                  <div style={{ maxWidth: 220, fontSize: 12 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 4 }}>{p.title}</div>
+                    <div style={{ marginBottom: 4 }}>
+                      <strong>Type:</strong>{" "}
+                      {p.kind === "lost" ? "Lost Report" : p.kind === "found" ? "Found Report" : "Adoption"}
+                    </div>
+                    <div style={{ marginBottom: 8 }}>
+                      <strong>Location:</strong> {p.location}
+                    </div>
+                    <a
+                      href={p.url}
+                      style={{
+                        display: "inline-block",
+                        padding: "6px 10px",
+                        borderRadius: 999,
+                        background: "#3b82f6",
+                        color: "#ffffff",
+                        textDecoration: "none",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Open details
+                    </a>
+                  </div>
+                </RL.Popup>
+              </AnyMarker>
             );
           })}
         </AnyMapContainer>
@@ -2266,30 +2469,47 @@ export default function AdminHome() {
                   attribution="&copy; OpenStreetMap contributors"
                 />
                 {points.map((p, idx) => {
-                  const color =
-                    p.kind === "lost" ? "#dc2626" : p.kind === "found" ? "#16a34a" : "#eab308";
-                  const label =
-                    (p.kind === "lost"
-                      ? "Lost reports"
-                      : p.kind === "found"
-                        ? "Found reports"
-                        : "Adoption pets") + ` • ${p.location} (${p.count})`;
+                  const borderColor =
+                    p.kind === "lost" ? "#dc2626" : p.kind === "found" ? "#3b82f6" : "#8b5cf6";
+                  const icon = L.divIcon({
+                    className: "",
+                    html: `
+                      <div style="width:40px;height:40px;border-radius:50%;border:3px solid ${borderColor};overflow:hidden;box-shadow:0 0 0 2px #ffffff;background:#e5e7eb;display:flex;align-items:center;justify-content:center;">
+                        ${p.photo ? `<img src="${p.photo}" style="width:100%;height:100%;object-fit:cover;" />` : "🐾"}
+                      </div>
+                    `,
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20],
+                  });
                   return (
-                    <RL.CircleMarker
-                      key={`big-${idx}`}
-                      center={[p.lat, p.lon]}
-                      radius={7}
-                      pathOptions={{
-                        color,
-                        fillColor: color,
-                        fillOpacity: 0.9,
-                        weight: 2,
-                      }}
-                    >
-                      <RL.Tooltip direction="top" offset={[0, -4]} opacity={0.95}>
-                        {label}
-                      </RL.Tooltip>
-                    </RL.CircleMarker>
+                    <AnyMarker key={`big-${idx}`} position={[p.lat, p.lon]} icon={icon}>
+                      <RL.Popup>
+                        <div style={{ maxWidth: 260, fontSize: 12 }}>
+                          <div style={{ fontWeight: 700, marginBottom: 4 }}>{p.title}</div>
+                          <div style={{ marginBottom: 4 }}>
+                            <strong>Type:</strong>{" "}
+                            {p.kind === "lost" ? "Lost Report" : p.kind === "found" ? "Found Report" : "Adoption"}
+                          </div>
+                          <div style={{ marginBottom: 8 }}>
+                            <strong>Location:</strong> {p.location}
+                          </div>
+                          <a
+                            href={p.url}
+                            style={{
+                              display: "inline-block",
+                              padding: "6px 10px",
+                              borderRadius: 999,
+                              background: "#3b82f6",
+                              color: "#ffffff",
+                              textDecoration: "none",
+                              fontWeight: 600,
+                            }}
+                          >
+                            Open details
+                          </a>
+                        </div>
+                      </RL.Popup>
+                    </AnyMarker>
                   );
                 })}
               </AnyMapContainer>
@@ -2456,6 +2676,8 @@ export default function AdminHome() {
                         navigate(`/pets/${r.pet.id}`);
                       } else if (isLost) {
                         navigate(`/admin/lost/${r.id}`);
+                      } else if (isFound) {
+                        navigate(`/admin/found/${r.id}`);
                       } else {
                         setExpandedId((prev) => (prev === r.id ? null : r.id));
                       }

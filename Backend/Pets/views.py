@@ -11,6 +11,8 @@ from rest_framework.views import APIView
 from .models import (
     STATUS_CHOICES,
     AdoptionRequest,
+    ChatMessage,
+    Conversation,
     FoundPetReport,
     LostPetReport,
     Message,
@@ -23,6 +25,10 @@ from .serializers import (
     AdoptionRequestCreateSerializer,
     AdoptionRequestListSerializer,
     AdoptionRequestSerializer,
+    ChatMessageCreateSerializer,
+    ChatMessageSerializer,
+    ConversationCreateSerializer,
+    ConversationSerializer,
     FoundPetReportSerializer,
     LostPetReportSerializer,
     MessageCreateSerializer,
@@ -565,6 +571,151 @@ class MessageListView(generics.ListAPIView):
             "sender"
         )
 
+
+class UserConversationListCreateView(generics.ListCreateAPIView):
+    """List/create conversations for the current user (regular users only)."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return ConversationCreateSerializer
+        return ConversationSerializer
+
+    def get_queryset(self):
+        return Conversation.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        # ConversationCreateSerializer.create uses request.user, but we keep this
+        # to mirror DRF patterns.
+        serializer.save()
+
+
+class UserConversationConfirmView(APIView):
+    """User confirms a conversation after admin has accepted (pending_user → active)."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        convo = get_object_or_404(Conversation, pk=pk, user=request.user)
+        if convo.status != "pending_user":
+            return Response({"detail": "Conversation is not awaiting confirmation."}, status=status.HTTP_400_BAD_REQUEST)
+
+        convo.status = "active"
+        convo.save(update_fields=["status", "updated_at"])
+
+        ChatMessage.objects.create(
+            conversation=convo,
+            sender=request.user,
+            text="User joined the chat.",
+            is_system=True,
+        )
+        return Response(ConversationSerializer(convo).data, status=status.HTTP_200_OK)
+
+
+class UserChatMessageListCreateView(generics.ListCreateAPIView):
+    """List/send messages in a conversation for the owning user."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return ChatMessageCreateSerializer
+        return ChatMessageSerializer
+
+    def get_queryset(self):
+        convo_id = self.kwargs["conversation_id"]
+        convo = get_object_or_404(Conversation, pk=convo_id, user=self.request.user)
+        return convo.messages.select_related("sender")
+
+    def perform_create(self, serializer):
+        convo_id = self.kwargs["conversation_id"]
+        convo = get_object_or_404(Conversation, pk=convo_id, user=self.request.user)
+        if convo.status != "active":
+            raise permissions.PermissionDenied("Conversation is not active.")
+        serializer.save(conversation=convo, sender=self.request.user)
+
+
+class AdminConversationListView(generics.ListAPIView):
+    """List conversations for admins with optional status filter."""
+
+    permission_classes = [IsAdminOrStaff]
+    serializer_class = ConversationSerializer
+
+    def get_queryset(self):
+        qs = Conversation.objects.select_related("user", "admin")
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            qs = qs.filter(status=status_param)
+        return qs
+
+
+class AdminConversationAcceptView(APIView):
+    """Admin accepts a requested conversation (requested → pending_user)."""
+
+    permission_classes = [IsAdminOrStaff]
+
+    def post(self, request, pk):
+        convo = get_object_or_404(Conversation, pk=pk)
+        if convo.status != "requested":
+            return Response({"detail": "Conversation is not in requested state."}, status=status.HTTP_400_BAD_REQUEST)
+
+        convo.admin = request.user
+        convo.status = "pending_user"
+        convo.save(update_fields=["admin", "status", "updated_at"])
+
+        ChatMessage.objects.create(
+            conversation=convo,
+            sender=request.user,
+            text="Admin accepted the chat request.",
+            is_system=True,
+        )
+        return Response(ConversationSerializer(convo).data, status=status.HTTP_200_OK)
+
+
+class AdminConversationCloseView(APIView):
+    """Admin closes a conversation (any non-closed → closed)."""
+
+    permission_classes = [IsAdminOrStaff]
+
+    def post(self, request, pk):
+        convo = get_object_or_404(Conversation, pk=pk)
+        if convo.status == "closed":
+            return Response(ConversationSerializer(convo).data, status=status.HTTP_200_OK)
+
+        convo.status = "closed"
+        convo.save(update_fields=["status", "updated_at"])
+
+        ChatMessage.objects.create(
+            conversation=convo,
+            sender=request.user,
+            text="Chat was closed by admin.",
+            is_system=True,
+        )
+        return Response(ConversationSerializer(convo).data, status=status.HTTP_200_OK)
+
+
+class AdminChatMessageListCreateView(generics.ListCreateAPIView):
+    """List/send messages in a conversation for admins."""
+
+    permission_classes = [IsAdminOrStaff]
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return ChatMessageCreateSerializer
+        return ChatMessageSerializer
+
+    def get_queryset(self):
+        convo_id = self.kwargs["conversation_id"]
+        convo = get_object_or_404(Conversation, pk=convo_id)
+        return convo.messages.select_related("sender")
+
+    def perform_create(self, serializer):
+        convo_id = self.kwargs["conversation_id"]
+        convo = get_object_or_404(Conversation, pk=convo_id)
+        if convo.status != "active":
+            raise permissions.PermissionDenied("Conversation is not active.")
+        serializer.save(conversation=convo, sender=self.request.user)
 
 class CreateMessageView(APIView):
     """Create a new message in adoption request chat"""

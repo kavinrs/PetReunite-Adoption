@@ -4,6 +4,7 @@ import {
   getProfile,
   clearTokens,
   fetchPublicLostPets,
+  fetchPublicFoundPets,
   fetchAvailablePets,
   fetchMyActivity,
   updateMyLostReport,
@@ -146,8 +147,9 @@ export default function UserHome() {
     async function loadPets() {
       setPetsLoading(true);
       try {
-        const [lostRes, adoptionRes] = await Promise.all([
+        const [lostRes, foundRes, adoptionRes] = await Promise.all([
           fetchPublicLostPets(),
+          fetchPublicFoundPets(),
           fetchAvailablePets(),
         ]);
 
@@ -184,30 +186,40 @@ export default function UserHome() {
           combinedPets.push(...lostPets);
         }
 
-        if (adoptionRes.ok) {
-          console.log("DEBUG: Adoption API response:", adoptionRes.data);
-          const adoptionPets = adoptionRes.data.map(
-            (pet: any, index: number) => {
-              const raw = pet.photos;
-              return {
-                ...pet,
-                petCategory: "adoption",
-                displayName: pet.name,
-                location: `${pet.location_city}, ${pet.location_state}`,
-                photo: resolvePhoto(
-                  raw,
-                  getSamplePetImage(pet.species, index + 20),
-                ),
-              };
-            },
-          );
-          console.log("DEBUG: Mapped adoption pets:", adoptionPets);
-          combinedPets.push(...adoptionPets);
-        } else {
-          console.log("DEBUG: Adoption API failed:", adoptionRes.error);
+        if (foundRes.ok) {
+          const foundPets = foundRes.data.map((pet: any, index: number) => {
+            const raw = pet.photo_url || pet.photo;
+            return {
+              ...pet,
+              petCategory: "found",
+              displayName: pet.pet_type || "Found pet",
+              location: `${pet.found_city}, ${pet.state}`,
+              photo: resolvePhoto(
+                raw,
+                getSamplePetImage(pet.pet_type || "Dog", index + 50),
+              ),
+            };
+          });
+          combinedPets.push(...foundPets);
         }
 
-        console.log("DEBUG: All combined pets:", combinedPets);
+        if (adoptionRes.ok) {
+          const adoptionPets = adoptionRes.data.map((pet: any, index: number) => {
+            const raw = pet.photos;
+            return {
+              ...pet,
+              petCategory: "adoption",
+              displayName: pet.name,
+              location: `${pet.location_city}, ${pet.location_state}`,
+              photo: resolvePhoto(
+                raw,
+                getSamplePetImage(pet.species, index + 100),
+              ),
+            };
+          });
+          combinedPets.push(...adoptionPets);
+        }
+
         setAllPets(combinedPets);
         setFilteredPets(combinedPets);
       } catch (error) {
@@ -1166,11 +1178,9 @@ export default function UserHome() {
                           <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
                             <button
                               onClick={() =>
-                                setActivityExpanded(
-                                  activityExpanded === `found-${r.id}`
-                                    ? null
-                                    : `found-${r.id}`,
-                                )
+                                navigate(`/user/found/${r.id}`, {
+                                  state: { report: r },
+                                })
                               }
                               style={{
                                 padding: "6px 12px",
@@ -1343,7 +1353,11 @@ export default function UserHome() {
                         padding: "4px 10px",
                         borderRadius: 12,
                         background:
-                          pet.petCategory === "lost" ? "#dc2626" : "#16a34a",
+                          pet.petCategory === "lost"
+                            ? "#dc2626"
+                            : pet.petCategory === "found"
+                              ? "#1d4ed8"
+                              : "#16a34a",
                         color: "white",
                         fontSize: 11,
                         fontWeight: 800,
@@ -1351,7 +1365,11 @@ export default function UserHome() {
                         boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
                       }}
                     >
-                      {pet.petCategory === "lost" ? "🚨 Lost" : "🐾 Adoption"}
+                      {pet.petCategory === "lost"
+                        ? "🚨 Lost"
+                        : pet.petCategory === "found"
+                          ? "FOUND"
+                          : "🐾 Adoption"}
                     </div>
 
                     {/* Pet Image */}
@@ -1469,25 +1487,21 @@ export default function UserHome() {
                         fontWeight: 600,
                       }}
                     >
-                      {pet.petCategory === "lost" ? "Reported" : "Found"}:{" "}
-                      {new Date(pet.created_at).toLocaleDateString()}
+                      {pet.petCategory === "lost"
+                        ? "Reported"
+                        : pet.petCategory === "found"
+                          ? "Found"
+                          : "Listed"}
+                      : {new Date(pet.created_at).toLocaleDateString()}
                     </div>
 
                     <button
                       onClick={() => {
-                        console.log(
-                          "DEBUG: Button clicked for pet:",
-                          pet.displayName,
-                          "Category:",
-                          pet.petCategory,
-                          "ID:",
-                          pet.id,
-                        );
                         if (pet.petCategory === "lost") {
                           navigate("/user/report-found");
+                        } else if (pet.petCategory === "found") {
+                          navigate(`/user/found/${pet.id}`, { state: { report: pet } });
                         } else if (pet.petCategory === "adoption") {
-                          // Navigate to pet details page for adoption pets
-                          console.log("DEBUG: Navigating to /pets/" + pet.id);
                           navigate(`/pets/${pet.id}`);
                         }
                       }}
@@ -1499,7 +1513,9 @@ export default function UserHome() {
                         background:
                           pet.petCategory === "lost"
                             ? "linear-gradient(135deg, #dc2626, #ef4444)"
-                            : "linear-gradient(135deg, #8b5cf6, #a855f7)",
+                            : pet.petCategory === "found"
+                              ? "linear-gradient(135deg, #1d4ed8, #3b82f6)"
+                              : "linear-gradient(135deg, #8b5cf6, #a855f7)",
                         color: "white",
                         fontWeight: 700,
                         cursor: "pointer",
@@ -1508,7 +1524,9 @@ export default function UserHome() {
                     >
                       {pet.petCategory === "lost"
                         ? "Help Find This Pet"
-                        : "View Details & Adopt"}
+                        : pet.petCategory === "found"
+                          ? "View Found Pet"
+                          : "View Details & Adopt"}
                     </button>
                   </div>
                 ))}

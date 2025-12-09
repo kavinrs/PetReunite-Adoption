@@ -38,7 +38,7 @@ export default function AdminLostReportDetail() {
   }, [id]);
 
   const handleBack = () => {
-    navigate("/admin?tab=lost");
+    navigate("/admin/pending-approvals");
   };
 
   const handleAcceptUpdate = async () => {
@@ -47,10 +47,10 @@ export default function AdminLostReportDetail() {
       setSavingAction("accept");
       setError(null);
       const numericId = Number(id);
-      const res = await updateAdminLostReport(numericId, {
-        has_user_update: false as any,
-        previous_snapshot: null as any,
-      });
+      const res = await updateAdminLostReport(
+        numericId,
+        { has_user_update: false, previous_snapshot: null } as any,
+      );
       if (!res.ok) {
         if (res.error) setError(res.error);
         return;
@@ -114,7 +114,7 @@ export default function AdminLostReportDetail() {
             cursor: "pointer",
           }}
         >
-          〉 Back to lost reports
+          〉 Back to approvals
         </button>
         <div>{error}</div>
       </div>
@@ -156,7 +156,7 @@ export default function AdminLostReportDetail() {
           cursor: "pointer",
         }}
       >
-        〉 Back to lost reports
+        〉 Back to approvals
       </button>
 
       <div

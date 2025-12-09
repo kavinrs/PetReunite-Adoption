@@ -366,7 +366,7 @@ export default function UserHome() {
 
   const sidebarLinks = [
     {
-      label: "Dashboard",
+      label: "Home",
       icon: "🗂",
       onClick: () => {
         setPageTab("home");
@@ -460,7 +460,7 @@ export default function UserHome() {
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {sidebarLinks.map((link) => {
               const isActive =
-                (link.label === "Dashboard" && pageTab === "home") ||
+                (link.label === "Home" && pageTab === "home") ||
                 (link.label === "My Activity" && pageTab === "activity");
               return (
               <button
@@ -579,7 +579,7 @@ export default function UserHome() {
             }}
           >
             <div>
-              <div style={{ fontSize: 24, fontWeight: 800 }}>{pageTab === "activity" ? "My Activity" : "Dashboard"}</div>
+              <div style={{ fontSize: 24, fontWeight: 800 }}>{pageTab === "activity" ? "My Activity" : "Home"}</div>
               <div style={{ color: "rgba(15,23,42,0.6)", marginTop: 4 }}>
                 {pageTab === "activity" ? "Your reports and adoption history" : "Manage your pet rescue activities"}
               </div>

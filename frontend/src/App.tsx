@@ -4,6 +4,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import UserHome from "./pages/UserHome";
 import AdminHome from "./pages/AdminHome";
+import PendingApprovals from "./pages/admin/PendingApprovals";
 import AdminRegister from "./pages/AdminRegister";
 import AdminProfile from "./pages/AdminProfile";
 import AdminLostReportDetail from "./pages/AdminLostReportDetail";
@@ -103,6 +104,14 @@ export default function App() {
         element={
           <PrivateRoute role="admin">
             <AdminHome />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/admin/pending-approvals"
+        element={
+          <PrivateRoute role="admin">
+            <PendingApprovals />
           </PrivateRoute>
         }
       />

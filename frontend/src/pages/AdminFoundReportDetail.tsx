@@ -36,7 +36,7 @@ export default function AdminFoundReportDetail() {
   }, [id]);
 
   const handleBack = () => {
-    navigate("/admin?tab=found");
+    navigate("/admin/pending-approvals");
   };
 
   const handleAcceptUpdate = async () => {
@@ -114,7 +114,7 @@ export default function AdminFoundReportDetail() {
             cursor: "pointer",
           }}
         >
-          〉 Back to found reports
+          〉 Back to approvals
         </button>
         <div>{error}</div>
       </div>
@@ -156,7 +156,7 @@ export default function AdminFoundReportDetail() {
           cursor: "pointer",
         }}
       >
-        〉 Back to found reports
+        〉 Back to approvals
       </button>
 
       <div

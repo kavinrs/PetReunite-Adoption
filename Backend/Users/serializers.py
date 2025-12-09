@@ -1,7 +1,7 @@
 # users/serializers.py
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import UserProfile
+from .models import UserProfile, VolunteerRequest
 User = get_user_model()
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -96,6 +96,86 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = ("role", "verified")
+
+
+class VolunteerRequestCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VolunteerRequest
+        fields = (
+            "id",
+            "full_name",
+            "date_of_birth",
+            "phone_number",
+            "email",
+            "city",
+            "state",
+            "pincode",
+            "volunteering_preferences",
+            "availability",
+            "skills",
+            "experience_level",
+            "id_proof_type",
+            "id_proof_document",
+            "motivation",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "created_at", "updated_at")
+
+    def create(self, validated_data):
+        user = self.context["request"].user
+        return VolunteerRequest.objects.create(user=user, **validated_data)
+
+
+class VolunteerRequestListSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+
+    class Meta:
+        model = VolunteerRequest
+        fields = (
+            "id",
+            "user",
+            "full_name",
+            "phone_number",
+            "email",
+            "city",
+            "state",
+            "pincode",
+            "skills",
+            "experience_level",
+            "status",
+            "created_at",
+        )
+
+
+class AdminVolunteerRequestSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+
+    class Meta:
+        model = VolunteerRequest
+        fields = (
+            "id",
+            "user",
+            "full_name",
+            "date_of_birth",
+            "phone_number",
+            "email",
+            "city",
+            "state",
+            "pincode",
+            "volunteering_preferences",
+            "availability",
+            "skills",
+            "experience_level",
+            "id_proof_type",
+            "id_proof_document",
+            "motivation",
+            "status",
+            "admin_notes",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "user", "created_at", "updated_at")
 
 
 # class FoundPetReportSerializer(serializers.ModelSerializer):

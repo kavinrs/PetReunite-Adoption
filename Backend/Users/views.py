@@ -7,10 +7,11 @@ from rest_framework import parsers
 from .serializers import (
     RegisterSerializer,
     UserProfileSerializer,
-    # FoundPetReportSerializer,
-    # LostPetReportSerializer,
+    VolunteerRequestCreateSerializer,
+    VolunteerRequestListSerializer,
+    AdminVolunteerRequestSerializer,
 )
-from .models import UserProfile
+from .models import UserProfile, VolunteerRequest
 #  FoundPetReport, LostPetReport
 from django.contrib.auth import authenticate, get_user_model
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -159,23 +160,56 @@ class EmailLoginView(APIView):
         )
 
 
-# class FoundPetReportView(generics.ListAPIView):
-#     serializer_class = FoundPetReportSerializer
-#     permission_classes = [permissions.IsAuthenticated]
+class VolunteerRequestView(generics.ListCreateAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
 
-#     def get_queryset(self):
-#         user = self.request.user
-#         if user.is_staff or user.is_superuser:
-#             return FoundPetReport.objects.all()
-#         return FoundPetReport.objects.filter(reporter=user)
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return VolunteerRequestCreateSerializer
+        return VolunteerRequestListSerializer
+
+    def get_queryset(self):
+        return VolunteerRequest.objects.filter(user=self.request.user).order_by("-created_at")
+
+    def perform_create(self, serializer):
+        serializer.save()
 
 
-# class LostPetReportView(generics.ListAPIView):
-#     serializer_class = LostPetReportSerializer
-#     permission_classes = [permissions.IsAuthenticated]
+class AdminVolunteerListView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated]
 
-#     def get_queryset(self):
-#         user = self.request.user
-#         if user.is_staff or user.is_superuser:
-#             return LostPetReport.objects.all()
-#         return LostPetReport.objects.filter(reporter=user)
+    def get_queryset(self):
+        user = self.request.user
+        qs = VolunteerRequest.objects.all().order_by("-created_at") if (user.is_staff or user.is_superuser) else VolunteerRequest.objects.filter(user=user).order_by("-created_at")
+
+        status_filter = self.request.query_params.get("status")
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+
+        city = self.request.query_params.get("city")
+        if city:
+            qs = qs.filter(city__iexact=city)
+
+        state = self.request.query_params.get("state")
+        if state:
+            qs = qs.filter(state__iexact=state)
+
+        q = (self.request.query_params.get("q") or "").strip().lower()
+        if q:
+            qs = qs.filter(full_name__icontains=q)
+
+        return qs
+
+    serializer_class = AdminVolunteerRequestSerializer
+
+
+class AdminVolunteerDetailView(generics.RetrieveUpdateAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = AdminVolunteerRequestSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff or user.is_superuser:
+            return VolunteerRequest.objects.all()
+        return VolunteerRequest.objects.filter(user=user)

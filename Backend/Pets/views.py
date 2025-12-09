@@ -324,6 +324,13 @@ class AdminReportSummaryView(APIView):
         total_users = User.objects.filter(is_active=True).count()
         successful_adoptions = AdoptionRequest.objects.filter(status="approved").count()
         new_pets_this_week = Pet.objects.filter(is_active=True, created_at__gte=week_start).count()
+        try:
+            from Users.models import VolunteerRequest
+            volunteers_total = VolunteerRequest.objects.count()
+            volunteers_pending = VolunteerRequest.objects.filter(status="pending").count()
+        except Exception:
+            volunteers_total = 0
+            volunteers_pending = 0
         # Total reports that have pending user updates (lost + found)
         update_requests = (
             LostPetReport.objects.filter(has_user_update=True).count()
@@ -346,6 +353,8 @@ class AdminReportSummaryView(APIView):
             "total_users": total_users,
             "successful_adoptions": successful_adoptions,
             "new_pets_this_week": new_pets_this_week,
+            "volunteers_total": volunteers_total,
+            "volunteers_pending": volunteers_pending,
             "update_requests": update_requests,
         }
 

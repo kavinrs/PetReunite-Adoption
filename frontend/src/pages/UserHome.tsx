@@ -34,11 +34,15 @@ export default function UserHome() {
   const [sortBy, setSortBy] = useState("Most Recent");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const notifRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
   const [activity, setActivity] = useState<{ lost: any[]; found: any[]; adoptions: any[] }>({ lost: [], found: [], adoptions: [] });
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityExpanded, setActivityExpanded] = useState<string | null>(null);
   const [updatingReportId, setUpdatingReportId] = useState<string | null>(null);
+  const [userHasNotification, setUserHasNotification] = useState(false);
+  const [userNotificationOpen, setUserNotificationOpen] = useState(false);
+  const [dismissedUserNotifications, setDismissedUserNotifications] = useState<string[]>([]);
 
   // Function to get sample pet images
   const getSamplePetImage = (petType: string, index: number): string => {
@@ -300,6 +304,21 @@ export default function UserHome() {
     return () => window.removeEventListener("mousedown", handleClickOutside);
   }, [menuOpen]);
 
+  useEffect(() => {
+    function handleClickOutsideNotif(e: MouseEvent) {
+      const node = notifRef.current;
+      if (!node) return;
+      if (node.contains(e.target as Node)) return;
+      setUserNotificationOpen(false);
+    }
+    if (userNotificationOpen) {
+      window.addEventListener("mousedown", handleClickOutsideNotif);
+    } else {
+      window.removeEventListener("mousedown", handleClickOutsideNotif);
+    }
+    return () => window.removeEventListener("mousedown", handleClickOutsideNotif);
+  }, [userNotificationOpen]);
+
   const displayName =
     profile?.full_name ??
     profile?.username ??
@@ -307,6 +326,58 @@ export default function UserHome() {
     "User";
   const avatarUrl = profile?.profile_photo || "/profile-avatar.svg";
   const email = profile?.user?.email ?? profile?.email ?? "";
+
+  const userNotificationFeed = useMemo(() => {
+    const items: { id: string; title: string; from: string; createdAt: string | null; tab: "lost" | "found" | "adoption"; rowId?: number; status?: string }[] = [];
+    const pushItem = (id: string, title: string, createdAt: string | null, tab: "lost" | "found" | "adoption", rowId?: number, status?: string) => {
+      items.push({ id, title, from: "Admin", createdAt, tab, rowId, status });
+    };
+    for (const r of (activity.lost ?? []) as any[]) {
+      const st = (r.status || "").toLowerCase();
+      if (st && st !== "pending") {
+        pushItem(`lost-${r.id}`, "Lost Report", r.updated_at || r.created_at || null, "lost", r.id, r.status);
+      }
+    }
+    for (const r of (activity.found ?? []) as any[]) {
+      const st = (r.status || "").toLowerCase();
+      if (st && st !== "pending") {
+        pushItem(`found-${r.id}`, "Found Report", r.updated_at || r.created_at || null, "found", r.id, r.status);
+      }
+    }
+    for (const a of (activity.adoptions ?? []) as any[]) {
+      const st = (a.status || "").toLowerCase();
+      if (st && st !== "pending") {
+        pushItem(`adoption-${a.id}`, "Adoption Request", a.updated_at || a.created_at || null, "adoption", a.id, a.status);
+      }
+    }
+    items.sort((a, b) => {
+      const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return tb - ta;
+    });
+    return items;
+  }, [activity.lost, activity.found, activity.adoptions]);
+
+  useEffect(() => {
+    const unread = userNotificationFeed.filter((n) => !dismissedUserNotifications.includes(n.id));
+    setUserHasNotification(unread.length > 0);
+  }, [userNotificationFeed, dismissedUserNotifications]);
+
+  function handleUserNotificationClick() {
+    setUserNotificationOpen((open) => !open);
+    setUserHasNotification(false);
+  }
+
+  function handleUserNotificationItemClick(item: { id: string; tab: "lost" | "found" | "adoption"; rowId?: number }) {
+    setDismissedUserNotifications((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]));
+    if (item.tab === "lost" && item.rowId) {
+      navigate(`/user/lost/${item.rowId}`);
+    } else if (item.tab === "found" && item.rowId) {
+      navigate(`/user/found/${item.rowId}`);
+    } else if (item.tab === "adoption") {
+      navigate(`/user/adoption-requests`);
+    }
+  }
 
   // Derived activity lists respecting species + sort filters
   const activityLostFiltered = useMemo(() => {
@@ -584,8 +655,100 @@ export default function UserHome() {
                 {pageTab === "activity" ? "Your reports and adoption history" : "Manage your pet rescue activities"}
               </div>
             </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div ref={notifRef} style={{ position: "relative" }}>
+                <button
+                  onClick={handleUserNotificationClick}
+                  aria-label="Notifications"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 40,
+                    height: 40,
+                    borderRadius: "50%",
+                    background: "white",
+                    border: "2px solid rgba(15,23,42,0.08)",
+                    boxShadow: "0 12px 30px rgba(15,23,42,0.12)",
+                    cursor: "pointer",
+                    position: "relative",
+                  }}
+                >
+                  <span style={{ fontSize: 18 }}>🔔</span>
+                  {userHasNotification && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: 6,
+                        right: 6,
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
+                        background: "#ef4444",
+                      }}
+                    />
+                  )}
+                </button>
+                {userNotificationOpen && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "120%",
+                      right: 0,
+                      width: 340,
+                      maxHeight: 360,
+                      overflowY: "auto",
+                      background: "white",
+                      borderRadius: 12,
+                      boxShadow: "0 16px 40px rgba(15,23,42,0.2)",
+                      border: "1px solid rgba(15,23,42,0.08)",
+                      zIndex: 20,
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderBottom: "1px solid #f1f5f9" }}>
+                      <div style={{ fontWeight: 800, color: "#0f172a" }}>Notifications</div>
+                      <div style={{ fontSize: 12, color: "#64748b" }}>Latest activity</div>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                      {userNotificationFeed.filter((n) => !dismissedUserNotifications.includes(n.id)).length === 0 ? (
+                        <div style={{ padding: 12, fontSize: 13, color: "#64748b" }}>No new notifications</div>
+                      ) : (
+                        userNotificationFeed
+                          .filter((n) => !dismissedUserNotifications.includes(n.id))
+                          .map((n) => (
+                            <button
+                              key={n.id}
+                              onClick={() => handleUserNotificationItemClick(n)}
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: "1fr auto",
+                                gap: 8,
+                                width: "100%",
+                                textAlign: "left",
+                                background: "transparent",
+                                border: "none",
+                                padding: "10px 12px",
+                                cursor: "pointer",
+                                borderBottom: "1px solid #f1f5f9",
+                              }}
+                            >
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontWeight: 700, color: "#0f172a", fontSize: 13 }}>{n.title}{n.status ? ` — ${n.status}` : ""}</div>
+                                <div style={{ fontSize: 12, color: "#64748b" }}>From Admin</div>
+                                <div style={{ fontSize: 11, color: "#9ca3af" }}>{n.createdAt ? new Date(n.createdAt).toLocaleString() : ""}</div>
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444" }} />
+                              </div>
+                            </button>
+                          ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
 
-            <div ref={menuRef} style={{ position: "relative" }}>
+              <div ref={menuRef} style={{ position: "relative" }}>
               <button
                 onClick={() => setMenuOpen((prev) => !prev)}
                 style={{
@@ -766,6 +929,7 @@ export default function UserHome() {
                 </div>
               )}
             </div>
+          </div>
           </div>
 
           {/* Find Your Perfect Pet Section */}

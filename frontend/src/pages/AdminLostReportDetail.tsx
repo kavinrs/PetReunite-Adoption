@@ -47,10 +47,10 @@ export default function AdminLostReportDetail() {
       setSavingAction("accept");
       setError(null);
       const numericId = Number(id);
-      const res = await updateAdminLostReport(
-        numericId,
-        { has_user_update: false, previous_snapshot: null } as any,
-      );
+      const res = await updateAdminLostReport(numericId, {
+        has_user_update: false as any,
+        previous_snapshot: null as any,
+      });
       if (!res.ok) {
         if (res.error) setError(res.error);
         return;

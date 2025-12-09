@@ -295,8 +295,8 @@ export default function PendingApprovals() {
                 padding: "12px 16px",
                 borderRadius: "12px",
                 border: "none",
-                background: "transparent",
-                color: "#64748b",
+                background: "linear-gradient(135deg, #3b82f6, #8b5cf6)",
+                color: "white",
                 fontSize: "14px",
                 fontWeight: "600",
                 cursor: "pointer",
@@ -306,7 +306,7 @@ export default function PendingApprovals() {
                 marginBottom: "8px",
               }}
             >
-              <span>🏠</span> Home
+              <span></span> Home
             </button>
             <button
               onClick={() => navigate("/admin?tab=found", { replace: true })}

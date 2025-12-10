@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { fetchAdminVolunteerDetail, updateAdminVolunteerRequest } from "../services/api";
+import { fetchAdminVolunteerDetail, updateAdminVolunteerRequest, deleteAdminVolunteerRequest } from "../services/api";
 
 export default function AdminVolunteerDetail() {
   const { id } = useParams();
@@ -60,18 +60,53 @@ export default function AdminVolunteerDetail() {
             <div style={{ fontSize: 24, fontWeight: 800, color: "#0f172a" }}>Volunteer Details</div>
             <div style={{ color: "#374151", marginTop: 4 }}>{vol.full_name}</div>
           </div>
-          <button
-            type="button"
-            onClick={() => navigate("/admin?tab=volunteers", { replace: true })}
-            style={{ padding: "8px 12px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#f9fafb", color: "#0f172a", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-          >
-            ← Back
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => navigate("/admin?tab=volunteers", { replace: true })}
+              style={{ padding: "8px 12px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#f9fafb", color: "#0f172a", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+            >
+              ← Back
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                const ok = window.confirm("Delete this volunteer request?");
+                if (!ok) return;
+                const res = await deleteAdminVolunteerRequest(Number(id));
+                if (res.ok) navigate("/admin?tab=volunteers", { replace: true });
+                else setError(res.error || "Failed to delete");
+              }}
+              style={{ padding: "8px 12px", borderRadius: 999, border: "1px solid #ef4444", background: "#ffffff", color: "#b91c1c", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+            >
+              Delete
+            </button>
+          </div>
         </div>
 
         {error && <div style={{ marginBottom: 12, borderRadius: 8, background: "#fff1f2", color: "#b91c1c", padding: 10, fontSize: 13 }}>{error}</div>}
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "160px 1fr 1fr", gap: 12, alignItems: "start" }}>
+          <div style={{ width: 160, height: 160, borderRadius: 12, overflow: "hidden", background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {(() => {
+              const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
+              const origin = /^https?:/.test(apiBase) ? new URL(apiBase).origin : "http://localhost:8000";
+              const raw = vol.profile_photo || vol.id_proof_document;
+              if (!raw) return <span style={{ fontSize: 28, color: "#6b7280" }}>🐾</span>;
+              const u = String(raw);
+              const isAbsolute = u.startsWith("http");
+              const isRoot = u.startsWith("/");
+              const fixed = isAbsolute ? u : isRoot ? origin + u : origin + "/media/" + u.replace(/^\/+/, "");
+              const ext = u.split(".").pop()?.toLowerCase();
+              const isImage = ["jpg", "jpeg", "png", "gif", "webp"]
+                .includes((ext || "").replace(/\?.*$/, ""));
+              return isImage ? (
+                <img src={fixed} alt="ID proof" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <span style={{ fontSize: 28, color: "#6b7280" }}>🐾</span>
+              );
+            })()}
+          </div>
           <Info label="Email" value={vol.email} />
           <Info label="Phone" value={vol.phone_number} />
           <Info label="City" value={vol.city} />
@@ -104,4 +139,3 @@ function Info({ label, value }: { label: string; value?: string }) {
     </div>
   );
 }
-

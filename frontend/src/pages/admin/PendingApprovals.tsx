@@ -713,28 +713,6 @@ export default function PendingApprovals() {
                         View
                       </Button>
                     )}
-                    <Button
-                      startIcon={<Check />}
-                      color="success"
-                      variant="contained"
-                      size="small"
-                      disabled={actionKey === `${r.kind}-${r.id}-approved`}
-                      onClick={() => changeStatus(r, "approved")}
-                      sx={{ textTransform: "none", borderRadius: 999, px: 2.5 }}
-                    >
-                      Accept
-                    </Button>
-                    <Button
-                      startIcon={<Close />}
-                      color="error"
-                      variant="outlined"
-                      size="small"
-                      disabled={actionKey === `${r.kind}-${r.id}-rejected`}
-                      onClick={() => changeStatus(r, "rejected")}
-                      sx={{ textTransform: "none", borderRadius: 999, px: 2.5 }}
-                    >
-                      Reject
-                    </Button>
                   </Box>
                 </Paper>
               ))}

@@ -10,7 +10,7 @@ import {
   updateMyLostReport,
   updateMyFoundReport,
 } from "../services/api";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
 
 type Tab = "owner" | "rescuer" | "adopter";
@@ -36,6 +36,7 @@ export default function UserHome() {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const notifRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const [activity, setActivity] = useState<{ lost: any[]; found: any[]; adoptions: any[] }>({ lost: [], found: [], adoptions: [] });
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityExpanded, setActivityExpanded] = useState<string | null>(null);
@@ -128,23 +129,51 @@ export default function UserHome() {
     };
   }, []);
 
+  // If the router state requests the Activity view, honour it
+  useEffect(() => {
+    const state = (location.state || {}) as any;
+    if (state && state.tab === "activity") {
+      setPageTab("activity");
+    }
+  }, [location.state]);
+
+  // Load any previously dismissed notifications for this user from localStorage
+  useEffect(() => {
+    const username =
+      profile?.username ?? profile?.user?.username ?? null;
+    if (!username) return;
+
+    const key = `user_dismissed_notifications_${username}`;
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setDismissedUserNotifications(parsed as string[]);
+        }
+      }
+    } catch {
+      // ignore parse errors and start fresh
+    }
+  }, [profile?.username, profile?.user?.username]);
+
   useEffect(() => {
     let mounted = true;
     async function loadActivity() {
-      if (pageTab !== "activity") return;
       setActivityLoading(true);
       const res = await fetchMyActivity();
       if (!mounted) return;
       if (res.ok) setActivity(res.data);
       setActivityLoading(false);
     }
+    // Always load activity so notifications work from any tab
     loadActivity();
     const id = window.setInterval(loadActivity, 15000);
     return () => {
       mounted = false;
       window.clearInterval(id);
     };
-  }, [pageTab]);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -361,6 +390,17 @@ export default function UserHome() {
   useEffect(() => {
     const unread = userNotificationFeed.filter((n) => !dismissedUserNotifications.includes(n.id));
     setUserHasNotification(unread.length > 0);
+    // Persist dismissed notifications per user so they don't return after logout/login
+    const username =
+      profile?.username ?? profile?.user?.username ?? null;
+    if (username) {
+      const key = `user_dismissed_notifications_${username}`;
+      try {
+        localStorage.setItem(key, JSON.stringify(dismissedUserNotifications));
+      } catch {
+        // ignore storage errors
+      }
+    }
   }, [userNotificationFeed, dismissedUserNotifications]);
 
   function handleUserNotificationClick() {
@@ -369,13 +409,24 @@ export default function UserHome() {
   }
 
   function handleUserNotificationItemClick(item: { id: string; tab: "lost" | "found" | "adoption"; rowId?: number }) {
-    setDismissedUserNotifications((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]));
+    // Mark this notification as read
+    setDismissedUserNotifications((prev) =>
+      prev.includes(item.id) ? prev : [...prev, item.id],
+    );
+
+    // Always switch the main section to My Activity
+    setPageTab("activity");
+
+    // Hide the dropdown so the focus moves to the details view
+    setUserNotificationOpen(false);
+
+    // Deep-link to the appropriate detail page for this notification
     if (item.tab === "lost" && item.rowId) {
       navigate(`/user/lost/${item.rowId}`);
     } else if (item.tab === "found" && item.rowId) {
       navigate(`/user/found/${item.rowId}`);
     } else if (item.tab === "adoption") {
-      navigate(`/user/adoption-requests`);
+      navigate("/user/adoption-requests");
     }
   }
 
@@ -699,7 +750,9 @@ export default function UserHome() {
                     style={{
                       position: "absolute",
                       top: "120%",
-                      right: 0,
+                      // Move the dropdown further to the right so it stays clear
+                      // of the Species filter area below it
+                      right: -80,
                       width: 340,
                       maxHeight: 360,
                       overflowY: "auto",
@@ -707,7 +760,11 @@ export default function UserHome() {
                       borderRadius: 12,
                       boxShadow: "0 16px 40px rgba(15,23,42,0.2)",
                       border: "1px solid rgba(15,23,42,0.08)",
-                      zIndex: 20,
+                      paddingRight: 4,
+                      // Slightly nicer scrolling on supported browsers
+                      scrollbarWidth: "thin",
+                      // Ensure notifications float above species filter and other controls
+                      zIndex: 1000,
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderBottom: "1px solid #f1f5f9" }}>
@@ -1226,9 +1283,16 @@ export default function UserHome() {
                               )}
                               {r.location_url && (
                                 <div>
-                                  <strong>Location URL:</strong>{" "}
-                                  <a href={r.location_url} target="_blank" rel="noreferrer">
-                                    {r.location_url}
+                                  <strong>Location:</strong>{" "}
+                                  <a
+                                    href={String(r.location_url).startsWith("http")
+                                      ? String(r.location_url)
+                                      : `https://www.google.com/maps?q=${encodeURIComponent(String(r.location_url))}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{ color: "#2563eb" }}
+                                  >
+                                    Open in Google Maps
                                   </a>
                                 </div>
                               )}
@@ -1240,6 +1304,11 @@ export default function UserHome() {
                         </div>
                         <div style={{ alignSelf: "center", color: "#64748b", fontSize: 12 }}>
                           {new Date(r.created_at).toLocaleString()}
+                          {r.lost_time && (
+                            <div style={{ marginTop: 4 }}>
+                              Lost time: {new Date(r.lost_time).toLocaleString()}
+                            </div>
+                          )}
                           <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
                             <button
                               onClick={() =>
@@ -1336,6 +1405,16 @@ export default function UserHome() {
                                   <strong>Estimated age:</strong> {r.estimated_age}
                                 </div>
                               )}
+                              {r.weight && (
+                                <div>
+                                  <strong>Weight:</strong> {r.weight}
+                                </div>
+                              )}
+                              {r.pincode && (
+                                <div>
+                                  <strong>Pincode:</strong> {r.pincode}
+                                </div>
+                              )}
                               <div>
                                 <strong>Description:</strong> {r.description || "No additional details"}
                               </div>
@@ -1344,6 +1423,11 @@ export default function UserHome() {
                         </div>
                         <div style={{ alignSelf: "center", color: "#64748b", fontSize: 12 }}>
                           {new Date(r.created_at).toLocaleString()}
+                          {r.found_time && (
+                            <div style={{ marginTop: 4 }}>
+                              Found time: {new Date(r.found_time).toLocaleString()}
+                            </div>
+                          )}
                           <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
                             <button
                               onClick={() =>

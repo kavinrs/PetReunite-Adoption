@@ -18,6 +18,7 @@ const initialForm = {
   pincode: "",
   description: "",
   location_url: "",
+  lost_time: "",
 };
 
 export default function ReportLostPet() {
@@ -277,16 +278,25 @@ export default function ReportLostPet() {
                 placeholder="State"
               />
             </div>
-            <div>
-              <label style={labelStyle}>Pincode</label>
-              <input
-                type="text"
-                value={form.pincode}
-                onChange={(e) => handleChange("pincode", e.target.value)}
-                style={inputStyle}
-                placeholder="Postal/ZIP code"
-              />
-            </div>
+          <div>
+            <label style={labelStyle}>Pincode</label>
+            <input
+              type="text"
+              value={form.pincode}
+              onChange={(e) => handleChange("pincode", e.target.value)}
+              style={inputStyle}
+              placeholder="Postal/ZIP code"
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Lost Time</label>
+            <input
+              type="datetime-local"
+              value={form.lost_time}
+              onChange={(e) => handleChange("lost_time", e.target.value)}
+              style={inputStyle}
+            />
+          </div>
             <div>
               <label style={labelStyle}>Location URL</label>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

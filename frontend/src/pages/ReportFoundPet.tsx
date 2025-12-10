@@ -9,11 +9,14 @@ const initialForm = {
   pet_type: "",
   breed: "",
   color: "",
+  weight: "",
   estimated_age: "",
   found_city: "",
   state: "",
+  pincode: "",
   description: "",
   location_url: "",
+  found_time: "",
 };
 
 export default function ReportFoundPet() {
@@ -204,6 +207,16 @@ export default function ReportFoundPet() {
               />
             </div>
             <div>
+              <label style={labelStyle}>Weight</label>
+              <input
+                type="text"
+                value={form.weight}
+                onChange={(e) => handleChange("weight" as any, e.target.value)}
+                style={inputStyle}
+                placeholder="Approximate weight"
+              />
+            </div>
+            <div>
               <label style={labelStyle}>Estimated Age (years)</label>
               <input
                 type="text"
@@ -240,6 +253,16 @@ export default function ReportFoundPet() {
               />
             </div>
             <div>
+              <label style={labelStyle}>Pincode</label>
+              <input
+                type="text"
+                value={form.pincode}
+                onChange={(e) => handleChange("pincode" as any, e.target.value)}
+                style={inputStyle}
+                placeholder="Area pincode"
+              />
+            </div>
+            <div>
               <label style={labelStyle}>Upload Photo</label>
               <input
                 type="file"
@@ -252,6 +275,15 @@ export default function ReportFoundPet() {
                   border: "1px solid rgba(15,23,42,0.15)",
                   background: "#fff",
                 }}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Found Time</label>
+              <input
+                type="datetime-local"
+                value={form.found_time}
+                onChange={(e) => handleChange("found_time" as any, e.target.value)}
+                style={inputStyle}
               />
             </div>
             <div>

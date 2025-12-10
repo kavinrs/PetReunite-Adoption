@@ -29,6 +29,7 @@ export default function LostReportDetail() {
     state: "",
     pincode: "",
     location_url: "",
+    lost_time: "",
     description: "",
   });
 
@@ -56,6 +57,7 @@ export default function LostReportDetail() {
             state: found.state || "",
             pincode: found.pincode || "",
             location_url: found.location_url || "",
+            lost_time: found.lost_time ? new Date(found.lost_time).toISOString().slice(0,16) : "",
             description: found.description || "",
           });
         }
@@ -261,6 +263,12 @@ export default function LostReportDetail() {
                 <strong>Last updated:</strong>{" "}
                 {new Date(report.updated_at).toLocaleString()}
               </div>
+              {report.lost_time && (
+                <div>
+                  <strong>Lost time:</strong>{" "}
+                  {new Date(report.lost_time).toLocaleString()}
+                </div>
+              )}
             </div>
           </div>
 
@@ -334,6 +342,7 @@ export default function LostReportDetail() {
                 ["state", "State"],
                 ["pincode", "Pincode"],
                 ["location_url", "Location URL"],
+                ["lost_time", "Lost Time"],
               ] as const).map(([key, label]) => (
                 <div key={key}>
                   <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>{label}</div>
@@ -341,25 +350,49 @@ export default function LostReportDetail() {
                     <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>
                       {key === "location_url" && form[key]
                         ? (
-                            <a href={form[key]} target="_blank" rel="noreferrer">
-                              {form[key]}
+                            <a
+                              href={String(form[key]).startsWith("http")
+                                ? String(form[key])
+                                : `https://www.google.com/maps?q=${encodeURIComponent(String(form[key]))}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ color: "#2563eb" }}
+                            >
+                              Open in Google Maps
                             </a>
                           )
-                        : form[key] || <span style={{ color: "#9ca3af" }}>—</span>}
-                    </div>
+                        : key === "lost_time" && form[key]
+                          ? new Date(form[key]).toLocaleString()
+                          : form[key] || <span style={{ color: "#9ca3af" }}>—</span>}
+                  </div>
                   ) : (
-                    <input
-                      type="text"
-                      value={form[key]}
-                      onChange={(e) => handleChange(key, e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "8px 10px",
-                        borderRadius: 10,
-                        border: "1px solid #e5e7eb",
-                        fontSize: 12,
-                      }}
-                    />
+                    key === "lost_time" ? (
+                      <input
+                        type="datetime-local"
+                        value={form[key]}
+                        onChange={(e) => handleChange(key, e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "8px 10px",
+                          borderRadius: 10,
+                          border: "1px solid #e5e7eb",
+                          fontSize: 12,
+                        }}
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        value={form[key]}
+                        onChange={(e) => handleChange(key, e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "8px 10px",
+                          borderRadius: 10,
+                          border: "1px solid #e5e7eb",
+                          fontSize: 12,
+                        }}
+                      />
+                    )
                   )}
                 </div>
               ))}

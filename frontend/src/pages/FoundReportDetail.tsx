@@ -10,7 +10,7 @@ export default function FoundReportDetail() {
   const report = (location.state as any)?.report;
 
   const handleBack = () => {
-    navigate("/user");
+    navigate("/user", { state: { tab: "activity" } });
   };
 
   if (!report) {
@@ -29,7 +29,7 @@ export default function FoundReportDetail() {
             fontSize: 16,
           }}
         >
-          ← Back to dashboard
+          ← Back to activity
         </button>
         <div>
           Unable to load found pet details for ID {id}. Please return to the
@@ -75,7 +75,7 @@ export default function FoundReportDetail() {
           fontSize: 16,
         }}
       >
-        ← Back to dashboard
+        ← Back to activity
       </button>
 
       <div
@@ -218,6 +218,12 @@ export default function FoundReportDetail() {
                   {new Date(report.created_at).toLocaleString()}
                 </div>
               )}
+              {report.found_time && (
+                <div>
+                  <strong>Found time:</strong>{" "}
+                  {new Date(report.found_time).toLocaleString()}
+                </div>
+              )}
             </div>
           </div>
 
@@ -247,6 +253,7 @@ export default function FoundReportDetail() {
                 ["pet_type", "Pet Type"],
                 ["breed", "Breed"],
                 ["color", "Color"],
+                ["weight", "Weight"],
                 ["estimated_age", "Estimated Age"],
                 ["found_city", "Found City"],
                 ["state", "State"],
@@ -270,19 +277,22 @@ export default function FoundReportDetail() {
                       color: "#111827",
                     }}
                   >
-                    {key === "location_url" && report[key] ? (
-                      <a
-                        href={report[key] as string}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {report[key]}
-                      </a>
-                    ) : (
-                      report[key] || (
-                        <span style={{ color: "#9ca3af" }}>—</span>
-                      )
-                    )}
+                    {key === "location_url" && report[key]
+                      ? (
+                          <a
+                            href={String(report[key]).startsWith("http")
+                              ? String(report[key])
+                              : `https://www.google.com/maps?q=${encodeURIComponent(String(report[key]))}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{ color: "#2563eb" }}
+                          >
+                            Open in Google Maps
+                          </a>
+                        )
+                      : report[key] || (
+                          <span style={{ color: "#9ca3af" }}>—</span>
+                        )}
                   </div>
                 </div>
               ))}

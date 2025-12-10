@@ -204,7 +204,7 @@ class AdminVolunteerListView(generics.ListAPIView):
     serializer_class = AdminVolunteerRequestSerializer
 
 
-class AdminVolunteerDetailView(generics.RetrieveUpdateAPIView):
+class AdminVolunteerDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = AdminVolunteerRequestSerializer
 

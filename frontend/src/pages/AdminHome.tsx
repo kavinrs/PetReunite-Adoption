@@ -454,6 +454,9 @@ import {
   deleteAdoptionRequest,
   fetchAdminUsers,
   fetchAvailablePets,
+  fetchAdminVolunteerRequests,
+  updateAdminVolunteerRequest,
+  deleteAdminVolunteerRequest,
 } from "../services/api";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
@@ -489,7 +492,15 @@ const STATUS_COLORS: Record<string, string> = {
   closed: "#6b7280",
 };
 
-type TabKey = "dashboard" | "found" | "lost" | "adoptions" | "pets" | "users" | "stats";
+type TabKey =
+  | "dashboard"
+  | "found"
+  | "lost"
+  | "adoptions"
+  | "pets"
+  | "users"
+  | "volunteers"
+  | "stats";
 
 export default function AdminHome() {
   // Apply viewport standardization to ensure consistent 100% scaling
@@ -500,6 +511,7 @@ export default function AdminHome() {
   const [foundReports, setFoundReports] = useState<any[]>([]);
   const [lostReports, setLostReports] = useState<any[]>([]);
   const [adoptionRequests, setAdoptionRequests] = useState<any[]>([]);
+  const [volunteerRequests, setVolunteerRequests] = useState<any[]>([]);
   const [adminUsers, setAdminUsers] = useState<any[]>([]);
   const [tab, setTab] = useState<TabKey>("dashboard");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -522,6 +534,10 @@ export default function AdminHome() {
   const [recentPetsSpecies, setRecentPetsSpecies] = useState("All Species");
   const [recentPetsExpandedId, setRecentPetsExpandedId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  // Track whether the large Pet Reports Map overlay is open so that
+  // we can keep it open across re-renders and optionally pause
+  // background refreshes while the map is focused.
+  const [mapExpanded, setMapExpanded] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
   const [loading, setLoading] = useState(true);
   const [tableLoading, setTableLoading] = useState(false);
@@ -538,7 +554,19 @@ export default function AdminHome() {
   useEffect(() => {
     const qs = new URLSearchParams(location.search);
     const initialTab = qs.get("tab") as TabKey | null;
-    if (initialTab && ["dashboard","found","lost","adoptions","pets","users","stats"].includes(initialTab)) {
+    if (
+      initialTab &&
+      [
+        "dashboard",
+        "found",
+        "lost",
+        "adoptions",
+        "pets",
+        "users",
+        "volunteers",
+        "stats",
+      ].includes(initialTab)
+    ) {
       setTab(initialTab);
     }
 
@@ -558,11 +586,12 @@ export default function AdminHome() {
       }
       setProfile(profileRes.data);
 
-      const [summaryRes, foundRes, lostRes, adoptionRes] = await Promise.all([
+      const [summaryRes, foundRes, lostRes, adoptionRes, volunteersRes] = await Promise.all([
         fetchAdminSummary(),
         fetchAdminFoundReports(),
         fetchAdminLostReports(),
         fetchAllAdoptionRequests(),
+        fetchAdminVolunteerRequests(),
       ]);
       if (!mounted) return;
 
@@ -570,13 +599,15 @@ export default function AdminHome() {
       if (foundRes.ok) setFoundReports(foundRes.data ?? []);
       if (lostRes.ok) setLostReports(lostRes.data ?? []);
       if (adoptionRes.ok) setAdoptionRequests(adoptionRes.data ?? []);
+      if (volunteersRes.ok) setVolunteerRequests(volunteersRes.data ?? []);
 
-      if (!summaryRes.ok || !foundRes.ok || !lostRes.ok || !adoptionRes.ok) {
+      if (!summaryRes.ok || !foundRes.ok || !lostRes.ok || !adoptionRes.ok || !volunteersRes.ok) {
         const msg =
           summaryRes.error ||
           foundRes.error ||
           lostRes.error ||
-          adoptionRes.error;
+          adoptionRes.error ||
+          volunteersRes.error;
         if (msg) setError(msg);
       }
 
@@ -599,9 +630,14 @@ export default function AdminHome() {
   }, [location.state, location.search]);
 
   useEffect(() => {
-    const id = window.setInterval(() => setRefreshTick((t) => t + 1), 15000);
+    const id = window.setInterval(() => {
+      // Avoid kicking off background refreshes while the large
+      // Pet Reports Map overlay is open so that we don't disturb
+      // the map experience.
+      setRefreshTick((t) => (mapExpanded ? t : t + 1));
+    }, 15000);
     return () => window.clearInterval(id);
-  }, []);
+  }, [mapExpanded]);
 
   const isUpdated = (r: any) => {
     return !!(r && r.has_user_update);
@@ -632,6 +668,8 @@ export default function AdminHome() {
       });
     } else if (tab === "pets") {
       reloadPets();
+    } else if (tab === "volunteers") {
+      reloadTable("volunteers", statusFilter);
     } else {
       // For lost/found/adoptions we always fetch full data and
       // apply the statusFilter purely on the frontend so that
@@ -662,6 +700,12 @@ export default function AdminHome() {
             : (res.data ?? []).filter((req: any) => req.status === nextStatus);
         setAdoptionRequests(filtered);
       } else if (res.error) setError(res.error);
+    } else if (nextTab === "volunteers") {
+      const res = await fetchAdminVolunteerRequests(
+        nextStatus === "all" ? undefined : { status: nextStatus },
+      );
+      if (res.ok) setVolunteerRequests(res.data ?? []);
+      else if (res.error) setError(res.error);
     }
     setTableLoading(false);
   }
@@ -692,6 +736,9 @@ export default function AdminHome() {
     const adoptionPending = Array.isArray(adoptionRequests)
       ? adoptionRequests.filter((r: any) => r.status === "pending").length
       : 0;
+    const volunteerPending = Array.isArray(volunteerRequests)
+      ? volunteerRequests.filter((r: any) => r.status === "pending").length
+      : 0;
 
     const lostUpdated = Array.isArray(lostReports)
       ? lostReports.filter(isUpdated).length
@@ -701,7 +748,7 @@ export default function AdminHome() {
       : 0;
 
     const totalAttention =
-      lostPending + foundPending + adoptionPending + lostUpdated + foundUpdated;
+      lostPending + foundPending + adoptionPending + volunteerPending + lostUpdated + foundUpdated;
 
     if (totalAttention > lastSeenPendingRef.current) {
       setHasPendingNotification(true);
@@ -781,6 +828,22 @@ export default function AdminHome() {
         }
       }
 
+      if (Array.isArray(volunteerRequests)) {
+        for (const r of volunteerRequests as any[]) {
+          const status: string = r.status || "pending";
+          const filter = status === "pending" ? "pending" : "all";
+          items.push({
+            id: `volunteer-${r.id}`,
+            context: "Volunteer Request",
+            from: r.full_name || r.user?.username || "Unknown user",
+            createdAt: r.updated_at || r.created_at || null,
+            tab: "volunteers",
+            filter,
+            backendStatus: filter,
+          });
+        }
+      }
+
       items.sort((a, b) => {
         const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -789,7 +852,7 @@ export default function AdminHome() {
 
       return items;
     },
-    [lostReports, foundReports, adoptionRequests],
+    [lostReports, foundReports, adoptionRequests, volunteerRequests],
   );
 
   function handleNotificationClick() {
@@ -1295,23 +1358,36 @@ export default function AdminHome() {
         ? adoptionRequests
         : tab === "found"
           ? foundReports
-          : lostReports;
+          : tab === "volunteers"
+            ? volunteerRequests
+            : lostReports;
     const q = search.trim().toLowerCase();
     const bySearch = !q
       ? rows
       : rows.filter((r: any) => {
-        const text = [
-          r.pet_name,
-          r.pet_type,
-          r.breed,
-          r.color,
-          r.description,
-          r.found_city,
-          r.city,
-          r.state,
-          r.requester?.username,
-          r.reporter?.username,
-        ]
+        const text = (
+          tab === "volunteers"
+            ? [
+                r.full_name,
+                r.email,
+                r.city,
+                r.state,
+                r.skills,
+                r.experience_level,
+              ]
+            : [
+                r.pet_name,
+                r.pet_type,
+                r.breed,
+                r.color,
+                r.description,
+                r.found_city,
+                r.city,
+                r.state,
+                r.requester?.username,
+                r.reporter?.username,
+              ]
+        )
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
@@ -1331,7 +1407,7 @@ export default function AdminHome() {
     }
 
     return bySearch.filter((r: any) => r.status === statusFilter);
-  }, [tab, adoptionRequests, foundReports, lostReports, search, statusFilter]);
+  }, [tab, adoptionRequests, foundReports, lostReports, volunteerRequests, search, statusFilter]);
 
   async function handleChangeStatus(kind: TabKey, id: number, status: string) {
     setError(null);
@@ -1658,7 +1734,7 @@ export default function AdminHome() {
               Pet Reports Map
             </h3>
             <div style={{ height: 220 }}>
-              <MapPins />
+              <MapPins mapExpanded={mapExpanded} setMapExpanded={setMapExpanded} />
             </div>
           </div>
         </div>
@@ -1940,6 +2016,16 @@ export default function AdminHome() {
           >
             {[
               {
+                key: "total-pets" as const,
+                label: "Total Pets",
+                value:
+                  (summary?.lost_total ?? summary?.lost_today ?? 0) +
+                  (summary?.found_total ?? summary?.found_today ?? 0) +
+                  (Array.isArray(adoptionRequests)
+                    ? adoptionRequests.length
+                    : (summary?.adoption_total ?? 0)),
+              },
+              {
                 key: "total-users" as const,
                 label: "Total Users",
                 value: summary.total_users ?? 0,
@@ -1948,11 +2034,6 @@ export default function AdminHome() {
                 key: "update-requests" as const,
                 label: "Updation Requests",
                 value: summary.update_requests ?? 0,
-              },
-              {
-                key: "new-pets" as const,
-                label: "Newly Added Pets (This Week)",
-                value: summary.new_pets_this_week ?? 0,
               },
               {
                 key: "successful-adoptions" as const,
@@ -1972,11 +2053,10 @@ export default function AdminHome() {
                     setStatusFilter("updated");
                     navigate("/admin?tab=lost&status=updated", { replace: true });
                     reloadTable("lost", "all");
-                  } else if (item.key === "new-pets") {
-                    setTab("stats");
-                    setStatsView("recentPets");
-                    navigate("/admin?tab=stats&view=recentPets", { replace: true });
-                    loadRecentPets();
+                  } else if (item.key === "total-pets") {
+                    // Navigate to the Pets feature when Total Pets is clicked
+                    setTab("pets");
+                    navigate("/admin?tab=pets", { replace: true });
                   }
                 }}
                 style={{
@@ -1988,7 +2068,7 @@ export default function AdminHome() {
                   cursor:
                     item.key === "total-users" ||
                     item.key === "update-requests" ||
-                    item.key === "new-pets"
+                    item.key === "total-pets"
                       ? "pointer"
                       : "default",
                 }}
@@ -2247,7 +2327,7 @@ export default function AdminHome() {
           <div style={{ background: "white", borderRadius: 16, padding: "24px", border: "1px solid #f1f5f9", boxShadow: "0 4px 24px rgba(0, 0, 0, 0.06)" }}>
             <h3 style={{ fontSize: "18px", fontWeight: 700, color: "#1e293b", margin: 0 }}>Pet Reports Map</h3>
             <div style={{ height: 220, marginTop: 20 }}>
-              <MapPins />
+              <MapPins mapExpanded={mapExpanded} setMapExpanded={setMapExpanded} />
             </div>
           </div>
         </div>
@@ -2417,7 +2497,6 @@ export default function AdminHome() {
     const [points, setPoints] = useState<
       { lat: number; lon: number; kind: "lost" | "found" | "adoption"; location: string; count: number }[]
     >([]);
-    const [expanded, setExpanded] = useState(false);
     const CITY_COORDS: Record<string, [number, number]> = {
       chennai: [13.0827, 80.2707],
       bengaluru: [12.9716, 77.5946],
@@ -2455,43 +2534,26 @@ export default function AdminHome() {
     useEffect(() => {
       let cancelled = false;
       async function geocodeAll() {
-        const cacheKey = "geocodeCache";
-        const cache = JSON.parse(localStorage.getItem(cacheKey) || "{}");
         const next: { lat: number; lon: number; kind: "lost" | "found" | "adoption"; location: string; count: number }[] = [];
         const hotspots: any[] = summary?.hotspots ?? [];
         for (const h of hotspots) {
           const q = h.location as string;
           if (!q) continue;
-          let entry = cache[q];
-          if (!entry) {
-            try {
-              const controller = new AbortController();
-              const t = setTimeout(() => controller.abort(), 4000);
-              const resp = await fetch(
-                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}`,
-                { signal: controller.signal },
-              );
-              clearTimeout(t);
-              const data = await resp.json();
-              entry = data?.[0]
-                ? { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) }
-                : null;
-              if (!entry) {
-                const parts = q.split(",");
-                const cityKey = parts[0].trim().toLowerCase();
-                const stateKey = (parts[1] || "").trim().toLowerCase();
-                const cityHit = CITY_COORDS[cityKey];
-                const stateHit = STATE_COORDS[stateKey];
-                if (cityHit) entry = { lat: cityHit[0], lon: cityHit[1] };
-                else if (stateHit) entry = { lat: stateHit[0], lon: stateHit[1] };
-              }
-              cache[q] = entry;
-              localStorage.setItem(cacheKey, JSON.stringify(cache));
-            } catch {
-              entry = null;
-            }
-          }
+
+          // Only use our local city/state lookup tables; do not call external geocoding APIs.
+          const parts = q.split(",");
+          const cityKey = parts[0].trim().toLowerCase();
+          const stateKey = (parts[1] || "").trim().toLowerCase();
+          const cityHit = CITY_COORDS[cityKey];
+          const stateHit = STATE_COORDS[stateKey];
+          const entry = cityHit
+            ? { lat: cityHit[0], lon: cityHit[1] }
+            : stateHit
+              ? { lat: stateHit[0], lon: stateHit[1] }
+              : null;
+
           if (!entry) continue;
+
           const base = { lat: entry.lat, lon: entry.lon, location: q };
           const lost = Number(h.lost || 0);
           const found = Number(h.found || 0);
@@ -2511,7 +2573,7 @@ export default function AdminHome() {
     return (
       <div style={{ position: "relative" }}>
         <button
-          onClick={() => setExpanded(true)}
+          onClick={() => setMapExpanded(true)}
           style={{
             position: "absolute",
             right: 8,
@@ -2612,7 +2674,13 @@ export default function AdminHome() {
     );
   }
 
-  function MapPins() {
+  function MapPins({
+    mapExpanded,
+    setMapExpanded,
+  }: {
+    mapExpanded: boolean;
+    setMapExpanded: (value: boolean) => void;
+  }) {
     const navigate = useNavigate();
     const loc = useLocation();
     const [items, setItems] = useState<
@@ -2669,31 +2737,15 @@ export default function AdminHome() {
       const cityKey = (city || "").trim().toLowerCase();
       const stateKey = (state || "").trim().toLowerCase();
       const hit = CITY_COORDS[cityKey] || STATE_COORDS[stateKey];
-      if (hit) return { lat: hit[0], lon: hit[1] };
-      const q = [city, state].filter(Boolean).join(", ");
-      if (!q) return null;
-      const cacheKey = "geocodeCachePins";
-      const cache = JSON.parse(localStorage.getItem(cacheKey) || "{}");
-      if (cache[q]) return cache[q];
-      try {
-        const controller = new AbortController();
-        const t = setTimeout(() => controller.abort(), 4000);
-        const resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}`,{ signal: controller.signal });
-        clearTimeout(t);
-        const data = await resp.json();
-        const entry = data?.[0] ? { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) } : null;
-        cache[q] = entry;
-        localStorage.setItem(cacheKey, JSON.stringify(cache));
-        return entry;
-      } catch {
-        return null;
-      }
+      // Only use local lookup tables; skip external geocoding to avoid CORS issues.
+      if (!hit) return null;
+      return { lat: hit[0], lon: hit[1] };
     }
 
     useEffect(() => {
       const open = (loc.state as any)?.openMap;
-      if (open) setExpanded(true);
-    }, [loc.state]);
+      if (open) setMapExpanded(true);
+    }, [loc.state, setMapExpanded]);
 
     useEffect(() => {
       let cancelled = false;
@@ -2789,9 +2841,9 @@ export default function AdminHome() {
     }, []);
 
     function pinColor(kind: "lost" | "found" | "adoption") {
-      if (kind === "lost") return "#dc2626";
-      if (kind === "found") return "#3b82f6";
-      return "#8b5cf6";
+      if (kind === "lost") return "#dc2626"; // red
+      if (kind === "found") return "#2563eb"; // blue
+      return "#16a34a"; // green for adoption
     }
 
     function makeIcon(url: string | null | undefined, kind: "lost" | "found" | "adoption") {
@@ -2804,10 +2856,23 @@ export default function AdminHome() {
       return L.divIcon({ html, iconSize: [40, 40], className: "" });
     }
 
+    const [kindFilter, setKindFilter] = useState<"all" | "lost" | "found" | "adoption">("all");
+
+    // Only apply filters to the expanded map; when collapsed, always show all pets.
+    const filteredItems = kindFilter === "all" ? items : items.filter((it) => it.kind === kindFilter);
+
+    useEffect(() => {
+      // Whenever the map is collapsed, reset the filter so the small
+      // inline map always shows all pets without filter controls.
+      if (!mapExpanded) {
+        setKindFilter("all");
+      }
+    }, [mapExpanded]);
+
     const MapInner = ({ height }: { height: number }) => (
       <AnyMapContainer center={[20.5937, 78.9629]} zoom={5} style={{ height }}>
         <AnyTileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
-        {items.map((it) => (
+        {filteredItems.map((it) => (
           <AnyMarker key={`${it.kind}-${it.id}`} position={[it.lat, it.lon]} icon={makeIcon(it.photo, it.kind)}>
             <AnyPopup>
               <div style={{ width: 180 }}>
@@ -2834,20 +2899,95 @@ export default function AdminHome() {
     return (
       <div style={{ position: "relative" }}>
         <button
-          onClick={() => setExpanded(true)}
+          onClick={() => setMapExpanded(true)}
           style={{ position: "absolute", right: 8, top: 8, zIndex: 1000, padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#ffffff", color: "#0f172a", fontSize: 12, fontWeight: 600 }}
         >
           Expand
         </button>
+        {/* Small inline map: always shows all pets, no filters/legend */}
         <MapInner height={200} />
-        {expanded && (
+        {mapExpanded && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000 }}>
             <div style={{ width: "90vw", height: "80vh", background: "#ffffff", borderRadius: 12, padding: 12, boxShadow: "0 10px 30px rgba(0,0,0,0.2)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <div style={{ fontSize: 16, fontWeight: 700 }}>Pet Reports Map</div>
-                <button onClick={() => setExpanded(false)} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#ffffff", color: "#0f172a", fontSize: 12, fontWeight: 600 }}>Close</button>
+                <button onClick={() => setMapExpanded(false)} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#ffffff", color: "#0f172a", fontSize: 12, fontWeight: 600 }}>Close</button>
               </div>
-              <MapInner height={Math.floor((window.innerHeight * 0.8) - 48)} />
+              {/* Filters + legend for expanded map */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 8,
+                  gap: 12,
+                }}
+              >
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {["all", "lost", "found", "adoption"].map((k) => {
+                    const key = k as "all" | "lost" | "found" | "adoption";
+                    const label =
+                      key === "all"
+                        ? "All pets"
+                        : key === "lost"
+                          ? "Lost pets"
+                          : key === "found"
+                            ? "Found pets"
+                            : "Adopted pets";
+                    const active = kindFilter === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setKindFilter(key)}
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: 999,
+                          border: "1px solid #e5e7eb",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          background: active ? "#0f172a" : "#ffffff",
+                          color: active ? "#f9fafb" : "#0f172a",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 12,
+                    padding: "6px 10px",
+                    borderRadius: 999,
+                    background: "rgba(248,250,252,0.9)",
+                    border: "1px solid #e5e7eb",
+                    alignItems: "center",
+                    fontSize: 12,
+                  }}
+                >
+                  {["lost", "found", "adoption"].map((k) => {
+                    const label =
+                      k === "lost" ? "Lost" : k === "found" ? "Found" : "Adopted";
+                    return (
+                      <span key={k} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span
+                          style={{
+                            width: 10,
+                            height: 10,
+                            borderRadius: "50%",
+                            background: pinColor(k as "lost" | "found" | "adoption"),
+                          }}
+                        />
+                        <span>{label}</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+              <MapInner height={Math.floor((window.innerHeight * 0.8) - 48 - 40)} />
             </div>
           </div>
         )}
@@ -2875,27 +3015,34 @@ export default function AdminHome() {
           const isLost = tab === "lost";
           const isFound = tab === "found";
           const isAdoption = tab === "adoptions";
+          const isVolunteers = tab === "volunteers";
           const isPetsTab = tab === "pets";
-          const title = isLost
-            ? `${r.pet_name || r.pet_type || "Pet"}`
-            : isFound
-              ? `${r.pet_type || r.pet_name || "Pet"}`
-              : r.pet?.name || "Adoption Request";
-          const locationText = isLost
-            ? `${r.location || r.city || r.found_city || ""}${r.state ? ", " + r.state : ""}`
-            : isFound
-              ? `${r.found_city || r.city || ""}${r.state ? ", " + r.state : ""}`
-              : `${r.pet?.location_city || ""}${r.pet?.location_state ? ", " + r.pet?.location_state : ""}`;
+          const title = isVolunteers
+            ? r.full_name || "Volunteer"
+            : isLost
+              ? `${r.pet_name || r.pet_type || "Pet"}`
+              : isFound
+                ? `${r.pet_type || r.pet_name || "Pet"}`
+                : r.pet?.name || "Adoption Request";
+          const locationText = isVolunteers
+            ? `${r.city || ""}${r.state ? ", " + r.state : ""}`
+            : isLost
+              ? `${r.location || r.city || r.found_city || ""}${r.state ? ", " + r.state : ""}`
+              : isFound
+                ? `${r.found_city || r.city || ""}${r.state ? ", " + r.state : ""}`
+                : `${r.pet?.location_city || ""}${r.pet?.location_state ? ", " + r.pet?.location_state : ""}`;
 
           const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
           const origin = /^https?:/.test(apiBase)
             ? new URL(apiBase).origin
             : "http://localhost:8000";
-          const rawDetail = isLost
-            ? r.photo_url || r.photo
-            : isFound
+          const rawDetail = isVolunteers
+            ? (r.profile_photo || r.id_proof_document)
+            : isLost
               ? r.photo_url || r.photo
-              : r.pet?.photos;
+              : isFound
+                ? r.photo_url || r.photo
+                : r.pet?.photos;
           const detailSrc = (() => {
             if (!rawDetail) return null;
             const u = String(rawDetail);
@@ -2961,19 +3108,31 @@ export default function AdminHome() {
                     );
                   })()}
                 </div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                     <span
                       style={{
                         padding: "4px 10px",
                         borderRadius: 999,
-                        background: isLost ? "#fee2e2" : isFound ? "#dbeafe" : "#ede9fe",
-                        color: isLost ? "#b91c1c" : isFound ? "#1d4ed8" : "#6d28d9",
+                        background: isVolunteers
+                          ? "#f3e8ff"
+                          : isLost
+                            ? "#fee2e2"
+                            : isFound
+                              ? "#dbeafe"
+                              : "#ede9fe",
+                        color: isVolunteers
+                          ? "#6d28d9"
+                          : isLost
+                            ? "#b91c1c"
+                            : isFound
+                              ? "#1d4ed8"
+                              : "#6d28d9",
                         fontSize: 12,
                         fontWeight: 700,
                       }}
                     >
-                      {isLost ? "LOST" : isFound ? "FOUND" : "ADOPTION"}
+                      {isVolunteers ? "VOLUNTEER" : isLost ? "LOST" : isFound ? "FOUND" : "ADOPTION"}
                     </span>
                     <span
                       style={{
@@ -2990,27 +3149,51 @@ export default function AdminHome() {
                     </span>
                   </div>
                   <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>{title}</div>
-                  <div style={{ fontSize: 13, color: "#374151", marginTop: 4 }}>
-                    {isLost ? `Breed: ${r.breed || "—"}` : isFound ? `Breed: ${r.breed || "—"}` : `${r.pet?.species || "Pet"} • ${r.pet?.breed || "—"}`}
-                  </div>
-                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {r.description || r.pet?.description || ""}
-                  </div>
+                  {!isVolunteers && (
+                    <>
+                      <div style={{ fontSize: 13, color: "#374151", marginTop: 4 }}>
+                        {isLost ? `Breed: ${r.breed || "—"}` : isFound ? `Breed: ${r.breed || "—"}` : `${r.pet?.species || "Pet"} • ${r.pet?.breed || "—"}`}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#64748b", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {r.description || r.pet?.description || ""}
+                      </div>
+                    </>
+                  )}
+                  {isVolunteers && (
+                    <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+                      {r.skills || r.volunteering_preferences || ""}
+                    </div>
+                  )}
                 </div>
                 <div>
-                  <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600 }}>Last Seen Location:</div>
+                  <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600 }}>
+                    {isVolunteers ? "Location:" : "Last Seen Location:"}
+                  </div>
                   <div style={{ fontSize: 13, color: "#374151" }}>{locationText || "—"}</div>
-                  <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600, marginTop: 8 }}>Reported by:</div>
-                  <div style={{ fontSize: 13, color: "#374151" }}>{r.reporter?.username || r.requester?.username || "—"}</div>
-                  <div style={{ fontSize: 12, color: "#64748b" }}>{r.reporter?.email || r.requester?.email || ""}</div>
+                  <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600, marginTop: 8 }}>
+                    {isVolunteers ? "Submitted by:" : "Reported by:"}
+                  </div>
+                  <div style={{ fontSize: 13, color: "#374151" }}>
+                    {isVolunteers
+                      ? r.user?.username || "—"
+                      : r.reporter?.username || r.requester?.username || "—"}
+                  </div>
+                  <div style={{ fontSize: 12, color: "#64748b" }}>
+                    {isVolunteers
+                      ? r.user?.email || r.email || ""
+                      : r.reporter?.email || r.requester?.email || ""}
+                  </div>
                 </div>
-                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
-                  <button
-                    onClick={() => {
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
+                    <button
+                      onClick={() => {
+                      
                       if (isPetsTab && r.pet?.id) {
                         navigate(`/pets/${r.pet.id}`);
                       } else if (isLost) {
                         navigate(`/admin/lost/${r.id}`);
+                      } else if (isVolunteers) {
+                        navigate(`/admin/volunteers/${r.id}`);
                       } else {
                         setExpandedId((prev) => (prev === r.id ? null : r.id));
                       }
@@ -3027,51 +3210,38 @@ export default function AdminHome() {
                   >
                     View
                   </button>
-                  {/* Show action buttons only when status is pending; otherwise show status on the right */}
-                  {r.status === "pending" ? (
-                    <>
+                  {/* On the main pending approvals list, only show the status badge here.
+                      Accept/Reject actions are now handled inside the detailed view pages. */}
+                  <div
+                    style={{ display: "flex", gap: 8, alignItems: "center" }}
+                  >
+                    {renderStatusBadge(r.status)}
+                    {isVolunteers && (
                       <button
-                        onClick={() => {
-                          if (isAdoption) handleAdoptionStatusChange(r.id, "approved");
-                          else handleChangeStatus(isFound ? "found" : "lost", r.id, "approved");
+                        onClick={async () => {
+                          const ok = window.confirm("Delete this volunteer request?");
+                          if (!ok) return;
+                          const res = await deleteAdminVolunteerRequest(r.id);
+                          if (res.ok)
+                            setVolunteerRequests((prev) =>
+                              prev.filter((v: any) => v.id !== r.id),
+                            );
                         }}
                         style={{
-                          padding: "8px 12px",
-                          borderRadius: 999,
-                          border: "1px solid #10b981",
-                          background: "#10b981",
-                          color: "white",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Accept
-                      </button>
-                      <button
-                        onClick={() => {
-                          const reason = window.prompt("Reason", "");
-                          if (isAdoption) handleAdoptionStatusChange(r.id, "rejected", reason || undefined);
-                          else {
-                            handleChangeStatus(isFound ? "found" : "lost", r.id, "rejected");
-                            if (reason) handleEditNotes(isFound ? "found" : "lost", r.id);
-                          }
-                        }}
-                        style={{
-                          padding: "8px 12px",
+                          padding: "6px 10px",
                           borderRadius: 999,
                           border: "1px solid #ef4444",
-                          background: "#ef4444",
-                          color: "white",
-                          fontWeight: 700,
+                          background: "#ffffff",
+                          color: "#b91c1c",
+                          fontSize: 11,
+                          fontWeight: 600,
                           cursor: "pointer",
                         }}
                       >
-                        Reject
+                        Delete
                       </button>
-                    </>
-                  ) : (
-                    <div>{renderStatusBadge(r.status)}</div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -3136,13 +3306,14 @@ export default function AdminHome() {
                         gap: 12,
                       }}
                     >
-                      <div
+                      {!isVolunteers && (
+                        <div
                         style={{
                           display: "grid",
                           gridTemplateColumns: "1fr 1fr",
                           gap: 16,
                         }}
-                      >
+                        >
                         <div>
                           <div
                             style={{
@@ -3278,6 +3449,7 @@ export default function AdminHome() {
                           </div>
                         </div>
                       </div>
+                      )}
 
                       <div style={{ marginTop: 8 }}>
                         <div
@@ -3288,7 +3460,7 @@ export default function AdminHome() {
                             marginBottom: 4,
                           }}
                         >
-                          Description
+                          {isVolunteers ? "Motivation" : "Description"}
                         </div>
                         <div
                           style={{
@@ -3297,7 +3469,7 @@ export default function AdminHome() {
                             whiteSpace: "pre-wrap",
                           }}
                         >
-                          {r.description || r.pet?.description || "No details provided."}
+                          {isVolunteers ? r.motivation || "No details provided." : r.description || r.pet?.description || "No details provided."}
                         </div>
                       </div>
 
@@ -3565,6 +3737,33 @@ export default function AdminHome() {
 
             <button
               onClick={() => {
+                setTab("volunteers");
+                navigate("/admin?tab=volunteers", { replace: true });
+                reloadTable("volunteers", statusFilter);
+              }}
+              style={{
+                width: "100%",
+                padding: "12px 16px",
+                borderRadius: "12px",
+                border: "none",
+                background:
+                  tab === "volunteers"
+                    ? "rgba(109, 40, 217, 0.12)"
+                    : "transparent",
+                color: tab === "volunteers" ? "#6d28d9" : "#64748b",
+                fontSize: "14px",
+                fontWeight: "600",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                marginBottom: "8px",
+              }}
+            >
+              <span>🙋‍♀️</span> Volunteers
+            </button>
+            <button
+              onClick={() => {
                 setTab("stats");
                 navigate("/admin?tab=stats", { replace: true });
               }}
@@ -3625,7 +3824,9 @@ export default function AdminHome() {
                           ? "All Pets"
                           : tab === "users"
                             ? "Users"
-                            : "Statistics"}
+                            : tab === "volunteers"
+                              ? "Volunteers"
+                              : "Statistics"}
               </span>
             </div>
             <div
@@ -4065,7 +4266,9 @@ export default function AdminHome() {
                   placeholder={
                     tab === "adoptions"
                       ? "Search by pet, requester, or notes"
-                      : "Search by species, breed, or description"
+                      : tab === "volunteers"
+                        ? "Search by name, city, state, or skills"
+                        : "Search by species, breed, or description"
                   }
                   style={{
                     width: "100%",
@@ -4080,7 +4283,7 @@ export default function AdminHome() {
                 />
                 <div style={{ display: "flex", gap: 8 }}>
                   {(
-                    tab === "adoptions"
+                    tab === "adoptions" || tab === "volunteers"
                       ? ["all", "pending", "approved", "rejected"]
                       : [
                           "all",
@@ -4412,36 +4615,37 @@ export default function AdminHome() {
                                   } else if (isLost) {
                                     navigate(`/admin/lost/${r.id}`);
                                   }
-                                }}
-                                style={{
-                                  padding: "8px 12px",
-                                  borderRadius: 999,
-                                  border: "1px solid #e5e7eb",
-                                  background: "#ffffff",
-                                  color: "#0f172a",
-                                  fontSize: 12,
-                                  fontWeight: 600,
-                                  cursor: "pointer",
-                                }}
-                              >
-                                View details
-                              </button>
-                              <button
-                                onClick={() => handleDeletePet(r)}
-                                style={{
-                                  padding: "8px 12px",
-                                  borderRadius: 999,
-                                  border: "1px solid #ef4444",
-                                  background: "#ffffff",
-                                  color: "#b91c1c",
-                                  fontSize: 12,
-                                  fontWeight: 600,
-                                  cursor: "pointer",
-                                }}
-                              >
-                                Delete
-                              </button>
-                            </div>
+                      }}
+                      style={{
+                        padding: "8px 12px",
+                        borderRadius: 999,
+                        border: "1px solid #e5e7eb",
+                        background: "#ffffff",
+                        color: "#0f172a",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      View details
+                    </button>
+                    
+                    <button
+                      onClick={() => handleDeletePet(r)}
+                      style={{
+                        padding: "8px 12px",
+                        borderRadius: 999,
+                        border: "1px solid #ef4444",
+                        background: "#ffffff",
+                        color: "#b91c1c",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
                           </div>
                         </div>
                       );
@@ -4452,7 +4656,7 @@ export default function AdminHome() {
             </div>
           )}
 
-          {(tab === "lost" || tab === "found" || tab === "adoptions") &&
+          {(tab === "lost" || tab === "found" || tab === "adoptions" || tab === "volunteers") &&
             renderCards()}
         </div>
       </div>

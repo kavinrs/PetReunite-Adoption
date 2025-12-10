@@ -126,6 +126,7 @@ class FoundPetReportDetailView(generics.RetrieveUpdateAPIView):
                     "estimated_age": instance.estimated_age,
                     "found_city": instance.found_city,
                     "state": instance.state,
+                    "location_url": instance.location_url,
                     "description": instance.description,
                 }
             instance.has_user_update = True

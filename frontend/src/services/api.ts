@@ -388,7 +388,7 @@ export async function fetchAdminLostReports(
 
 export async function updateAdminFoundReport(
   id: number,
-  payload: { status?: string; admin_notes?: string },
+  payload: any,
 ): Promise<ApiResult> {
   const url = `${PETS_BASE}/admin/reports/found/${id}/`;
   const resp = await fetchWithAuth(url, {
@@ -424,7 +424,7 @@ export async function deleteAdminLostReport(id: number): Promise<ApiResult> {
 
 export async function updateAdminLostReport(
   id: number,
-  payload: { status?: string; admin_notes?: string },
+  payload: any,
 ): Promise<ApiResult> {
   const url = `${PETS_BASE}/admin/reports/lost/${id}/`;
   const resp = await fetchWithAuth(url, {
@@ -441,11 +441,14 @@ export async function reportFoundPet(payload: {
   pet_type: string;
   breed?: string;
   color?: string;
+  weight?: string;
   estimated_age?: string;
   found_city: string;
   state: string;
+  pincode?: string;
   description: string;
   location_url?: string;
+  found_time?: string;
   photo?: File | null;
 }): Promise<ApiResult> {
   const url = `${PETS_BASE}/reports/found/`;
@@ -453,11 +456,14 @@ export async function reportFoundPet(payload: {
   formData.append("pet_type", payload.pet_type);
   formData.append("found_city", payload.found_city);
   formData.append("state", payload.state);
+  if (payload.pincode) formData.append("pincode", payload.pincode);
   formData.append("description", payload.description);
   if (payload.location_url)
     formData.append("location_url", payload.location_url);
+  if (payload.found_time) formData.append("found_time", payload.found_time);
   if (payload.breed) formData.append("breed", payload.breed);
   if (payload.color) formData.append("color", payload.color);
+  if (payload.weight) formData.append("weight", payload.weight);
   if (payload.estimated_age)
     formData.append("estimated_age", payload.estimated_age);
   if (payload.photo) formData.append("photo", payload.photo);
@@ -489,6 +495,7 @@ export async function updateMyLostReport(
     pincode: string;
     description: string;
     location_url: string;
+    lost_time: string;
   }>,
 ): Promise<ApiResult> {
   const url = `${PETS_BASE}/reports/lost/${id}/`;
@@ -508,11 +515,14 @@ export async function updateMyFoundReport(
     pet_type: string;
     breed: string;
     color: string;
+    weight: string;
     estimated_age: string;
     found_city: string;
     state: string;
+    pincode: string;
     description: string;
     location_url: string;
+    found_time: string;
   }>,
 ): Promise<ApiResult> {
   const url = `${PETS_BASE}/reports/found/${id}/`;
@@ -628,6 +638,15 @@ export async function updateAdminVolunteerRequest(id: number, payload: {
   return { ok: false, status: resp.status, error: message, data };
 }
 
+export async function deleteAdminVolunteerRequest(id: number): Promise<ApiResult> {
+  const url = `${USERS_BASE}/admin/volunteers/${id}/`;
+  const resp = await fetchWithAuth(url, { method: "DELETE" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok || resp.status === 204) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to delete volunteer";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
 export async function fetchAdminVolunteerDetail(id: number): Promise<ApiResult> {
   const url = `${USERS_BASE}/admin/volunteers/${id}/`;
   const resp = await fetchWithAuth(url, { method: "GET" });
@@ -698,6 +717,7 @@ export async function reportLostPet(payload: {
   pincode?: string;
   description: string;
   location_url?: string;
+  lost_time?: string;
   photo?: File | null;
 }): Promise<ApiResult> {
   const url = `${PETS_BASE}/reports/lost/`;
@@ -715,6 +735,7 @@ export async function reportLostPet(payload: {
   formData.append("description", payload.description);
   if (payload.location_url)
     formData.append("location_url", payload.location_url);
+  if (payload.lost_time) formData.append("lost_time", payload.lost_time);
   if (payload.photo) formData.append("photo", payload.photo);
 
   const resp = await fetchWithAuth(url, {

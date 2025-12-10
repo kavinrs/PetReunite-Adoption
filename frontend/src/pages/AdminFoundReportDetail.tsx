@@ -291,6 +291,11 @@ export default function AdminFoundReportDetail() {
                   <strong>Reported on:</strong> {new Date(report.created_at).toLocaleString()}
                 </div>
               )}
+              {report.found_time && (
+                <div>
+                  <strong>Found time:</strong> {new Date(report.found_time).toLocaleString()}
+                </div>
+              )}
             </div>
           </div>
 
@@ -396,17 +401,15 @@ export default function AdminFoundReportDetail() {
                         }}
                       >
                         {([
-                          ["pet_name", "Pet Name"],
                           ["pet_type", "Pet Type"],
                           ["breed", "Breed"],
                           ["color", "Color"],
                           ["weight", "Weight"],
-                          ["vaccinated", "Vaccinated"],
-                          ["age", "Age (years)"],
+                          ["estimated_age", "Estimated Age"],
                           ["found_city", "Found City"],
-                          ["city", "Reporter City"],
                           ["state", "State"],
                           ["pincode", "Pincode"],
+                          ["location_url", "Location URL"],
                         ] as const).map(([key, label]) => (
                           <div key={key}>
                             <div
@@ -418,15 +421,28 @@ export default function AdminFoundReportDetail() {
                             >
                               {label}
                             </div>
-                            <div
-                              style={{
-                                fontSize: 15,
-                                fontWeight: 600,
-                                color: "#111827",
-                              }}
-                            >
-                              {source[key] || <span style={{ color: "#9ca3af" }}>—</span>}
-                            </div>
+                            {key === "location_url" && source[key] ? (
+                              <a
+                                href={String(source[key]).startsWith("http")
+                                  ? String(source[key])
+                                  : `https://www.google.com/maps?q=${encodeURIComponent(String(source[key]))}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{ fontSize: 13, fontWeight: 700, color: "#2563eb" }}
+                              >
+                                Open in Google Maps
+                              </a>
+                            ) : (
+                              <div
+                                style={{
+                                  fontSize: 15,
+                                  fontWeight: 600,
+                                  color: "#111827",
+                                }}
+                              >
+                                {source[key] || <span style={{ color: "#9ca3af" }}>—</span>}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -460,30 +476,47 @@ export default function AdminFoundReportDetail() {
                   }}
                 >
                   {([
-                    ["pet_name", "Pet Name"],
                     ["pet_type", "Pet Type"],
                     ["breed", "Breed"],
                     ["color", "Color"],
                     ["weight", "Weight"],
-                    ["vaccinated", "Vaccinated"],
-                    ["age", "Age (years)"],
+                    ["estimated_age", "Estimated Age"],
                     ["found_city", "Found City"],
-                    ["city", "Reporter City"],
                     ["state", "State"],
                     ["pincode", "Pincode"],
+                    ["location_url", "Location URL"],
                   ] as const).map(([key, label]) => (
                     <div key={key}>
-                      <div
-                        style={{ fontSize: 13, color: "#6b7280", marginBottom: 4 }}
-                      >
-                        {label}
+                        <div
+                          style={{ fontSize: 13, color: "#6b7280", marginBottom: 4 }}
+                        >
+                          {label}
+                        </div>
+                        {key === "location_url" && report[key] ? (
+                          <a
+                            href={String(report[key]).startsWith("http")
+                              ? String(report[key])
+                              : `https://www.google.com/maps?q=${encodeURIComponent(String(report[key]))}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{ fontSize: 13, fontWeight: 700, color: "#2563eb" }}
+                          >
+                            Open in Google Maps
+                          </a>
+                        ) : (
+                          <div
+                            style={{
+                              fontSize: 15,
+                              fontWeight: 600,
+                              color: "#111827",
+                            }}
+                          >
+                            {report[key] || (
+                              <span style={{ color: "#9ca3af" }}>—</span>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div
-                        style={{ fontSize: 15, fontWeight: 600, color: "#111827" }}
-                      >
-                        {report[key] || <span style={{ color: "#9ca3af" }}>—</span>}
-                      </div>
-                    </div>
                   ))}
                 </div>
 
@@ -501,6 +534,69 @@ export default function AdminFoundReportDetail() {
                 </div>
               </>
             )}
+
+            {/* Status actions inside detail view */}
+            <div
+              style={{
+                marginTop: 16,
+                display: "flex",
+                gap: 8,
+                justifyContent: "flex-end",
+              }}
+            >
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!report || report.status === "approved") return;
+                  setError(null);
+                  const res = await updateAdminFoundReport(report.id, { status: "approved" } as any);
+                  if (!res.ok) {
+                    if (res.error) setError(res.error);
+                  } else {
+                    setReport(res.data);
+                  }
+                }}
+                style={{
+                  padding: "10px 24px",
+                  borderRadius: 999,
+                  border: "none",
+                  background: "#16a34a",
+                  color: "white",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  cursor: report?.status === "approved" ? "not-allowed" : "pointer",
+                  opacity: report?.status === "approved" ? 0.7 : 1,
+                }}
+              >
+                ✓ Accept
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!report || report.status === "rejected") return;
+                  setError(null);
+                  const res = await updateAdminFoundReport(report.id, { status: "rejected" } as any);
+                  if (!res.ok) {
+                    if (res.error) setError(res.error);
+                  } else {
+                    setReport(res.data);
+                  }
+                }}
+                style={{
+                  padding: "10px 24px",
+                  borderRadius: 999,
+                  border: "1px solid #dc2626",
+                  background: "white",
+                  color: "#dc2626",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  cursor: report?.status === "rejected" ? "not-allowed" : "pointer",
+                  opacity: report?.status === "rejected" ? 0.7 : 1,
+                }}
+              >
+                ✕ Reject
+              </button>
+            </div>
           </div>
           {error && (
             <div style={{ fontSize: 12, color: "#b91c1c" }}>{error}</div>

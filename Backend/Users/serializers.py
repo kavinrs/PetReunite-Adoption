@@ -129,12 +129,14 @@ class VolunteerRequestCreateSerializer(serializers.ModelSerializer):
 
 class VolunteerRequestListSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
+    profile_photo = serializers.ImageField(source="user.profile.profile_photo", read_only=True)
 
     class Meta:
         model = VolunteerRequest
         fields = (
             "id",
             "user",
+            "profile_photo",
             "full_name",
             "phone_number",
             "email",
@@ -150,12 +152,14 @@ class VolunteerRequestListSerializer(serializers.ModelSerializer):
 
 class AdminVolunteerRequestSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
+    profile_photo = serializers.ImageField(source="user.profile.profile_photo", read_only=True)
 
     class Meta:
         model = VolunteerRequest
         fields = (
             "id",
             "user",
+            "profile_photo",
             "full_name",
             "date_of_birth",
             "phone_number",

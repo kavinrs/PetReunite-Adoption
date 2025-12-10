@@ -23,9 +23,13 @@ class FoundPetReport(models.Model):
     pet_type = models.CharField(max_length=100)
     breed = models.CharField(max_length=120, blank=True)
     color = models.CharField(max_length=80, blank=True)
+    weight = models.CharField(max_length=50, blank=True)
     estimated_age = models.CharField(max_length=60, blank=True)
     found_city = models.CharField(max_length=100)
     state = models.CharField(max_length=100)
+    pincode = models.CharField(max_length=10, blank=True)
+    location_url = models.URLField(max_length=500, blank=True)
+    found_time = models.DateTimeField(null=True, blank=True)
     description = models.TextField()
     photo = models.ImageField(
         upload_to="found_pets/%Y/%m/%d/",
@@ -60,6 +64,8 @@ class LostPetReport(models.Model):
     city = models.CharField(max_length=100)
     state = models.CharField(max_length=100)
     pincode = models.CharField(max_length=10, blank=True)
+    location_url = models.URLField(max_length=500, blank=True)
+    lost_time = models.DateTimeField(null=True, blank=True)
     description = models.TextField()
     photo = models.ImageField(
         upload_to="lost_pets/%Y/%m/%d/",

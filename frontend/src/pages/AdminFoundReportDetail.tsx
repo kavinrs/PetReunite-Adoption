@@ -37,9 +37,18 @@ export default function AdminFoundReportDetail() {
   }, [id]);
 
   const handleBack = () => {
-    const fromMap = (location.state as any)?.from === "admin-map";
-    if (fromMap) navigate("/admin?tab=stats", { state: { openMap: true } });
-    else navigate("/admin/pending-approvals");
+    const from = (location.state as any)?.from;
+    if (from === "admin-map") {
+      navigate("/admin?tab=stats", { state: { openMap: true } });
+    } else if (from === "admin-found") {
+      navigate("/admin?tab=found", { replace: true });
+    } else if (from === "pending-approvals") {
+      navigate("/admin/pending-approvals");
+    } else if (from === "pets") {
+      navigate("/admin?tab=pets", { replace: true });
+    } else {
+      navigate("/admin/pending-approvals");
+    }
   };
 
   const handleAcceptUpdate = async () => {
@@ -101,6 +110,18 @@ export default function AdminFoundReportDetail() {
     }
   };
 
+  const from = (location.state as any)?.from;
+  const backLabel =
+    from === "admin-map"
+      ? "Back To Map"
+      : from === "admin-found"
+        ? "Back to Found Pet Reports"
+        : from === "pets"
+          ? "Back to Pets"
+          : from === "pending-approvals"
+            ? "Back to Pending Approvals"
+            : "Back";
+
   if (loading) return <div style={{ padding: 32 }}>Loading report...</div>;
   if (error)
     return (
@@ -117,7 +138,7 @@ export default function AdminFoundReportDetail() {
             cursor: "pointer",
           }}
         >
-          {(location.state as any)?.from === "admin-map" ? "← Back To Map" : "〉 Back to approvals"}
+          {backLabel}
         </button>
         <div>{error}</div>
       </div>
@@ -159,7 +180,7 @@ export default function AdminFoundReportDetail() {
           cursor: "pointer",
         }}
       >
-        ← Back To Map
+        {backLabel}
       </button>
 
       <div
@@ -535,68 +556,70 @@ export default function AdminFoundReportDetail() {
               </>
             )}
 
-            {/* Status actions inside detail view */}
-            <div
-              style={{
-                marginTop: 16,
-                display: "flex",
-                gap: 8,
-                justifyContent: "flex-end",
-              }}
-            >
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!report || report.status === "approved") return;
-                  setError(null);
-                  const res = await updateAdminFoundReport(report.id, { status: "approved" } as any);
-                  if (!res.ok) {
-                    if (res.error) setError(res.error);
-                  } else {
-                    setReport(res.data);
-                  }
-                }}
+            {/* Status actions inside detail view - only when opened from Pending Approvals */}
+            {location.state.from === "pending-approvals" && (
+              <div
                 style={{
-                  padding: "10px 24px",
-                  borderRadius: 999,
-                  border: "none",
-                  background: "#16a34a",
-                  color: "white",
-                  fontSize: 14,
-                  fontWeight: 700,
-                  cursor: report?.status === "approved" ? "not-allowed" : "pointer",
-                  opacity: report?.status === "approved" ? 0.7 : 1,
+                  marginTop: 16,
+                  display: "flex",
+                  gap: 8,
+                  justifyContent: "flex-end",
                 }}
               >
-                ✓ Accept
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!report || report.status === "rejected") return;
-                  setError(null);
-                  const res = await updateAdminFoundReport(report.id, { status: "rejected" } as any);
-                  if (!res.ok) {
-                    if (res.error) setError(res.error);
-                  } else {
-                    setReport(res.data);
-                  }
-                }}
-                style={{
-                  padding: "10px 24px",
-                  borderRadius: 999,
-                  border: "1px solid #dc2626",
-                  background: "white",
-                  color: "#dc2626",
-                  fontSize: 14,
-                  fontWeight: 700,
-                  cursor: report?.status === "rejected" ? "not-allowed" : "pointer",
-                  opacity: report?.status === "rejected" ? 0.7 : 1,
-                }}
-              >
-                ✕ Reject
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!report || report.status === "approved") return;
+                    setError(null);
+                    const res = await updateAdminFoundReport(report.id, { status: "approved" } as any);
+                    if (!res.ok) {
+                      if (res.error) setError(res.error);
+                    } else {
+                      setReport(res.data);
+                    }
+                  }}
+                  style={{
+                    padding: "10px 24px",
+                    borderRadius: 999,
+                    border: "none",
+                    background: "#16a34a",
+                    color: "white",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: report?.status === "approved" ? "not-allowed" : "pointer",
+                    opacity: report?.status === "approved" ? 0.7 : 1,
+                  }}
+                >
+                  Accept
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!report || report.status === "rejected") return;
+                    setError(null);
+                    const res = await updateAdminFoundReport(report.id, { status: "rejected" } as any);
+                    if (!res.ok) {
+                      if (res.error) setError(res.error);
+                    } else {
+                      setReport(res.data);
+                    }
+                  }}
+                  style={{
+                    padding: "10px 24px",
+                    borderRadius: 999,
+                    border: "1px solid #dc2626",
+                    background: "white",
+                    color: "#dc2626",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: report?.status === "rejected" ? "not-allowed" : "pointer",
+                    opacity: report?.status === "rejected" ? 0.7 : 1,
+                  }}
+                >
+                  Reject
+                </button>
+              </div>
+            )}
           </div>
           {error && (
             <div style={{ fontSize: 12, color: "#b91c1c" }}>{error}</div>

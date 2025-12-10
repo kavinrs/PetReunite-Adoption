@@ -1307,9 +1307,15 @@ export default function AdminHome() {
                         <button
                           onClick={() => {
                             if ((r as any).pet?.id) {
-                              navigate(`/pets/${(r as any).pet.id}`);
+                              // From the Pets tab, viewing an adoption pet
+                              navigate(`/pets/${(r as any).pet.id}`, {
+                                state: { from: "pets" },
+                              });
                             } else if (isLost) {
-                              navigate(`/admin/lost/${r.id}`);
+                              // From the Pets tab, viewing a lost report
+                              navigate(`/admin/lost/${r.id}`, {
+                                state: { from: "pets" },
+                              });
                             }
                           }}
                           style={{
@@ -3187,11 +3193,10 @@ export default function AdminHome() {
                   <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
                     <button
                       onClick={() => {
-                      
                       if (isPetsTab && r.pet?.id) {
                         navigate(`/pets/${r.pet.id}`);
                       } else if (isLost) {
-                        navigate(`/admin/lost/${r.id}`);
+                        navigate(`/admin/lost/${r.id}`, { state: { from: "admin-lost" } });
                       } else if (isVolunteers) {
                         navigate(`/admin/volunteers/${r.id}`);
                       } else {
@@ -4611,11 +4616,15 @@ export default function AdminHome() {
                               <button
                                 onClick={() => {
                                   if ((r as any).pet?.id) {
-                                    navigate(`/pets/${(r as any).pet.id}`);
+                                    navigate(`/pets/${(r as any).pet.id}`, {
+                                      state: { from: "pets" },
+                                    });
                                   } else if (isLost) {
-                                    navigate(`/admin/lost/${r.id}`);
+                                    navigate(`/admin/lost/${r.id}`, {
+                                      state: { from: "pets" },
+                                    });
                                   }
-                      }}
+                                }}
                       style={{
                         padding: "8px 12px",
                         borderRadius: 999,

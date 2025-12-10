@@ -705,8 +705,14 @@ export default function PendingApprovals() {
                         variant="outlined"
                         size="small"
                         onClick={() => {
-                          if (r.kind === "lost") navigate(`/admin/lost/${r.id}`);
-                          else navigate(`/admin/found/${r.id}`);
+                          if (r.kind === "lost")
+                            navigate(`/admin/lost/${r.id}`, {
+                              state: { from: "pending-approvals" },
+                            });
+                          else
+                            navigate(`/admin/found/${r.id}`, {
+                              state: { from: "pending-approvals" },
+                            });
                         }}
                         sx={{ textTransform: "none", borderRadius: 999 }}
                       >

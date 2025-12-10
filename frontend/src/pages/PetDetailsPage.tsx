@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
 
 interface Pet {
@@ -39,6 +39,7 @@ export default function PetDetailsPage() {
 
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [pet, setPet] = useState<Pet | null>(null);
   const [loading, setLoading] = useState(true);
@@ -195,7 +196,11 @@ export default function PetDetailsPage() {
         >
           <div style={{ color: "#ef4444", marginBottom: "16px" }}>{error}</div>
           <button
-            onClick={() => navigate("/user")}
+            onClick={() => {
+              const fromMap = (location.state as any)?.from === "admin-map";
+              if (fromMap) navigate("/admin?tab=stats", { state: { openMap: true } });
+              else navigate("/user");
+            }}
             style={{
               background: "linear-gradient(135deg, #ff8a00, #ff2fab)",
               color: "white",
@@ -206,7 +211,7 @@ export default function PetDetailsPage() {
               fontWeight: "600",
             }}
           >
-            Back to Dashboard
+            {(location.state as any)?.from === "admin-map" ? "Back" : "Back to Dashboard"}
           </button>
         </div>
       </div>
@@ -295,7 +300,11 @@ export default function PetDetailsPage() {
               View My Requests
             </button>
             <button
-              onClick={() => navigate("/user")}
+              onClick={() => {
+                const fromMap = (location.state as any)?.from === "admin-map";
+                if (fromMap) navigate("/admin?tab=stats", { state: { openMap: true } });
+                else navigate("/user");
+              }}
               style={{
                 background: "transparent",
                 color: "#6b7280",
@@ -343,7 +352,11 @@ export default function PetDetailsPage() {
           }}
         >
           <button
-            onClick={() => navigate("/user")}
+            onClick={() => {
+              const fromMap = (location.state as any)?.from === "admin-map";
+              if (fromMap) navigate("/admin?tab=stats", { state: { openMap: true } });
+              else navigate("/user");
+            }}
             style={{
               background: "transparent",
               border: "none",

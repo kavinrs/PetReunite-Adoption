@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
 import { fetchAdminFoundReports, updateAdminFoundReport } from "../services/api";
 
@@ -7,6 +7,7 @@ export default function AdminFoundReportDetail() {
   useViewportStandardization();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [report, setReport] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,7 +37,9 @@ export default function AdminFoundReportDetail() {
   }, [id]);
 
   const handleBack = () => {
-    navigate("/admin/pending-approvals");
+    const fromMap = (location.state as any)?.from === "admin-map";
+    if (fromMap) navigate("/admin?tab=stats", { state: { openMap: true } });
+    else navigate("/admin/pending-approvals");
   };
 
   const handleAcceptUpdate = async () => {
@@ -114,7 +117,7 @@ export default function AdminFoundReportDetail() {
             cursor: "pointer",
           }}
         >
-          〉 Back to approvals
+          {(location.state as any)?.from === "admin-map" ? "← Back To Map" : "〉 Back to approvals"}
         </button>
         <div>{error}</div>
       </div>
@@ -156,7 +159,7 @@ export default function AdminFoundReportDetail() {
           cursor: "pointer",
         }}
       >
-        〉 Back to approvals
+        ← Back To Map
       </button>
 
       <div

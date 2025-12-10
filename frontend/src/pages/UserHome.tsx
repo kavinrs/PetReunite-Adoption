@@ -455,6 +455,11 @@ export default function UserHome() {
       onClick: () => navigate("/user/report-found"),
     },
     {
+      label: "Volunteer",
+      icon: "🤝",
+      onClick: () => navigate("/user/volunteer"),
+    },
+    {
       label: "My Activity",
       icon: "📜",
       onClick: () => setPageTab("activity"),

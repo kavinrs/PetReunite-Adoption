@@ -7,6 +7,7 @@ export type ApiResult = {
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
+const USERS_BASE = `${API_BASE}`;
 
 async function parseJSONSafe(resp: Response) {
   try {
@@ -543,6 +544,96 @@ export async function fetchMyActivity(): Promise<ApiResult> {
   const data = await parseJSONSafe(resp);
   if (resp.ok) return { ok: true, status: resp.status, data };
   const message = extractErrorMessage(data) ?? "Failed to load activity";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+// ===== Volunteers API =====
+export async function createVolunteerRequest(payload: {
+  full_name: string;
+  date_of_birth?: string;
+  phone_number: string;
+  email: string;
+  city: string;
+  state?: string;
+  pincode: string;
+  volunteering_preferences?: string;
+  availability?: string;
+  skills?: string;
+  experience_level: "beginner" | "moderate" | "experienced" | "professional";
+  id_proof_type?: string;
+  id_proof_document?: File | null;
+  motivation?: string;
+}): Promise<ApiResult> {
+  const url = `${USERS_BASE}/volunteers/`;
+  const fd = new FormData();
+  fd.append("full_name", payload.full_name);
+  fd.append("phone_number", payload.phone_number);
+  fd.append("email", payload.email);
+  fd.append("city", payload.city);
+  if (payload.state) fd.append("state", payload.state);
+  fd.append("pincode", payload.pincode);
+  fd.append("experience_level", payload.experience_level);
+  if (payload.date_of_birth) fd.append("date_of_birth", payload.date_of_birth);
+  if (payload.volunteering_preferences) fd.append("volunteering_preferences", payload.volunteering_preferences);
+  if (payload.availability) fd.append("availability", payload.availability);
+  if (payload.skills) fd.append("skills", payload.skills);
+  if (payload.id_proof_type) fd.append("id_proof_type", payload.id_proof_type);
+  if (payload.id_proof_document) fd.append("id_proof_document", payload.id_proof_document);
+  if (payload.motivation) fd.append("motivation", payload.motivation);
+
+  const resp = await fetchWithAuth(url, { method: "POST", body: fd });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to submit volunteer";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function fetchMyVolunteerRequests(): Promise<ApiResult> {
+  const url = `${USERS_BASE}/volunteers/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to load volunteers";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function fetchAdminVolunteerRequests(params?: {
+  status?: string;
+  q?: string;
+  city?: string;
+  state?: string;
+}): Promise<ApiResult> {
+  const qs = new URLSearchParams();
+  if (params?.status) qs.set("status", params.status);
+  if (params?.q) qs.set("q", params.q);
+  if (params?.city) qs.set("city", params.city);
+  if (params?.state) qs.set("state", params.state);
+  const url = `${USERS_BASE}/admin/volunteers/${qs.toString() ? `?${qs.toString()}` : ""}`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to load volunteer requests";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function updateAdminVolunteerRequest(id: number, payload: {
+  status?: "pending" | "approved" | "rejected";
+  admin_notes?: string;
+}): Promise<ApiResult> {
+  const url = `${USERS_BASE}/admin/volunteers/${id}/`;
+  const resp = await fetchWithAuth(url, { method: "PATCH", body: JSON.stringify(payload) });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to update volunteer";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function fetchAdminVolunteerDetail(id: number): Promise<ApiResult> {
+  const url = `${USERS_BASE}/admin/volunteers/${id}/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to load volunteer";
   return { ok: false, status: resp.status, error: message, data };
 }
 

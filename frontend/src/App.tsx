@@ -3,12 +3,14 @@ import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import UserHome from "./pages/UserHome";
+import VolunteerForm from "./pages/VolunteerForm";
 import AdminHome from "./pages/AdminHome";
 import PendingApprovals from "./pages/admin/PendingApprovals";
 import AdminRegister from "./pages/AdminRegister";
 import AdminProfile from "./pages/AdminProfile";
 import AdminLostReportDetail from "./pages/AdminLostReportDetail";
 import AdminFoundReportDetail from "./pages/AdminFoundReportDetail";
+import AdminVolunteerDetail from "./pages/AdminVolunteerDetail";
 import PrivateRoute from "./components/PrivateRoute";
 import UserProfile from "./pages/UserProfile";
 import ReportFoundPet from "./pages/ReportFoundPet";
@@ -40,6 +42,14 @@ export default function App() {
         element={
           <PrivateRoute role="user">
             <UserHome />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/user/volunteer"
+        element={
+          <PrivateRoute role="user">
+            <VolunteerForm />
           </PrivateRoute>
         }
       />
@@ -132,10 +142,26 @@ export default function App() {
         }
       />
       <Route
+        path="/admin/volunteers/:id"
+        element={
+          <PrivateRoute role="admin">
+            <AdminVolunteerDetail />
+          </PrivateRoute>
+        }
+      />
+      <Route
         path="/admin/found-pets"
         element={
           <PrivateRoute role="admin">
             <Navigate to="/admin?tab=found" replace />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/admin/volunteers"
+        element={
+          <PrivateRoute role="admin">
+            <Navigate to="/admin?tab=volunteers" replace />
           </PrivateRoute>
         }
       />

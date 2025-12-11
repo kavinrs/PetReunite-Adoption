@@ -20,7 +20,6 @@ export default function VolunteerForm() {
   const [pincode, setPincode] = useState("");
   const [address, setAddress] = useState("");
   const [locationText, setLocationText] = useState("");
-  const [preferences, setPreferences] = useState("");
   const [skills, setSkills] = useState("");
   const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel>("beginner");
   const [experienceWithPets, setExperienceWithPets] = useState("");
@@ -63,7 +62,6 @@ export default function VolunteerForm() {
       experience_level: experienceLevel,
       id_proof_type: idProofType.trim(),
       id_proof_document: idProofFile,
-      volunteering_preferences: preferences.trim(),
       availability: "",
       skills: skills.trim(),
       motivation: [
@@ -180,16 +178,9 @@ export default function VolunteerForm() {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
           <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <span style={{ fontSize: 13, color: "#374151" }}>Volunteering Preference</span>
-            <input value={preferences} onChange={(e) => setPreferences(e.target.value)} placeholder="Comma-separated" style={inputStyle} />
-          </label>
-          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <span style={{ fontSize: 13, color: "#374151" }}>Skills</span>
             <input value={skills} onChange={(e) => setSkills(e.target.value)} placeholder="Comma-separated" style={inputStyle} />
           </label>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
           <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <span style={{ fontSize: 13, color: "#374151" }}>Experience Level</span>
             <select value={experienceLevel} onChange={(e) => setExperienceLevel(e.target.value as ExperienceLevel)} style={inputStyle}>
@@ -199,6 +190,9 @@ export default function VolunteerForm() {
               <option value="professional">Professional vet / trainer</option>
             </select>
           </label>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12, marginTop: 12 }}>
           <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <span style={{ fontSize: 13, color: "#374151" }}>Experience with Pets</span>
             <input value={experienceWithPets} onChange={(e) => setExperienceWithPets(e.target.value)} style={inputStyle} />

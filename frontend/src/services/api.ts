@@ -566,7 +566,6 @@ export async function createVolunteerRequest(payload: {
   city: string;
   state?: string;
   pincode: string;
-  volunteering_preferences?: string;
   availability?: string;
   skills?: string;
   experience_level: "beginner" | "moderate" | "experienced" | "professional";
@@ -584,7 +583,6 @@ export async function createVolunteerRequest(payload: {
   fd.append("pincode", payload.pincode);
   fd.append("experience_level", payload.experience_level);
   if (payload.date_of_birth) fd.append("date_of_birth", payload.date_of_birth);
-  if (payload.volunteering_preferences) fd.append("volunteering_preferences", payload.volunteering_preferences);
   if (payload.availability) fd.append("availability", payload.availability);
   if (payload.skills) fd.append("skills", payload.skills);
   if (payload.id_proof_type) fd.append("id_proof_type", payload.id_proof_type);

@@ -61,7 +61,6 @@ class VolunteerRequest(models.Model):
     pincode = models.CharField(max_length=10)
 
     # Multi-select style fields stored as comma-separated values for simplicity
-    volunteering_preferences = models.TextField(blank=True, help_text="Comma-separated list of volunteering preferences")
     availability = models.TextField(blank=True, help_text="Comma-separated list describing availability")
     skills = models.TextField(blank=True, help_text="Comma-separated list of skills")
 

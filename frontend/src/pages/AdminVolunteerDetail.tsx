@@ -18,7 +18,10 @@ export default function AdminVolunteerDetail() {
       setLoading(true);
       const res = await fetchAdminVolunteerDetail(Number(id));
       if (cancelled) return;
-      if (res.ok) setVol(res.data);
+      if (res.ok) {
+        setVol(res.data);
+        setNotes(res.data.admin_notes || "");
+      }
       else setError(res.error || "Failed to load volunteer");
       setLoading(false);
     }
@@ -113,9 +116,32 @@ export default function AdminVolunteerDetail() {
           <Info label="State" value={vol.state} />
           <Info label="Pincode" value={vol.pincode} />
           <Info label="Skills" value={vol.skills} />
-          <Info label="Preferences" value={vol.volunteering_preferences} />
-          <Info label="Experience" value={vol.experience_level} />
+          <Info label="Availability" value={vol.availability} />
+          <Info label="Experience Level" value={vol.experience_level} />
+          <Info label="Date of Birth" value={vol.date_of_birth ? new Date(vol.date_of_birth).toLocaleDateString() : undefined} />
+          <Info label="ID Proof Type" value={vol.id_proof_type} />
+          <Info label="Status" value={vol.status} />
+          <Info label="Submitted On" value={vol.created_at ? new Date(vol.created_at).toLocaleString() : undefined} />
         </div>
+
+        {vol.motivation && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 13, color: "#374151", marginBottom: 6 }}>Additional Details from Volunteer</div>
+            <div
+              style={{
+                whiteSpace: "pre-wrap",
+                background: "#f9fafb",
+                border: "1px solid #e5e7eb",
+                borderRadius: 12,
+                padding: 12,
+                fontSize: 13,
+                color: "#111827",
+              }}
+            >
+              {vol.motivation}
+            </div>
+          </div>
+        )}
 
         <div style={{ marginTop: 16 }}>
           <div style={{ fontSize: 13, color: "#374151", marginBottom: 6 }}>Admin Notes</div>

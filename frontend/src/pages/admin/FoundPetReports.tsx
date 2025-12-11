@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Box, Typography, Paper, Button, Chip, Avatar, TextField } from "@mui/material";
+import { useNavigate } from "react-router-dom";
 import { Check, Close, Search } from "@mui/icons-material";
 import { fetchAdminFoundReports, updateAdminFoundReport } from "../../services/api";
 
@@ -21,6 +22,7 @@ type FoundReport = {
 const STATUS_OPTIONS = ["all", "pending", "approved", "rejected", "investigating", "resolved"] as const;
 
 export default function FoundPetReports() {
+  const navigate = useNavigate();
   const [reports, setReports] = useState<FoundReport[]>([]);
   const [status, setStatus] = useState<(typeof STATUS_OPTIONS)[number]>("all");
   const [loading, setLoading] = useState(false);
@@ -162,6 +164,13 @@ export default function FoundPetReports() {
                 </Typography>
               </Box>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => navigate(`/admin/found/${r.id}`, { state: { from: "admin-found" } })}
+                >
+                  View
+                </Button>
                 <Button
                   startIcon={<Check />}
                   color="success"

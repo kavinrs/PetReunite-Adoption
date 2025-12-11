@@ -35,6 +35,7 @@ export default function UserHome() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const notifRef = useRef<HTMLDivElement | null>(null);
+  const hasLoadedDismissedUserNotificationsRef = useRef(false);
   const navigate = useNavigate();
   const location = useLocation();
   const [activity, setActivity] = useState<{ lost: any[]; found: any[]; adoptions: any[] }>({ lost: [], found: [], adoptions: [] });
@@ -137,7 +138,6 @@ export default function UserHome() {
     }
   }, [location.state]);
 
-  // Load any previously dismissed notifications for this user from localStorage
   useEffect(() => {
     const username =
       profile?.username ?? profile?.user?.username ?? null;
@@ -152,6 +152,7 @@ export default function UserHome() {
           setDismissedUserNotifications(parsed as string[]);
         }
       }
+      hasLoadedDismissedUserNotificationsRef.current = true;
     } catch {
       // ignore parse errors and start fresh
     }
@@ -388,6 +389,7 @@ export default function UserHome() {
   }, [activity.lost, activity.found, activity.adoptions]);
 
   useEffect(() => {
+    if (!hasLoadedDismissedUserNotificationsRef.current) return;
     const unread = userNotificationFeed.filter((n) => !dismissedUserNotifications.includes(n.id));
     setUserHasNotification(unread.length > 0);
     // Persist dismissed notifications per user so they don't return after logout/login
@@ -754,15 +756,10 @@ export default function UserHome() {
                       // of the Species filter area below it
                       right: -80,
                       width: 340,
-                      maxHeight: 360,
-                      overflowY: "auto",
                       background: "white",
                       borderRadius: 12,
                       boxShadow: "0 16px 40px rgba(15,23,42,0.2)",
                       border: "1px solid rgba(15,23,42,0.08)",
-                      paddingRight: 4,
-                      // Slightly nicer scrolling on supported browsers
-                      scrollbarWidth: "thin",
                       // Ensure notifications float above species filter and other controls
                       zIndex: 1000,
                     }}
@@ -771,7 +768,17 @@ export default function UserHome() {
                       <div style={{ fontWeight: 800, color: "#0f172a" }}>Notifications</div>
                       <div style={{ fontSize: 12, color: "#64748b" }}>Latest activity</div>
                     </div>
-                    <div style={{ display: "flex", flexDirection: "column" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        maxHeight: 320,
+                        overflowY: "auto",
+                        paddingRight: 4,
+                        // Slightly nicer scrolling on supported browsers
+                        scrollbarWidth: "thin",
+                      }}
+                    >
                       {userNotificationFeed.filter((n) => !dismissedUserNotifications.includes(n.id)).length === 0 ? (
                         <div style={{ padding: 12, fontSize: 13, color: "#64748b" }}>No new notifications</div>
                       ) : (

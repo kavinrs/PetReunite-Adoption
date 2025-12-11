@@ -322,7 +322,22 @@ class AdminReportSummaryView(APIView):
         ]
 
         # System overview metrics
-        total_users = User.objects.filter(is_active=True).count()
+        # Use UserProfile so this matches the Users tab (only active, non-staff users)
+        try:
+            from Users.models import UserProfile
+
+            total_users = (
+                UserProfile.objects.select_related("user")
+                .filter(
+                    user__is_active=True,
+                    user__is_staff=False,
+                    user__is_superuser=False,
+                )
+                .count()
+            )
+        except Exception:
+            # Fallback to active auth users if profiles are unavailable
+            total_users = User.objects.filter(is_active=True, is_staff=False, is_superuser=False).count()
         successful_adoptions = AdoptionRequest.objects.filter(status="approved").count()
         new_pets_this_week = Pet.objects.filter(is_active=True, created_at__gte=week_start).count()
         try:
@@ -833,21 +848,36 @@ class AdminUserListView(APIView):
     permission_classes = [IsAdminOrStaff]
 
     def get(self, request):
-        # Only include active users so the table matches the real active user count
-        users = (
-            User.objects.filter(is_active=True)
-            .order_by("-date_joined")
-            .values("id", "username", "email", "is_staff", "is_active", "date_joined")
+        # Import here to avoid circular imports between apps
+        from Users.models import UserProfile
+
+        # Only include profiles for active users so the table matches the
+        # "real" active user count, but expose richer profile information
+        profiles = (
+            UserProfile.objects.select_related("user")
+            .filter(user__is_active=True, user__is_staff=False, user__is_superuser=False)
+            .order_by("-user__date_joined")
         )
-        data = [
-            {
-                "id": u["id"],
-                "username": u["username"],
-                "email": u["email"],
-                "is_staff": u["is_staff"],
-                "is_active": u["is_active"],
-                "joined": u["date_joined"].isoformat() if u["date_joined"] else None,
-            }
-            for u in users
-        ]
+
+        data = []
+        for p in profiles:
+            u = p.user
+            data.append(
+                {
+                    "id": p.id,
+                    "username": u.username,
+                    "email": u.email,
+                    "full_name": p.full_name,
+                    "phone_number": p.phone_number,
+                    "city": p.city,
+                    "state": p.state,
+                    "pincode": p.pincode,
+                    "role": p.role,
+                    "is_staff": u.is_staff,
+                    "is_superuser": u.is_superuser,
+                    "is_active": u.is_active,
+                    "joined": u.date_joined.isoformat() if u.date_joined else None,
+                }
+            )
+
         return Response(data, status=status.HTTP_200_OK)

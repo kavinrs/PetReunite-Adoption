@@ -3043,7 +3043,7 @@ export default function AdminHome() {
             ? new URL(apiBase).origin
             : "http://localhost:8000";
           const rawDetail = isVolunteers
-            ? (r.profile_photo || r.id_proof_document)
+            ? r.profile_photo || r.id_proof_document
             : isLost
               ? r.photo_url || r.photo
               : isFound
@@ -3094,11 +3094,13 @@ export default function AdminHome() {
                   {(() => {
                     const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
                     const origin = /^https?:/.test(apiBase) ? new URL(apiBase).origin : "http://localhost:8000";
-                    const raw = isLost
-                      ? r.photo_url || r.photo
-                      : isFound
+                    const raw = isVolunteers
+                      ? r.profile_photo || r.id_proof_document
+                      : isLost
                         ? r.photo_url || r.photo
-                        : r.pet?.photos;
+                        : isFound
+                          ? r.photo_url || r.photo
+                          : r.pet?.photos;
                     const src = (() => {
                       if (!raw) return null;
                       const u = String(raw);
@@ -3167,7 +3169,7 @@ export default function AdminHome() {
                   )}
                   {isVolunteers && (
                     <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
-                      {r.skills || r.volunteering_preferences || ""}
+                      {r.skills || "-"}
                     </div>
                   )}
                 </div>
@@ -3193,16 +3195,18 @@ export default function AdminHome() {
                   <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
                     <button
                       onClick={() => {
-                      if (isPetsTab && r.pet?.id) {
-                        navigate(`/pets/${r.pet.id}`);
-                      } else if (isLost) {
-                        navigate(`/admin/lost/${r.id}`, { state: { from: "admin-lost" } });
-                      } else if (isVolunteers) {
-                        navigate(`/admin/volunteers/${r.id}`);
-                      } else {
-                        setExpandedId((prev) => (prev === r.id ? null : r.id));
-                      }
-                    }}
+                        if (isPetsTab && r.pet?.id) {
+                          navigate(`/pets/${r.pet.id}`);
+                        } else if (isLost) {
+                          navigate(`/admin/lost/${r.id}`, { state: { from: "admin-lost" } });
+                        } else if (isFound) {
+                          navigate(`/admin/found/${r.id}`, { state: { from: "admin-found" } });
+                        } else if (isVolunteers) {
+                          navigate(`/admin/volunteers/${r.id}`);
+                        } else {
+                          setExpandedId((prev) => (prev === r.id ? null : r.id));
+                        }
+                      }}
                     style={{
                       padding: "8px 12px",
                       borderRadius: 999,
@@ -3213,7 +3217,7 @@ export default function AdminHome() {
                       cursor: "pointer",
                     }}
                   >
-                    View
+                    View Details 
                   </button>
                   {/* On the main pending approvals list, only show the status badge here.
                       Accept/Reject actions are now handled inside the detailed view pages. */}

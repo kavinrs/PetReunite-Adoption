@@ -53,6 +53,8 @@ export default function PendingApprovals() {
   const [actionKey, setActionKey] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [profile, setProfile] = useState<any | null>(null);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -440,6 +442,8 @@ export default function PendingApprovals() {
               justifyContent: "space-between",
               alignItems: "center",
               marginBottom: 20,
+              position: "relative",
+              zIndex: 40,
             }}
           >
             <div
@@ -464,6 +468,7 @@ export default function PendingApprovals() {
               <button
                 type="button"
                 aria-label="Notifications"
+                onClick={() => setNotificationOpen((prev) => !prev)}
                 style={{
                   position: "relative",
                   width: 40,
@@ -495,7 +500,131 @@ export default function PendingApprovals() {
                 )}
               </button>
 
+              {notificationOpen && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 48,
+                    right: 80,
+                    width: 380,
+                    background: "#ffffff",
+                    borderRadius: 12,
+                    border: "1px solid #e5e7eb",
+                    boxShadow: "0 12px 30px rgba(15,23,42,0.18)",
+                    padding: 12,
+                    fontSize: 13,
+                    zIndex: 60,
+                    color: "#111827",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: 8,
+                    }}
+                  >
+                    <span style={{ fontWeight: 700 }}>Notifications</span>
+                    <span style={{ fontSize: 11, color: "#6b7280" }}>
+                      Latest activity
+                    </span>
+                  </div>
+                  {items.length === 0 ? (
+                    <div style={{ fontSize: 12, color: "#6b7280", paddingTop: 4 }}>
+                      No notifications yet.
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        maxHeight: 260,
+                        overflowY: "auto",
+                        paddingRight: 4,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6,
+                      }}
+                    >
+                      {items.map((n) => (
+                        <button
+                          key={`${n.kind}-${n.id}`}
+                          onClick={() => {
+                            // Navigate to the relevant detail or tab view
+                            if (n.kind === "lost") {
+                              navigate(`/admin/lost/${n.id}`, {
+                                state: { from: "pending-approvals" },
+                              });
+                            } else if (n.kind === "found") {
+                              navigate(`/admin/found/${n.id}`, {
+                                state: { from: "pending-approvals" },
+                              });
+                            } else {
+                              navigate("/admin?tab=adoptions", { replace: true });
+                            }
+                            setNotificationOpen(false);
+                          }}
+                          style={{
+                            width: "100%",
+                            textAlign: "left",
+                            padding: "16px 18px",
+                            borderRadius: 12,
+                            border: "1px solid #e5e7eb",
+                            background: "#f9fafb",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 14,
+                            fontSize: 14,
+                            cursor: "pointer",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "flex-start",
+                              gap: 4,
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: 14,
+                                fontWeight: 700,
+                                color: "#111827",
+                              }}
+                            >
+                              {n.kind === "lost"
+                                ? "Lost Report"
+                                : n.kind === "found"
+                                  ? "Found Report"
+                                  : "Adoption Request"}
+                            </span>
+                            <span style={{ fontSize: 12, color: "#6b7280" }}>
+                              {n.title}
+                            </span>
+                            {n.location && (
+                              <span style={{ fontSize: 12, color: "#9ca3af" }}>
+                                {n.location}
+                              </span>
+                            )}
+                          </div>
+                          <span
+                            style={{
+                              width: 10,
+                              height: 10,
+                              borderRadius: "50%",
+                              background: "#ef4444",
+                            }}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <button
+                onClick={() => setProfileOpen((prev) => !prev)}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -545,6 +674,76 @@ export default function PendingApprovals() {
                 </div>
                 <span style={{ fontSize: 16, color: "#6b7280" }}>▾</span>
               </button>
+              {profileOpen && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "110%",
+                    right: 0,
+                    marginTop: 8,
+                    width: 260,
+                    borderRadius: 20,
+                    background: "#ffffff",
+                    boxShadow: "0 18px 40px rgba(15,23,42,0.25)",
+                    padding: 16,
+                    fontSize: 13,
+                    zIndex: 50,
+                    color: "#111827",
+                  }}
+                >
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 16, fontWeight: 700 }}>
+                      {displayName}
+                    </div>
+                    <div style={{ fontSize: 13, color: "#6b7280" }}>{email}</div>
+                  </div>
+                  <div
+                    style={{
+                      height: 1,
+                      background: "#e5e7eb",
+                      margin: "6px 0 10px",
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      setProfileOpen(false);
+                      navigate("/admin/profile");
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "10px 0",
+                      borderRadius: 999,
+                      border: "1px solid rgba(129,140,248,0.4)",
+                      background: "#eef2ff",
+                      color: "#4f46e5",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      marginBottom: 8,
+                    }}
+                  >
+                    View Profile
+                  </button>
+                  <button
+                    onClick={() => {
+                      clearTokens();
+                      setProfileOpen(false);
+                      navigate("/", { replace: true });
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "10px 0",
+                      borderRadius: 999,
+                      border: "1px solid rgba(248,113,113,0.4)",
+                      background: "#fee2e2",
+                      color: "#b91c1c",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Logout
+                  </button>
+                </div>
+              )}
             </div>
           </header>
 

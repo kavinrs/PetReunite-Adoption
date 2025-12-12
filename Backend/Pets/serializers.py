@@ -322,23 +322,38 @@ class ConversationSerializer(serializers.ModelSerializer):
             "id",
             "user",
             "admin",
+            "pet_id",
+            "pet_name",
+            "pet_kind",
             "status",
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "user", "admin", "created_at", "updated_at")
+        read_only_fields = (
+            "id",
+            "user",
+            "admin",
+            "pet_id",
+            "pet_name",
+            "pet_kind",
+            "created_at",
+            "updated_at",
+        )
 
 
 class ConversationCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Conversation
-        fields = ()
+        # Optional pet context can be passed from the frontend when the
+        # conversation is created so admins see which pet/report it refers to.
+        fields = ("pet_id", "pet_name", "pet_kind")
 
     def create(self, validated_data):
         request = self.context["request"]
         user = request.user
-        # Allow multiple conversations; just create a fresh one in requested state.
-        return Conversation.objects.create(user=user)
+        # Allow multiple conversations; create a fresh one in requested state,
+        # attaching any provided pet context.
+        return Conversation.objects.create(user=user, **validated_data)
 
 
 class ChatMessageSerializer(serializers.ModelSerializer):

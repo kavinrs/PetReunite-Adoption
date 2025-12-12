@@ -3793,6 +3793,30 @@ export default function AdminHome() {
             </button>
             <button
               onClick={() => {
+                // Navigate to integrated admin chat page
+                setTab("dashboard");
+                navigate("/admin/chat", { replace: false });
+              }}
+              style={{
+                width: "100%",
+                padding: "12px 16px",
+                borderRadius: "12px",
+                border: "none",
+                background: "transparent",
+                color: "#64748b",
+                fontSize: "14px",
+                fontWeight: "600",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                marginBottom: "8px",
+              }}
+            >
+              <span>💬</span> Chat
+            </button>
+            <button
+              onClick={() => {
                 setTab("stats");
                 navigate("/admin?tab=stats", { replace: true });
               }}

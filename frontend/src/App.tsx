@@ -21,6 +21,9 @@ import LostReportDetail from "./pages/LostReportDetail";
 import FoundReportDetail from "./pages/FoundReportDetail";
 import MyAdoptionRequests from "./pages/MyAdoptionRequests";
 import Home from "./pages/Home";
+import RoomsPage from "./chat/RoomsPage";
+import ChatRoomView from "./chat/ChatRoomView";
+import AdminRoomCreate from "./chat/AdminRoomCreate";
 import { useViewportStandardization } from "./hooks/useViewportStandardization";
 import "./App.css";
 
@@ -115,6 +118,32 @@ export default function App() {
         element={
           <PrivateRoute role="admin">
             <AdminHome />
+          </PrivateRoute>
+        }
+      />
+      {/* User chat: reuse UserHome layout so sidebar + top bar stay visible */}
+      <Route
+        path="/user/chat"
+        element={
+          <PrivateRoute role="user">
+            <UserHome />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/user/chat/rooms/:roomId"
+        element={
+          <PrivateRoute role="user">
+            <ChatRoomView />
+          </PrivateRoute>
+        }
+      />
+      {/* Admin chat */}
+      <Route
+        path="/admin/chat"
+        element={
+          <PrivateRoute role="admin">
+            <AdminRoomCreate />
           </PrivateRoute>
         }
       />

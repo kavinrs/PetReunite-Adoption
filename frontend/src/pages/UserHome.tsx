@@ -10,11 +10,12 @@ import {
   updateMyLostReport,
   updateMyFoundReport,
 } from "../services/api";
+import RoomsPage from "../chat/RoomsPage";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
 
 type Tab = "owner" | "rescuer" | "adopter";
-type UserPageTab = "home" | "activity";
+type UserPageTab = "home" | "activity" | "chat";
 
 export default function UserHome() {
   // Apply viewport standardization to ensure consistent 100% scaling
@@ -130,13 +131,18 @@ export default function UserHome() {
     };
   }, []);
 
-  // If the router state requests the Activity view, honour it
+  // Honour router state and path for switching views (activity/chat)
   useEffect(() => {
     const state = (location.state || {}) as any;
     if (state && state.tab === "activity") {
       setPageTab("activity");
+      return;
     }
-  }, [location.state]);
+
+    if (location.pathname.startsWith("/user/chat")) {
+      setPageTab("chat");
+    }
+  }, [location.pathname, location.state]);
 
   useEffect(() => {
     const username =
@@ -517,6 +523,14 @@ export default function UserHome() {
       icon: "📜",
       onClick: () => setPageTab("activity"),
     },
+    {
+      label: "Chat",
+      icon: "💬",
+      onClick: () => {
+        setPageTab("chat");
+        navigate("/user/chat");
+      },
+    },
   ];
 
   return (
@@ -590,7 +604,8 @@ export default function UserHome() {
             {sidebarLinks.map((link) => {
               const isActive =
                 (link.label === "Home" && pageTab === "home") ||
-                (link.label === "My Activity" && pageTab === "activity");
+                (link.label === "My Activity" && pageTab === "activity") ||
+                (link.label === "Chat" && pageTab === "chat");
               return (
               <button
                 key={link.label}
@@ -708,9 +723,19 @@ export default function UserHome() {
             }}
           >
             <div>
-              <div style={{ fontSize: 24, fontWeight: 800 }}>{pageTab === "activity" ? "My Activity" : "Home"}</div>
+              <div style={{ fontSize: 24, fontWeight: 800 }}>
+                {pageTab === "activity"
+                  ? "My Activity"
+                  : pageTab === "chat"
+                  ? "My Chats"
+                  : "Home"}
+              </div>
               <div style={{ color: "rgba(15,23,42,0.6)", marginTop: 4 }}>
-                {pageTab === "activity" ? "Your reports and adoption history" : "Manage your pet rescue activities"}
+                {pageTab === "activity"
+                  ? "Your reports and adoption history"
+                  : pageTab === "chat"
+                  ? "Chat with admins and view case rooms"
+                  : "Manage your pet rescue activities"}
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -1032,150 +1057,159 @@ export default function UserHome() {
             </div>
 
             {/* Search and Filters */}
-            <div style={{ marginBottom: 24 }}>
-              {/* Search Bar */}
-              <div style={{ marginBottom: 16 }}>
-                <input
-                  type="text"
-                  placeholder="Search by name or breed..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "6px 10px",
-                    borderRadius: 6,
-                    border: "1px solid rgba(15,23,42,0.15)",
-                    fontSize: 12,
-                    color: "#0f172a",
-                    background: "rgba(15,23,42,0.02)",
-                    boxSizing: "border-box",
-                  }}
-                />
-              </div>
-
-              {/* Filter Row */}
+            {pageTab !== "chat" && (
               <div
                 style={{
                   display: "flex",
+                  flexDirection: "column",
                   gap: 16,
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                  marginBottom: 16,
-                  position: "relative",
-                  zIndex: 1000,
-                  overflow: "visible",
+                  marginBottom: 12,
                 }}
               >
-                {/* Category Filter Buttons */}
-                <div style={{ display: "flex", gap: 8 }}>
-                  {["All pets", "Lost pet", "Found pet", "Adoption pet"].map((category) => (
-                    <button
-                      key={category}
-                      onClick={() => setSelectedCategory(category)}
-                      style={{
-                        padding: "8px 16px",
-                        borderRadius: 20,
-                        border:
-                          selectedCategory === category
-                            ? "2px solid #ff8a00"
-                            : "1px solid rgba(15,23,42,0.15)",
-                        background:
-                          selectedCategory === category
-                            ? "rgba(255,138,0,0.1)"
-                            : "white",
-                        color:
-                          selectedCategory === category
-                            ? "#ff8a00"
-                            : "rgba(15,23,42,0.8)",
-                        cursor: "pointer",
-                        fontWeight: selectedCategory === category ? 700 : 500,
-                        fontSize: 12,
-                      }}
-                    >
-                      {category}
-                    </button>
-                  ))}
+                {/* Search Bar */}
+                <div style={{ marginBottom: 16 }}>
+                  <input
+                    type="text"
+                    placeholder="Search by name or breed..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "6px 10px",
+                      borderRadius: 6,
+                      border: "1px solid rgba(15,23,42,0.15)",
+                      fontSize: 12,
+                      color: "#0f172a",
+                      background: "rgba(15,23,42,0.02)",
+                      boxSizing: "border-box",
+                    }}
+                  />
                 </div>
 
-                {/* Species Dropdown */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 12, color: "rgba(15,23,42,0.6)" }}>
-                    Species:
-                  </span>
-                  <div style={{ position: "relative", zIndex: 1001 }}>
+                {/* Filter Row */}
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 16,
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    marginBottom: 16,
+                    position: "relative",
+                    zIndex: 1000,
+                    overflow: "visible",
+                  }}
+                >
+                  {/* Category Filter Buttons */}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {["All pets", "Lost pet", "Found pet", "Adoption pet"].map((category) => (
+                      <button
+                        key={category}
+                        onClick={() => setSelectedCategory(category)}
+                        style={{
+                          padding: "8px 16px",
+                          borderRadius: 20,
+                          border:
+                            selectedCategory === category
+                              ? "2px solid #ff8a00"
+                              : "1px solid rgba(15,23,42,0.15)",
+                          background:
+                            selectedCategory === category
+                              ? "rgba(255,138,0,0.1)"
+                              : "white",
+                          color:
+                            selectedCategory === category
+                              ? "#ff8a00"
+                              : "rgba(15,23,42,0.8)",
+                          cursor: "pointer",
+                          fontWeight: selectedCategory === category ? 700 : 500,
+                          fontSize: 12,
+                        }}
+                      >
+                        {category}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Species Dropdown */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 12, color: "rgba(15,23,42,0.6)" }}>
+                      Species:
+                    </span>
+                    <div style={{ position: "relative", zIndex: 1001 }}>
+                      <select
+                        value={selectedSpecies}
+                        onChange={(e) => setSelectedSpecies(e.target.value)}
+                        style={{
+                          padding: "12px 16px",
+                          borderRadius: 12,
+                          border: "1px solid rgba(15,23,42,0.25)",
+                          background: "#ffffff",
+                          fontSize: 12,
+                          cursor: "pointer",
+                          minWidth: "140px",
+                          position: "relative",
+                          zIndex: 1002,
+                          color: "#0f172a",
+                          fontWeight: 600,
+                        }}
+                      >
+                        <option value="All Species">All Species</option>
+                        <option value="Dog">Dogs</option>
+                        <option value="Cat">Cats</option>
+                        <option value="Rabbit">Rabbits</option>
+                        <option value="Bird">Birds</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Sort Dropdown */}
+                  <div
+                    style={{
+                      marginLeft: "auto",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      position: "relative",
+                      zIndex: 1001,
+                    }}
+                  >
+                    <span style={{ fontSize: 12, color: "rgba(15,23,42,0.6)" }}>
+                      Sort by:
+                    </span>
                     <select
-                      value={selectedSpecies}
-                      onChange={(e) => setSelectedSpecies(e.target.value)}
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value)}
                       style={{
-                        padding: "12px 16px",
-                        borderRadius: 12,
+                        padding: "8px 12px",
+                        borderRadius: 8,
                         border: "1px solid rgba(15,23,42,0.25)",
                         background: "#ffffff",
                         fontSize: 12,
                         cursor: "pointer",
-                        minWidth: "140px",
+                        minWidth: "120px",
                         position: "relative",
                         zIndex: 1002,
                         color: "#0f172a",
                         fontWeight: 600,
                       }}
                     >
-                      <option value="All Species">All Species</option>
-                      <option value="Dog">Dogs</option>
-                      <option value="Cat">Cats</option>
-                      <option value="Rabbit">Rabbits</option>
-                      <option value="Bird">Birds</option>
+                      <option value="Most Recent">Most Recent</option>
+                      <option value="Alphabetical">Alphabetical</option>
                     </select>
                   </div>
                 </div>
 
-                {/* Sort Dropdown */}
-                <div
-                  style={{
-                    marginLeft: "auto",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    position: "relative",
-                    zIndex: 1001,
-                  }}
-                >
-                  <span style={{ fontSize: 12, color: "rgba(15,23,42,0.6)" }}>
-                    Sort by:
-                  </span>
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                    style={{
-                      padding: "8px 12px",
-                      borderRadius: 8,
-                      border: "1px solid rgba(15,23,42,0.25)",
-                      background: "#ffffff",
-                      fontSize: 12,
-                      cursor: "pointer",
-                      minWidth: "120px",
-                      position: "relative",
-                      zIndex: 1002,
-                      color: "#0f172a",
-                      fontWeight: 600,
-                    }}
-                  >
-                    <option value="Most Recent">Most Recent</option>
-                    <option value="Alphabetical">Alphabetical</option>
-                  </select>
-                </div>
+                {/* Results Count (only show on Dashboard view, not My Activity) */}
+                {pageTab !== "activity" && (
+                  <div style={{ fontSize: 16, fontWeight: 600, color: "#0f172a" }}>
+                    {filteredPets.length} Pet
+                    {filteredPets.length !== 1 ? "s" : ""} Available
+                  </div>
+                )}
               </div>
+            )}
 
-              {/* Results Count (only show on Dashboard view, not My Activity) */}
-              {pageTab !== "activity" && (
-                <div style={{ fontSize: 16, fontWeight: 600, color: "#0f172a" }}>
-                  {filteredPets.length} Pet
-                  {filteredPets.length !== 1 ? "s" : ""} Available
-                </div>
-              )}
-            </div>
-
-            {/* Activity view */}
+            {/* Main content: Activity, Chat, or Dashboard cards */}
             {pageTab === "activity" ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 {activityLoading && <div style={{ padding: 12 }}>Loading activity…</div>}
@@ -1558,6 +1592,17 @@ export default function UserHome() {
                     )}
                   </>
                 )}
+              </div>
+            ) : pageTab === "chat" ? (
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "flex-start",
+                  paddingTop: 8,
+                }}
+              >
+                <RoomsPage embedded />
               </div>
             ) : petsLoading ? (
               <div

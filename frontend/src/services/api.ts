@@ -341,6 +341,7 @@ export async function registerUser(payload: {
 }
 
 const PETS_BASE = `${API_BASE}/pets`;
+const CHAT_BASE = `${API_BASE}/chat`;
 
 export async function fetchAdminSummary(): Promise<ApiResult> {
   const url = `${PETS_BASE}/admin/summary/`;
@@ -825,6 +826,148 @@ export async function fetchMyAdoptionRequests(): Promise<ApiResult> {
   return { ok: false, status: resp.status, error: message, data };
 }
 
+// ===== Chat API (rooms & messages) =====
+
+export async function getRooms(): Promise<{
+  ok: boolean;
+  status: number;
+  rooms?: any[];
+  error?: string;
+}> {
+  const url = `${CHAT_BASE}/rooms/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, rooms: data?.rooms ?? [] };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to load chat rooms";
+  return { ok: false, status: resp.status, error: message };
+}
+
+export async function getRoomDetail(roomId: string): Promise<{
+  ok: boolean;
+  status: number;
+  room?: any;
+  members?: any[];
+  error?: string;
+}> {
+  const url = `${CHAT_BASE}/rooms/${roomId}/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return {
+      ok: true,
+      status: resp.status,
+      room: data?.room,
+      members: data?.members ?? [],
+    };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to load room";
+  return { ok: false, status: resp.status, error: message };
+}
+
+export async function getRoomMessages(
+  roomId: string,
+  limit = 50,
+): Promise<{
+  ok: boolean;
+  status: number;
+  messages?: any[];
+  error?: string;
+}> {
+  const url = `${CHAT_BASE}/messages/room/${roomId}/?limit=${limit}`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return {
+      ok: true,
+      status: resp.status,
+      messages: data?.messages ?? [],
+    };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to load messages";
+  return { ok: false, status: resp.status, error: message };
+}
+
+export async function createMessage(
+  roomId: string,
+  content: string,
+): Promise<{
+  ok: boolean;
+  status: number;
+  message?: any;
+  error?: string;
+}> {
+  const url = `${CHAT_BASE}/messages/room/${roomId}/`;
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: JSON.stringify({ content }),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, message: data?.message };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to send message";
+  return { ok: false, status: resp.status, error: message };
+}
+
+export async function createRoom(title: string): Promise<{
+  ok: boolean;
+  status: number;
+  room?: any;
+  error?: string;
+}> {
+  const url = `${CHAT_BASE}/rooms/`;
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: JSON.stringify({ title }),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, room: data?.room };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to create room";
+  return { ok: false, status: resp.status, error: message };
+}
+
+export async function lookupUserByEmail(email: string): Promise<{
+  ok: boolean;
+  status: number;
+  user?: any;
+  error?: string;
+}> {
+  const url = `${CHAT_BASE}/users/by-email?email=${encodeURIComponent(email)}`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, user: data?.user };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to lookup user";
+  return { ok: false, status: resp.status, error: message };
+}
+
+export async function addMember(
+  roomId: string,
+  userId: string,
+): Promise<{
+  ok: boolean;
+  status: number;
+  member?: any;
+  error?: string;
+}> {
+  const url = `${CHAT_BASE}/rooms/${roomId}/members/`;
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: JSON.stringify({ user_id: userId }),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, member: data?.member };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to add member";
+  return { ok: false, status: resp.status, error: message };
+}
+
 /* Fetch messages for adoption request */
 export async function fetchAdoptionMessages(
   adoptionRequestId: number,
@@ -872,7 +1015,30 @@ export async function fetchChatConversations(): Promise<ApiResult> {
 
 export async function createChatConversation(): Promise<ApiResult> {
   const url = `${PETS_BASE}/chat/conversations/`;
-  const resp = await fetchWithAuth(url, { method: "POST", body: JSON.stringify({}) });
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to request chat";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+// Create a conversation with optional pet context so admin knows which pet
+// the user is chatting about (lost / found / adoption).
+export async function createChatConversationWithPet(payload: {
+  pet_id?: number;
+  pet_name?: string;
+  pet_kind?: string; // "lost" | "found" | "adoption" etc
+}): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chat/conversations/`;
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: JSON.stringify(payload ?? {}),
+  });
   const data = await parseJSONSafe(resp);
   if (resp.ok) {
     return { ok: true, status: resp.status, data };

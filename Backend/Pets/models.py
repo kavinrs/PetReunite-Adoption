@@ -204,6 +204,15 @@ class Conversation(models.Model):
         null=True,
         blank=True,
     )
+    # Optional pet context so admin can see which pet/report this chat is about.
+    # For example, a lost report, found report, or adoption pet.
+    pet_id = models.IntegerField(null=True, blank=True)
+    pet_name = models.CharField(max_length=150, blank=True)
+    pet_kind = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Type of context: lost, found, adoption, etc.",
+    )
     status = models.CharField(max_length=32, choices=STATUS_CHOICES, default="requested")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

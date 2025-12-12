@@ -11,6 +11,7 @@ import AdminProfile from "./pages/AdminProfile";
 import AdminLostReportDetail from "./pages/AdminLostReportDetail";
 import AdminFoundReportDetail from "./pages/AdminFoundReportDetail";
 import AdminVolunteerDetail from "./pages/AdminVolunteerDetail";
+import AdminUserActivity from "./pages/AdminUserActivity";
 import PrivateRoute from "./components/PrivateRoute";
 import UserProfile from "./pages/UserProfile";
 import ReportFoundPet from "./pages/ReportFoundPet";
@@ -146,6 +147,14 @@ export default function App() {
         element={
           <PrivateRoute role="admin">
             <AdminVolunteerDetail />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/admin/users/:userId/activity"
+        element={
+          <PrivateRoute role="admin">
+            <AdminUserActivity />
           </PrivateRoute>
         }
       />

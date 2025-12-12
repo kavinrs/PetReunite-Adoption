@@ -360,6 +360,15 @@ export async function fetchAdminUsers(): Promise<ApiResult> {
   return { ok: false, status: resp.status, error: message, data };
 }
 
+export async function fetchAdminUserActivity(userId: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/users/${userId}/activity/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to load user activity";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
 export async function fetchAdminFoundReports(
   status?: string,
 ): Promise<ApiResult> {

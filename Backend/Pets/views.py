@@ -810,6 +810,35 @@ class MyActivityView(APIView):
         )
 
 
+class AdminUserActivityView(APIView):
+    """Admin view of a specific user's activity: lost, found, adoptions."""
+
+    permission_classes = [IsAdminOrStaff]
+
+    def get(self, request, user_id):
+        user = get_object_or_404(User, pk=user_id)
+
+        lost = LostPetReportSerializer(
+            LostPetReport.objects.filter(reporter=user).order_by("-created_at"),
+            many=True,
+        ).data
+        found = FoundPetReportSerializer(
+            FoundPetReport.objects.filter(reporter=user).order_by("-created_at"),
+            many=True,
+        ).data
+        adoptions = AdoptionRequestSerializer(
+            AdoptionRequest.objects.filter(requester=user)
+            .select_related("pet")
+            .order_by("-created_at"),
+            many=True,
+        ).data
+
+        return Response(
+            {"lost": lost, "found": found, "adoptions": adoptions},
+            status=status.HTTP_200_OK,
+        )
+
+
 class AdminClearDataView(APIView):
     """Dangerous: Admin-only endpoint to clear reports, pets, and related messages"""
 
@@ -865,6 +894,7 @@ class AdminUserListView(APIView):
             data.append(
                 {
                     "id": p.id,
+                    "user_id": u.id,
                     "username": u.username,
                     "email": u.email,
                     "full_name": p.full_name,

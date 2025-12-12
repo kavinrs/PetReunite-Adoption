@@ -12,6 +12,7 @@ from .views import (
     AdminReportSummaryView,
     AdminUpdateAdoptionRequestView,
     AdminUserListView,
+    AdminUserActivityView,
     AdoptionRequestDetailView,
     AdoptionRequestListView,
     AllReportsView,
@@ -54,6 +55,11 @@ urlpatterns = [
     # Admin dashboard endpoints
     path("admin/summary/", AdminReportSummaryView.as_view(), name="admin-report-summary"),
     path("admin/users/", AdminUserListView.as_view(), name="admin-user-list"),
+    path(
+        "admin/users/<int:user_id>/activity/",
+        AdminUserActivityView.as_view(),
+        name="admin-user-activity",
+    ),
     path(
         "admin/reports/found/",
         AdminFoundPetListView.as_view(),

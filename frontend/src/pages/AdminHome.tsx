@@ -521,7 +521,7 @@ export default function AdminHome() {
     "all" | "lost" | "found" | "adoption"
   >("all");
   const [petsStatusFilter, setPetsStatusFilter] = useState<"all" | "approved">(
-    "all",
+    "approved",
   );
   const [userSearch, setUserSearch] = useState("");
   const [userRoleFilter, setUserRoleFilter] = useState<"all" | "admin" | "user">("all");
@@ -1003,6 +1003,15 @@ export default function AdminHome() {
                   color: "#6b7280",
                 }}
               >
+                Actions
+              </th>
+              <th
+                style={{
+                  textAlign: "left",
+                  padding: "10px 16px",
+                  color: "#6b7280",
+                }}
+                >
                 Joined
               </th>
             </tr>
@@ -1018,6 +1027,30 @@ export default function AdminHome() {
                       ? "Super Admin"
                       : "Admin/Staff"
                     : "User"}
+                </td>
+                <td style={{ padding: "10px 16px" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const userId = u.user_id ?? u.id;
+                      if (!userId) return;
+                      navigate(`/admin/users/${userId}/activity`, {
+                        state: { username: u.username },
+                      });
+                    }}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: 999,
+                      border: "1px solid #e5e7eb",
+                      background: "#ffffff",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "#0f172a",
+                      cursor: "pointer",
+                    }}
+                  >
+                    View
+                  </button>
                 </td>
                 <td
                   style={{
@@ -1097,46 +1130,30 @@ export default function AdminHome() {
               boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
             }}
           />
-          <select
-            value={petsTypeFilter}
-            onChange={(e) =>
-              setPetsTypeFilter(
-                e.target.value as "all" | "lost" | "found" | "adoption",
-              )
-            }
-            style={{
-              width: "100%",
-              padding: "10px 12px",
-              borderRadius: 12,
-              border: "1px solid #e2e8f0",
-              background: "white",
-              color: "#374151",
-              fontSize: 14,
-            }}
-          >
-            <option value="all">All Types</option>
-            <option value="lost">Lost</option>
-            <option value="found">Found</option>
-            <option value="adoption">Adoption</option>
-          </select>
-          <select
-            value={petsStatusFilter}
-            onChange={(e) =>
-              setPetsStatusFilter(e.target.value as "all" | "approved")
-            }
-            style={{
-              width: "100%",
-              padding: "10px 12px",
-              borderRadius: 12,
-              border: "1px solid #e2e8f0",
-              background: "white",
-              color: "#374151",
-              fontSize: 14,
-            }}
-          >
-            <option value="all">All Status</option>
-            <option value="approved">Approved</option>
-          </select>
+          <div style={{ maxWidth: 260 }}>
+            <select
+              value={petsTypeFilter}
+              onChange={(e) =>
+                setPetsTypeFilter(
+                  e.target.value as "all" | "lost" | "found" | "adoption",
+                )
+              }
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                borderRadius: 12,
+                border: "1px solid #e2e8f0",
+                background: "white",
+                color: "#374151",
+                fontSize: 14,
+              }}
+            >
+              <option value="all">All Types</option>
+              <option value="lost">Lost</option>
+              <option value="found">Found</option>
+              <option value="adoption">Adoption</option>
+            </select>
+          </div>
         </div>
 
         {(() => {
@@ -1146,12 +1163,17 @@ export default function AdminHome() {
           const foundRows = foundReports
             .filter((r: any) => r.status === "approved")
             .map((r: any) => ({ ...r, __kind: "found" }));
-          const allRows: any[] = [...lostRows, ...foundRows];
+          const adoptionRows = adoptionRequests
+            .filter((r: any) => r.status === "approved")
+            .map((r: any) => ({ ...r, __kind: "adoption" }));
+          const allRows: any[] = [...lostRows, ...foundRows, ...adoptionRows];
 
           let rows = allRows;
           if (petsTypeFilter !== "all") {
             rows = rows.filter((r) => r.__kind === petsTypeFilter);
           }
+          // Mix lost/found/adoption by shuffling the rows so types are interleaved
+          rows = [...rows].sort(() => Math.random() - 0.5);
           if (petsStatusFilter === "approved") {
             rows = rows.filter((r) => r.status === "approved");
           }
@@ -1188,7 +1210,13 @@ export default function AdminHome() {
             );
 
           return (
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                gap: 16,
+              }}
+            >
               {rows.map((r: any) => {
                 const isLost = r.__kind === "lost";
                 const isFound = r.__kind === "found";
@@ -1222,20 +1250,22 @@ export default function AdminHome() {
                       padding: 16,
                       border: "1px solid #f1f5f9",
                       boxShadow: "0 4px 24px rgba(0, 0, 0, 0.06)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 12,
                     }}
                   >
                     <div
                       style={{
-                        display: "grid",
-                        gridTemplateColumns: "120px 1fr 1fr auto",
-                        gap: 16,
-                        alignItems: "center",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 12,
                       }}
                     >
                       <div
                         style={{
-                          width: 120,
-                          height: 120,
+                          width: "100%",
+                          height: 180,
                           borderRadius: 12,
                           overflow: "hidden",
                           background: "#f3f4f6",
@@ -1247,7 +1277,11 @@ export default function AdminHome() {
                         }}
                       >
                         {src ? (
-                          <img src={src} alt={title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          <img
+                            src={src}
+                            alt={title}
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          />
                         ) : (
                           <span>🐾</span>
                         )}
@@ -1299,8 +1333,9 @@ export default function AdminHome() {
                         style={{
                           display: "flex",
                           gap: 8,
-                          justifyContent: "flex-end",
+                          justifyContent: "space-between",
                           alignItems: "center",
+                          marginTop: 8,
                         }}
                       >
                         <div>{renderStatusBadge(r.status)}</div>
@@ -1330,21 +1365,6 @@ export default function AdminHome() {
                           }}
                         >
                           View details
-                        </button>
-                        <button
-                          onClick={() => handleDeletePet(r)}
-                          style={{
-                            padding: "8px 12px",
-                            borderRadius: 999,
-                            border: "1px solid #ef4444",
-                            background: "#ffffff",
-                            color: "#b91c1c",
-                            fontSize: 12,
-                            fontWeight: 600,
-                            cursor: "pointer",
-                          }}
-                        >
-                          Delete
                         </button>
                       </div>
                     </div>
@@ -4446,15 +4466,17 @@ export default function AdminHome() {
               </div>
 
               {(() => {
-                // Only include lost and found reports in this consolidated list.
-                // Adoption requests are managed separately in the Adoptions tab.
+                // Include approved lost, found, and adoption items in one mixed list.
                 const lostRows = lostReports
                   .filter((r: any) => r.status === "approved")
                   .map((r: any) => ({ ...r, __kind: "lost" }));
                 const foundRows = foundReports
                   .filter((r: any) => r.status === "approved")
                   .map((r: any) => ({ ...r, __kind: "found" }));
-                const allRows: any[] = [...lostRows, ...foundRows];
+                const adoptionRows = adoptionRequests
+                  .filter((r: any) => r.status === "approved")
+                  .map((r: any) => ({ ...r, __kind: "adoption" }));
+                const allRows: any[] = [...lostRows, ...foundRows, ...adoptionRows];
 
                 // apply type filter
                 let rows = allRows;
@@ -4466,6 +4488,9 @@ export default function AdminHome() {
                 if (petsStatusFilter === "approved") {
                   rows = rows.filter((r) => r.status === "approved");
                 }
+
+                // Shuffle so LOST / FOUND / ADOPTION appear visually mixed
+                rows = [...rows].sort(() => Math.random() - 0.5);
 
                 // text search
                 const q = petsSearch.trim().toLowerCase();
@@ -4501,10 +4526,17 @@ export default function AdminHome() {
                   );
 
                 return (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                      gap: 16,
+                    }}
+                  >
                     {rows.map((r: any) => {
                       const isLost = r.__kind === "lost";
                       const isFound = r.__kind === "found";
+                      const isAdoption = r.__kind === "adoption";
                       const title = isLost
                         ? `${r.pet_name || r.pet_type || "Pet"}`
                         : `${r.pet_type || r.pet_name || "Pet"}`;
@@ -4515,7 +4547,7 @@ export default function AdminHome() {
                       const origin = /^https?:/.test(apiBase)
                         ? new URL(apiBase).origin
                         : "http://localhost:8000";
-                      const raw = r.photo_url || r.photo;
+                      const raw = r.photo_url || r.photo || r.pet?.photos;
                       const src = raw
                         ? (() => {
                             const u = String(raw);
@@ -4535,88 +4567,111 @@ export default function AdminHome() {
                             padding: 16,
                             border: "1px solid #f1f5f9",
                             boxShadow: "0 4px 24px rgba(0, 0, 0, 0.06)",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 12,
                           }}
                         >
                           <div
                             style={{
-                              display: "grid",
-                              gridTemplateColumns: "120px 1fr 1fr auto",
-                              gap: 16,
+                              width: "100%",
+                              height: 180,
+                              borderRadius: 12,
+                              overflow: "hidden",
+                              background: "#f3f4f6",
+                              display: "flex",
                               alignItems: "center",
+                              justifyContent: "center",
+                              color: "#6b7280",
+                              fontSize: 28,
                             }}
                           >
+                            {src ? (
+                              <img
+                                src={src}
+                                alt={title}
+                                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                              />
+                            ) : (
+                              <span>🐾</span>
+                            )}
+                          </div>
+
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                              <span
+                                style={{
+                                  padding: "4px 10px",
+                                  borderRadius: 999,
+                                  background: isAdoption
+                                    ? "#ede9fe"
+                                    : isLost
+                                      ? "#fee2e2"
+                                      : "#dbeafe",
+                                  color: isAdoption
+                                    ? "#6d28d9"
+                                    : isLost
+                                      ? "#b91c1c"
+                                      : "#1d4ed8",
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {isAdoption ? "ADOPTION" : isLost ? "LOST" : "FOUND"}
+                              </span>
+                              <span
+                                style={{
+                                  padding: "4px 10px",
+                                  borderRadius: 999,
+                                  background: "#f1f5f9",
+                                  color: "#0f172a",
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  border: "1px solid #e5e7eb",
+                                }}
+                              >
+                                {r.status}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>{title}</div>
+                            <div style={{ fontSize: 13, color: "#374151", marginTop: 4 }}>
+                              {isAdoption
+                                ? `${r.pet?.species || "Pet"} • ${r.pet?.breed || "—"}` : isLost
+                                  ? `Breed: ${r.breed || "—"}` : `Breed: ${r.breed || "—"}`}
+                            </div>
                             <div
                               style={{
-                                width: 120,
-                                height: 120,
-                                borderRadius: 12,
+                                fontSize: 12,
+                                color: "#64748b",
+                                marginTop: 4,
+                                whiteSpace: "nowrap",
                                 overflow: "hidden",
-                                background: "#f3f4f6",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                color: "#6b7280",
-                                fontSize: 28,
+                                textOverflow: "ellipsis",
                               }}
                             >
-                              {src ? (
-                                <img src={src} alt={title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                              ) : (
-                                <span>🐾</span>
-                              )}
+                              {r.description || r.pet?.description || ""}
                             </div>
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                                <span
-                                  style={{
-                                    padding: "4px 10px",
-                                    borderRadius: 999,
-                                    background: isLost ? "#fee2e2" : isFound ? "#dbeafe" : "#ede9fe",
-                                    color: isLost ? "#b91c1c" : isFound ? "#1d4ed8" : "#6d28d9",
-                                    fontSize: 12,
-                                    fontWeight: 700,
-                                  }}
-                                >
-                                  {isLost ? "LOST" : isFound ? "FOUND" : "ADOPTION"}
-                                </span>
-                                <span
-                                  style={{
-                                    padding: "4px 10px",
-                                    borderRadius: 999,
-                                    background: "#f1f5f9",
-                                    color: "#0f172a",
-                                    fontSize: 12,
-                                    fontWeight: 700,
-                                    border: "1px solid #e5e7eb",
-                                  }}
-                                >
-                                  {r.status}
-                                </span>
-                              </div>
-                              <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>{title}</div>
-                              <div style={{ fontSize: 13, color: "#374151", marginTop: 4 }}>
-                                {isLost ? `Breed: ${r.breed || "—"}` : isFound ? `Breed: ${r.breed || "—"}` : `${r.pet?.species || "Pet"} • ${r.pet?.breed || "—"}`}
-                              </div>
-                              <div style={{ fontSize: 12, color: "#64748b", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                {r.description || r.pet?.description || ""}
-                              </div>
-                            </div>
-                            <div>
-                              <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600 }}>Last Seen Location:</div>
-                              <div style={{ fontSize: 13, color: "#374151" }}>{locationText || "—"}</div>
-                              <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600, marginTop: 8 }}>Reported by:</div>
-                              <div style={{ fontSize: 13, color: "#374151" }}>{r.reporter?.username || r.requester?.username || "—"}</div>
-                              <div style={{ fontSize: 12, color: "#64748b" }}>{r.reporter?.email || r.requester?.email || ""}</div>
-                            </div>
-                            <div
-                              style={{
-                                display: "flex",
-                                gap: 8,
-                                justifyContent: "flex-end",
-                                alignItems: "center",
-                              }}
-                            >
-                              <div>{renderStatusBadge(r.status)}</div>
+                          </div>
+
+                          <div>
+                            <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600 }}>Last Seen Location:</div>
+                            <div style={{ fontSize: 13, color: "#374151" }}>{locationText || "—"}</div>
+                            <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600, marginTop: 8 }}>Reported by:</div>
+                            <div style={{ fontSize: 13, color: "#374151" }}>{r.reporter?.username || r.requester?.username || "—"}</div>
+                            <div style={{ fontSize: 12, color: "#64748b" }}>{r.reporter?.email || r.requester?.email || ""}</div>
+                          </div>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 8,
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              marginTop: 8,
+                            }}
+                          >
+                            <div>{renderStatusBadge(r.status)}</div>
+                            <div style={{ display: "flex", gap: 8 }}>
                               <button
                                 onClick={() => {
                                   if ((r as any).pet?.id) {
@@ -4629,36 +4684,35 @@ export default function AdminHome() {
                                     });
                                   }
                                 }}
-                      style={{
-                        padding: "8px 12px",
-                        borderRadius: 999,
-                        border: "1px solid #e5e7eb",
-                        background: "#ffffff",
-                        color: "#0f172a",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
-                    >
-                      View details
-                    </button>
-                    
-                    <button
-                      onClick={() => handleDeletePet(r)}
-                      style={{
-                        padding: "8px 12px",
-                        borderRadius: 999,
-                        border: "1px solid #ef4444",
-                        background: "#ffffff",
-                        color: "#b91c1c",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </div>
+                                style={{
+                                  padding: "8px 12px",
+                                  borderRadius: 999,
+                                  border: "1px solid #e5e7eb",
+                                  background: "#ffffff",
+                                  color: "#0f172a",
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                View details
+                              </button>
+                              <button
+                                onClick={() => handleDeletePet(r)}
+                                style={{
+                                  padding: "8px 12px",
+                                  borderRadius: 999,
+                                  border: "1px solid #ef4444",
+                                  background: "#ffffff",
+                                  color: "#b91c1c",
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );

@@ -4682,6 +4682,10 @@ export default function AdminHome() {
                                     navigate(`/admin/lost/${r.id}`, {
                                       state: { from: "pets" },
                                     });
+                                  } else if (isFound) {
+                                    navigate(`/admin/found/${r.id}`, {
+                                      state: { from: "pets" },
+                                    });
                                   }
                                 }}
                                 style={{

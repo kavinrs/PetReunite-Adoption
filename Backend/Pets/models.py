@@ -22,6 +22,7 @@ class FoundPetReport(models.Model):
     )
     pet_type = models.CharField(max_length=100)
     breed = models.CharField(max_length=120, blank=True)
+    gender=models.CharField(max_length=10, blank=True)
     color = models.CharField(max_length=80, blank=True)
     weight = models.CharField(max_length=50, blank=True)
     estimated_age = models.CharField(max_length=60, blank=True)
@@ -57,6 +58,7 @@ class LostPetReport(models.Model):
     pet_name = models.CharField(max_length=150, blank=True)
     pet_type = models.CharField(max_length=100)
     breed = models.CharField(max_length=120, blank=True)
+    gender=models.CharField(max_length=10,blank=True)
     color = models.CharField(max_length=80, blank=True)
     weight = models.CharField(max_length=50, blank=True)
     vaccinated = models.CharField(max_length=20, blank=True)
@@ -92,6 +94,7 @@ class Pet(models.Model):
     name = models.CharField(max_length=150)
     species = models.CharField(max_length=50)  # Dog, Cat, Bird, etc.
     breed = models.CharField(max_length=120, blank=True)
+    gender=models.CharField(max_length=10,blank=True)
     description = models.TextField()
     age = models.CharField(max_length=60, blank=True)
     color = models.CharField(max_length=80, blank=True)

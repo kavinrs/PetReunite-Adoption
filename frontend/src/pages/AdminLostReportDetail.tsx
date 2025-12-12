@@ -87,6 +87,7 @@ export default function AdminLostReportDetail() {
         pet_name: snap.pet_name,
         pet_type: snap.pet_type,
         breed: snap.breed,
+        gender: snap.gender,
         color: snap.color,
         weight: snap.weight,
         vaccinated: snap.vaccinated,
@@ -279,6 +280,9 @@ export default function AdminLostReportDetail() {
                   {report.status}
                 </span>
               </div>
+              <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 2 }}>
+                Pet ID: <span style={{ fontWeight: 700, color: "#111827" }}>#{report.id}</span>
+              </div>
               <div
                 style={{
                   fontSize: 24,
@@ -427,6 +431,7 @@ export default function AdminLostReportDetail() {
                           ["pet_name", "Pet Name"],
                           ["pet_type", "Pet Type"],
                           ["breed", "Breed"],
+                          ["gender", "Gender"],
                           ["color", "Color"],
                           ["weight", "Weight"],
                           ["vaccinated", "Vaccinated"],
@@ -506,6 +511,7 @@ export default function AdminLostReportDetail() {
                     ["pet_name", "Pet Name"],
                     ["pet_type", "Pet Type"],
                     ["breed", "Breed"],
+                    ["gender", "Gender"],
                     ["color", "Color"],
                     ["weight", "Weight"],
                     ["vaccinated", "Vaccinated"],
@@ -580,6 +586,8 @@ export default function AdminLostReportDetail() {
                       if (res.error) setError(res.error);
                     } else {
                       setReport(res.data);
+                      window.alert("Lost report has been accepted.");
+                      navigate("/admin/pending-approvals", { replace: true });
                     }
                   }}
                   style={{
@@ -606,6 +614,8 @@ export default function AdminLostReportDetail() {
                       if (res.error) setError(res.error);
                     } else {
                       setReport(res.data);
+                      window.alert("Lost report has been rejected.");
+                      navigate("/admin/pending-approvals", { replace: true });
                     }
                   }}
                   style={{

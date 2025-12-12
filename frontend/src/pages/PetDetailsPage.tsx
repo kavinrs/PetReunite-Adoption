@@ -7,6 +7,7 @@ interface Pet {
   name: string;
   species: string;
   breed: string;
+  gender: string;
   description: string;
   age: string;
   color: string;
@@ -444,6 +445,16 @@ export default function PetDetailsPage() {
                 🏠 AVAILABLE FOR ADOPTION
               </div>
 
+              <div
+                style={{
+                  fontSize: "13px",
+                  color: "#6b7280",
+                  marginBottom: "4px",
+                }}
+              >
+                Pet ID: <span style={{ fontWeight: 700, color: "#111827" }}>#{pet.id}</span>
+              </div>
+
               <h1
                 style={{
                   fontSize: "48px",
@@ -463,7 +474,7 @@ export default function PetDetailsPage() {
                   margin: "0 0 24px 0",
                 }}
               >
-                {pet.species} • {pet.breed} • {pet.age}
+                {pet.species} • {pet.breed} • {pet.gender || "Gender N/A"} • {pet.age}
               </p>
 
               <div
@@ -484,6 +495,26 @@ export default function PetDetailsPage() {
                   >
                     COLOR
                   </div>
+                <div>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#9ca3af",
+                      fontWeight: "600",
+                    }}
+                  >
+                    GENDER
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#374151",
+                    }}
+                  >
+                    {pet.gender || "—"}
+                  </div>
+                </div>
                   <div
                     style={{
                       fontSize: "16px",

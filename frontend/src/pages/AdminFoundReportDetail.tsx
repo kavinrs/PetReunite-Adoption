@@ -281,6 +281,15 @@ export default function AdminFoundReportDetail() {
               </div>
               <div
                 style={{
+                  fontSize: 13,
+                  color: "#6b7280",
+                  marginBottom: 4,
+                }}
+              >
+                Pet ID: <span style={{ fontWeight: 700, color: "#111827" }}>#{report.id}</span>
+              </div>
+              <div
+                style={{
                   fontSize: 28,
                   fontWeight: 900,
                   color: "#0f172a",
@@ -424,6 +433,7 @@ export default function AdminFoundReportDetail() {
                         {([
                           ["pet_type", "Pet Type"],
                           ["breed", "Breed"],
+                          ["gender", "Gender"],
                           ["color", "Color"],
                           ["weight", "Weight"],
                           ["estimated_age", "Estimated Age"],
@@ -576,6 +586,8 @@ export default function AdminFoundReportDetail() {
                       if (res.error) setError(res.error);
                     } else {
                       setReport(res.data);
+                      window.alert("Found report has been accepted.");
+                      navigate("/admin/pending-approvals", { replace: true });
                     }
                   }}
                   style={{
@@ -602,6 +614,8 @@ export default function AdminFoundReportDetail() {
                       if (res.error) setError(res.error);
                     } else {
                       setReport(res.data);
+                      window.alert("Found report has been rejected.");
+                      navigate("/admin/pending-approvals", { replace: true });
                     }
                   }}
                   style={{

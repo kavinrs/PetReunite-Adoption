@@ -21,6 +21,7 @@ export default function LostReportDetail() {
     pet_name: "",
     pet_type: "",
     breed: "",
+    gender: "",
     color: "",
     weight: "",
     vaccinated: "",
@@ -49,6 +50,7 @@ export default function LostReportDetail() {
             pet_name: found.pet_name || "",
             pet_type: found.pet_type || "",
             breed: found.breed || "",
+            gender: found.gender || "",
             color: found.color || "",
             weight: found.weight || "",
             vaccinated: found.vaccinated || "",
@@ -227,6 +229,9 @@ export default function LostReportDetail() {
                   {report.status}
                 </span>
               </div>
+              <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 2 }}>
+                Pet ID: <span style={{ fontWeight: 700, color: "#111827" }}>#{report.id}</span>
+              </div>
               <div
                 style={{
                   fontSize: 24,
@@ -334,6 +339,7 @@ export default function LostReportDetail() {
                 ["pet_name", "Pet Name"],
                 ["pet_type", "Pet Type"],
                 ["breed", "Breed"],
+                ["gender", "Gender"],
                 ["color", "Color"],
                 ["weight", "Weight"],
                 ["vaccinated", "Vaccinated"],

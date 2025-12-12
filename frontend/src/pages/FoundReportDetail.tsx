@@ -164,6 +164,15 @@ export default function FoundReportDetail() {
             </div>
             <div
               style={{
+                fontSize: 13,
+                color: "#6b7280",
+                marginBottom: 4,
+              }}
+            >
+              Pet ID: <span style={{ fontWeight: 700, color: "#111827" }}>#{report.id}</span>
+            </div>
+            <div
+              style={{
                 fontSize: 32,
                 fontWeight: 900,
                 color: "#0f172a",
@@ -252,6 +261,7 @@ export default function FoundReportDetail() {
                 ["pet_name", "Pet Name"],
                 ["pet_type", "Pet Type"],
                 ["breed", "Breed"],
+                ["gender", "Gender"],
                 ["color", "Color"],
                 ["weight", "Weight"],
                 ["estimated_age", "Estimated Age"],

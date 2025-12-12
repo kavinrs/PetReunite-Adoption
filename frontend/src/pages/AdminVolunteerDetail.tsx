@@ -93,20 +93,25 @@ export default function AdminVolunteerDetail() {
           <div style={{ width: 160, height: 160, borderRadius: 12, overflow: "hidden", background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center" }}>
             {(() => {
               const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
-              const origin = /^https?:/.test(apiBase) ? new URL(apiBase).origin : "http://localhost:8000";
+              const origin = /^https?:/.test(apiBase)
+                ? new URL(apiBase).origin
+                : "http://localhost:8000";
               const raw = vol.profile_photo || vol.id_proof_document;
               if (!raw) return <span style={{ fontSize: 28, color: "#6b7280" }}>🐾</span>;
               const u = String(raw);
-              const isAbsolute = u.startsWith("http");
-              const isRoot = u.startsWith("/");
-              const fixed = isAbsolute ? u : isRoot ? origin + u : origin + "/media/" + u.replace(/^\/+/, "");
-              const ext = u.split(".").pop()?.toLowerCase();
-              const isImage = ["jpg", "jpeg", "png", "gif", "webp"]
-                .includes((ext || "").replace(/\?.*$/, ""));
-              return isImage ? (
-                <img src={fixed} alt="ID proof" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              ) : (
-                <span style={{ fontSize: 28, color: "#6b7280" }}>🐾</span>
+              if (u.startsWith("http")) {
+                return <img src={u} alt="Volunteer" style={{ width: "100%", height: "100%", objectFit: "cover" }} />;
+              }
+              if (u.startsWith("/")) {
+                return <img src={origin + u} alt="Volunteer" style={{ width: "100%", height: "100%", objectFit: "cover" }} />;
+              }
+              const path = u.startsWith("media/") ? `/${u}` : `/media/${u.replace(/^\/+/, "")}`;
+              return (
+                <img
+                  src={origin + path}
+                  alt="Volunteer"
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
               );
             })()}
           </div>
@@ -116,9 +121,7 @@ export default function AdminVolunteerDetail() {
           <Info label="State" value={vol.state} />
           <Info label="Pincode" value={vol.pincode} />
           <Info label="Skills" value={vol.skills} />
-          <Info label="Availability" value={vol.availability} />
           <Info label="Experience Level" value={vol.experience_level} />
-          <Info label="Date of Birth" value={vol.date_of_birth ? new Date(vol.date_of_birth).toLocaleDateString() : undefined} />
           <Info label="ID Proof Type" value={vol.id_proof_type} />
           <Info label="Status" value={vol.status} />
           <Info label="Submitted On" value={vol.created_at ? new Date(vol.created_at).toLocaleString() : undefined} />

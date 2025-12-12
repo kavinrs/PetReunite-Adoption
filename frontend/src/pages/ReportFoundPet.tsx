@@ -8,6 +8,7 @@ type Feedback = { type: "success" | "error"; message: string } | null;
 const initialForm = {
   pet_type: "",
   breed: "",
+  gender: "",
   color: "",
   weight: "",
   estimated_age: "",
@@ -195,6 +196,19 @@ export default function ReportFoundPet() {
                 style={inputStyle}
                 placeholder="Breed"
               />
+            </div>
+            <div>
+              <label style={labelStyle}>Gender</label>
+              <select
+                value={form.gender}
+                onChange={(e) => handleChange("gender" as any, e.target.value)}
+                style={inputStyle}
+              >
+                <option value="">Select gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Unknown">Unknown</option>
+              </select>
             </div>
             <div>
               <label style={labelStyle}>Color</label>

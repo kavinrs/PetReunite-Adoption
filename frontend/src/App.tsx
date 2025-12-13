@@ -21,9 +21,9 @@ import LostReportDetail from "./pages/LostReportDetail";
 import FoundReportDetail from "./pages/FoundReportDetail";
 import MyAdoptionRequests from "./pages/MyAdoptionRequests";
 import Home from "./pages/Home";
-import RoomsPage from "./chat/RoomsPage";
-import ChatRoomView from "./chat/ChatRoomView";
-import AdminRoomCreate from "./chat/AdminRoomCreate";
+// Chat components removed for now because src/chat files were deleted
+// import ChatRoomView from "./chat/ChatRoomView";
+// import AdminRoomCreate from "./chat/AdminRoomCreate";
 import { useViewportStandardization } from "./hooks/useViewportStandardization";
 import "./App.css";
 
@@ -40,12 +40,21 @@ export default function App() {
       <Route path="/login" element={<Dashboard />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/admin/register" element={<AdminRegister />} />
+
       {/* protected routes remain */}
       <Route
         path="/user"
         element={
           <PrivateRoute role="user">
             <UserHome />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/admin/chat"
+        element={
+          <PrivateRoute role="admin">
+            <Navigate to="/admin?tab=chat" replace />
           </PrivateRoute>
         }
       />
@@ -113,6 +122,8 @@ export default function App() {
           </PrivateRoute>
         }
       />
+
+      {/* Admin main dashboard */}
       <Route
         path="/admin"
         element={
@@ -121,7 +132,9 @@ export default function App() {
           </PrivateRoute>
         }
       />
-      {/* User chat: reuse UserHome layout so sidebar + top bar stay visible */}
+
+      {/* NOTE: chat routes disabled for now since chat components are missing */}
+      {/*
       <Route
         path="/user/chat"
         element={
@@ -138,7 +151,6 @@ export default function App() {
           </PrivateRoute>
         }
       />
-      {/* Admin chat */}
       <Route
         path="/admin/chat"
         element={
@@ -147,6 +159,9 @@ export default function App() {
           </PrivateRoute>
         }
       />
+      */}
+
+      {/* Other admin routes */}
       <Route
         path="/admin/pending-approvals"
         element={
@@ -187,6 +202,8 @@ export default function App() {
           </PrivateRoute>
         }
       />
+
+      {/* Legacy admin tabs -> redirect into AdminHome with query params */}
       <Route
         path="/admin/found-pets"
         element={
@@ -227,6 +244,8 @@ export default function App() {
           </PrivateRoute>
         }
       />
+
+      {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

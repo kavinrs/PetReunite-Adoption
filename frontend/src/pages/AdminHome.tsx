@@ -336,6 +336,7 @@
 //                       </button>
 //                     )
 //                   )}
+
 //                 </div>
 //                 <button
 //                   onClick={() => handleEditNotes(tab, r.id)}
@@ -458,6 +459,7 @@ import {
   updateAdminVolunteerRequest,
   deleteAdminVolunteerRequest,
 } from "../services/api";
+import AdminChat from "./AdminChat";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
 import "leaflet/dist/leaflet.css";
@@ -500,7 +502,8 @@ type TabKey =
   | "pets"
   | "users"
   | "volunteers"
-  | "stats";
+  | "stats"
+  | "chat";
 
 export default function AdminHome() {
   // Apply viewport standardization to ensure consistent 100% scaling
@@ -565,6 +568,7 @@ export default function AdminHome() {
         "users",
         "volunteers",
         "stats",
+        "chat",
       ].includes(initialTab)
     ) {
       setTab(initialTab);
@@ -670,6 +674,8 @@ export default function AdminHome() {
       reloadPets();
     } else if (tab === "volunteers") {
       reloadTable("volunteers", statusFilter);
+    } else if (tab === "chat") {
+      // Chat panel uses its own data hooks; no table reload needed here.
     } else {
       // For lost/found/adoptions we always fetch full data and
       // apply the statusFilter purely on the frontend so that
@@ -2649,12 +2655,12 @@ export default function AdminHome() {
             );
           })}
         </AnyMapContainer>
-        {expanded && (
+        {mapExpanded && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000 }}>
             <div style={{ width: "90vw", height: "80vh", background: "#ffffff", borderRadius: 12, padding: 12, boxShadow: "0 10px 30px rgba(0,0,0,0.2)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <div style={{ fontSize: 16, fontWeight: 700 }}>Pet Hotspots</div>
-                <button onClick={() => setExpanded(false)} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#ffffff", color: "#0f172a", fontSize: 12, fontWeight: 600 }}>Close</button>
+                <button onClick={() => setMapExpanded(false)} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#ffffff", color: "#0f172a", fontSize: 12, fontWeight: 600 }}>Close</button>
               </div>
               <AnyMapContainer
                 center={[20.5937, 78.9629]}
@@ -3793,17 +3799,17 @@ export default function AdminHome() {
             </button>
             <button
               onClick={() => {
-                // Navigate to integrated admin chat page
-                setTab("dashboard");
-                navigate("/admin/chat", { replace: false });
+                setTab("chat");
+                navigate("/admin?tab=chat", { replace: true });
               }}
               style={{
                 width: "100%",
                 padding: "12px 16px",
                 borderRadius: "12px",
                 border: "none",
-                background: "transparent",
-                color: "#64748b",
+                background:
+                  tab === "chat" ? "rgba(59,130,246,0.10)" : "transparent",
+                color: tab === "chat" ? "#2563eb" : "#64748b",
                 fontSize: "14px",
                 fontWeight: "600",
                 cursor: "pointer",
@@ -3879,7 +3885,9 @@ export default function AdminHome() {
                             ? "Users"
                             : tab === "volunteers"
                               ? "Volunteers"
-                              : "Statistics"}
+                              : tab === "chat"
+                                ? "Admin Chat"
+                                : "Statistics"}
               </span>
             </div>
             <div
@@ -4287,7 +4295,13 @@ export default function AdminHome() {
           {tab === "dashboard" && renderSummaryTiles()}
           {tab === "stats" && renderStatisticsPanels()}
 
-          {tab !== "dashboard" && tab !== "pets" && tab !== "stats" && tab !== "users" && (
+          {tab === "chat" && (
+            <div style={{ marginTop: 24 }}>
+              <AdminChat />
+            </div>
+          )}
+
+          {tab !== "dashboard" && tab !== "pets" && tab !== "stats" && tab !== "users" && tab !== "chat" && (
             <div style={{ marginBottom: 16 }}>
               <div
                 style={{

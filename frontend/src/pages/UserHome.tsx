@@ -527,8 +527,8 @@ export default function UserHome() {
       label: "Chat",
       icon: "💬",
       onClick: () => {
+        // Stay on the same route and just switch the in-page tab
         setPageTab("chat");
-        navigate("/user/chat");
       },
     },
   ];
@@ -723,20 +723,18 @@ export default function UserHome() {
             }}
           >
             <div>
-              <div style={{ fontSize: 24, fontWeight: 800 }}>
-                {pageTab === "activity"
-                  ? "My Activity"
-                  : pageTab === "chat"
-                  ? "My Chats"
-                  : "Home"}
-              </div>
-              <div style={{ color: "rgba(15,23,42,0.6)", marginTop: 4 }}>
-                {pageTab === "activity"
-                  ? "Your reports and adoption history"
-                  : pageTab === "chat"
-                  ? "Chat with admins and view case rooms"
-                  : "Manage your pet rescue activities"}
-              </div>
+              {pageTab !== "chat" && (
+                <>
+                  <div style={{ fontSize: 24, fontWeight: 800 }}>
+                    {pageTab === "activity" ? "My Activity" : "Home"}
+                  </div>
+                  <div style={{ color: "rgba(15,23,42,0.6)", marginTop: 4 }}>
+                    {pageTab === "activity"
+                      ? "Your reports and adoption history"
+                      : "Manage your pet rescue activities"}
+                  </div>
+                </>
+              )}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <div ref={notifRef} style={{ position: "relative" }}>
@@ -1026,18 +1024,19 @@ export default function UserHome() {
           </div>
           </div>
 
-          {/* Find Your Perfect Pet Section */}
-          <div
-            style={{
-              background: "white",
-              borderRadius: 16,
-              padding: 20,
-              boxShadow: "0 24px 60px rgba(15,23,42,0.08)",
-              border: "1px solid rgba(15,23,42,0.05)",
-              overflow: "visible",
-              position: "relative",
-            }}
-          >
+          {/* Find Your Perfect Pet Section (hide on chat tab) */}
+          {pageTab !== "chat" && (
+            <div
+              style={{
+                background: "white",
+                borderRadius: 16,
+                padding: 20,
+                boxShadow: "0 24px 60px rgba(15,23,42,0.08)",
+                border: "1px solid rgba(15,23,42,0.05)",
+                overflow: "visible",
+                position: "relative",
+              }}
+            >
             {/* Header */}
             <div style={{ marginBottom: 24 }}>
               <div
@@ -1057,15 +1056,14 @@ export default function UserHome() {
             </div>
 
             {/* Search and Filters */}
-            {pageTab !== "chat" && (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 16,
-                  marginBottom: 12,
-                }}
-              >
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 16,
+                marginBottom: 12,
+              }}
+            >
                 {/* Search Bar */}
                 <div style={{ marginBottom: 16 }}>
                   <input
@@ -1207,9 +1205,8 @@ export default function UserHome() {
                   </div>
                 )}
               </div>
-            )}
 
-            {/* Main content: Activity, Chat, or Dashboard cards */}
+            {/* Main content: Activity or Dashboard cards (chat rendered separately) */}
             {pageTab === "activity" ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 {activityLoading && <div style={{ padding: 12 }}>Loading activity…</div>}
@@ -1593,17 +1590,6 @@ export default function UserHome() {
                   </>
                 )}
               </div>
-            ) : pageTab === "chat" ? (
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "flex-start",
-                  paddingTop: 8,
-                }}
-              >
-                <RoomsPage embedded />
-              </div>
             ) : petsLoading ? (
               <div
                 style={{
@@ -1848,6 +1834,21 @@ export default function UserHome() {
               </div>
             )}
           </div>
+          )}
+
+          {/* Standalone Chat page content */}
+          {pageTab === "chat" && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "flex-start",
+                paddingTop: 8,
+              }}
+            >
+              <RoomsPage embedded />
+            </div>
+          )}
         </main>
       </div>
     </div>

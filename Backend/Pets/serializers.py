@@ -358,6 +358,7 @@ class ConversationCreateSerializer(serializers.ModelSerializer):
 
 class ChatMessageSerializer(serializers.ModelSerializer):
     sender = UserSummarySerializer(read_only=True)
+    sender_role = serializers.SerializerMethodField()
 
     class Meta:
         model = ChatMessage
@@ -365,11 +366,29 @@ class ChatMessageSerializer(serializers.ModelSerializer):
             "id",
             "conversation",
             "sender",
+            "sender_role",
             "text",
             "is_system",
             "created_at",
         )
-        read_only_fields = ("id", "conversation", "sender", "is_system", "created_at")
+        read_only_fields = (
+            "id",
+            "conversation",
+            "sender",
+            "sender_role",
+            "is_system",
+            "created_at",
+        )
+
+    def get_sender_role(self, obj):
+        # Identify whether this message was sent by the user or the admin for UI alignment.
+        try:
+            convo_user_id = obj.conversation.user_id
+        except Exception:  # pragma: no cover - defensive
+            convo_user_id = None
+        if convo_user_id is not None and obj.sender_id == convo_user_id:
+            return "user"
+        return "admin"
 
 
 class ChatMessageCreateSerializer(serializers.ModelSerializer):

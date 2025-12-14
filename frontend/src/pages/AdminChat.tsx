@@ -7,6 +7,7 @@ import {
   fetchAdminLostReports,
   fetchAdminFoundReports,
   fetchChatMessagesAdmin,
+  sendChatMessageAdmin,
   type ApiResult,
 } from "../services/api";
 
@@ -29,6 +30,12 @@ export default function AdminChat() {
   const [petLoading, setPetLoading] = useState(false);
   const [petError, setPetError] = useState<string | null>(null);
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
+  const [selectedConversationId, setSelectedConversationId] =
+    useState<number | null>(null);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   // Load admin chat conversations (both pending requests and active chats)
@@ -121,6 +128,36 @@ export default function AdminChat() {
     loadPet();
   }, [selectedRequest]);
 
+  // Load messages for the selected direct chat conversation (admin side)
+  useEffect(() => {
+    if (!selectedConversationId) {
+      setChatMessages([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadMessages = async () => {
+      setChatLoading(true);
+      const res = await fetchChatMessagesAdmin(selectedConversationId);
+      if (!cancelled) {
+        if (res.ok && Array.isArray(res.data)) {
+          setChatMessages(res.data as any[]);
+        } else if (res.error) {
+          setChatError(res.error);
+        }
+      }
+      setChatLoading(false);
+    };
+
+    loadMessages();
+    const id = window.setInterval(loadMessages, 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [selectedConversationId]);
+
   const getUserDisplayName = (c: any): string => {
     // Try several possible fields that backend might use
     const direct =
@@ -162,6 +199,15 @@ export default function AdminChat() {
     await loadConversations();
   };
 
+  // Try to auto-select the first active direct chat if none is selected yet
+  useEffect(() => {
+    if (selectedConversationId || directChats.length === 0) return;
+    const first = directChats[0];
+    if (first) {
+      setSelectedConversationId(first.id);
+    }
+  }, [selectedConversationId, directChats]);
+
   const handleRejectRequest = async (id: number) => {
     setLoading(true);
     const res = await closeAdminConversation(id);
@@ -170,6 +216,11 @@ export default function AdminChat() {
     }
     await loadConversations();
   };
+
+  const activeConversation =
+    selectedConversationId != null
+      ? conversations.find((c: any) => c.id === selectedConversationId) || null
+      : null;
 
   return (
     <div
@@ -250,129 +301,151 @@ export default function AdminChat() {
           </div>
         )}
 
-        <input
-          type="text"
-          placeholder="Search contact"
-          style={{
-            width: "100%",
-            padding: "8px 10px",
-            borderRadius: 999,
-            border: "1px solid #e5e7eb",
-            fontSize: 13,
-            outline: "none",
-          }}
-        />
-
+        {/* Direct Chats card */}
         <div
           style={{
-            fontSize: 12,
-            color: "#9ca3af",
-            marginTop: 4,
-          }}
-        >
-          Direct Chats
-        </div>
-
-        <div
-          style={{
+            borderRadius: 12,
+            background: "#ffffff",
+            padding: 10,
+            boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
             display: "flex",
             flexDirection: "column",
             gap: 8,
-            maxHeight: 260,
-            overflowY: "auto",
           }}
         >
-          {directChats.map((c: any, idx: number) => (
-            <button
-              key={c.id}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "40px 1fr auto",
-                gap: 8,
-                padding: "8px 10px",
-                borderRadius: 12,
-                border: "1px solid #e5e7eb",
-                background: idx === 0 ? "#eef2ff" : "#ffffff",
-                cursor: "pointer",
-                textAlign: "left",
-              }}
-            >
-              <div
+          <input
+            type="text"
+            placeholder="Search contact"
+            style={{
+              width: "100%",
+              padding: "6px 10px",
+              borderRadius: 999,
+              border: "1px solid #e5e7eb",
+              fontSize: 13,
+              outline: "none",
+              background: "#ffffff",
+              color: "#111827",
+            }}
+          />
+
+          <div
+            style={{
+              fontSize: 12,
+              color: "#9ca3af",
+              marginTop: 4,
+            }}
+          >
+            Direct Chats
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              maxHeight: 210,
+              overflowY: "auto",
+            }}
+          >
+            {directChats.map((c: any, idx: number) => (
+              <button
+                key={c.id}
                 style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: "50%",
-                  background: "linear-gradient(135deg,#6366f1,#22c1c3)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "white",
-                  fontWeight: 700,
-                  fontSize: 16,
+                  display: "grid",
+                  gridTemplateColumns: "40px 1fr auto",
+                  gap: 8,
+                  padding: "8px 10px",
+                  borderRadius: 12,
+                  border: "1px solid #e5e7eb",
+                  background:
+                    selectedConversationId === c.id
+                      ? "#eef2ff"
+                      : "#f9fafb",
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+                onClick={() => {
+                  setSelectedConversationId(c.id);
+                  setCenterView("chat");
                 }}
               >
-                {getUserDisplayName(c).charAt(0)}
-              </div>
-              <div style={{ minWidth: 0 }}>
                 <div
                   style={{
-                    fontSize: 14,
+                    width: 40,
+                    height: 40,
+                    borderRadius: "50%",
+                    background: "linear-gradient(135deg,#6366f1,#22c1c3)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "white",
                     fontWeight: 700,
-                    color: "#0f172a",
-                    marginBottom: 2,
+                    fontSize: 16,
                   }}
                 >
-                  {c.user_full_name || c.user_username || "User"}
+                  {getUserDisplayName(c).charAt(0)}
                 </div>
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "#64748b",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {c.topic || c.last_message_preview || "Conversation"}
-                </div>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "flex-end",
-                  gap: 4,
-                  fontSize: 11,
-                  color: "#9ca3af",
-                }}
-              >
-                <span>
-                  {c.updated_at
-                    ? new Date(c.updated_at).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
-                    : ""}
-                </span>
-                {c.unread > 0 && (
-                  <span
+                <div style={{ minWidth: 0 }}>
+                  <div
                     style={{
-                      minWidth: 18,
-                      padding: "2px 6px",
-                      borderRadius: 999,
-                      background: "#f97316",
-                      color: "white",
-                      fontSize: 10,
+                      fontSize: 14,
                       fontWeight: 700,
-                      textAlign: "center",
+                      color: "#0f172a",
+                      marginBottom: 2,
                     }}
                   >
-                    {c.unread}
+                    {getUserDisplayName(c)}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "#64748b",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {c.topic || c.last_message_preview || "Conversation"}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-end",
+                    gap: 4,
+                    fontSize: 11,
+                    color: "#9ca3af",
+                  }}
+                >
+                  <span>
+                    {c.updated_at
+                      ? new Date(c.updated_at).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : ""}
                   </span>
-                )}
-              </div>
-            </button>
-          ))}
+                  {c.unread > 0 && (
+                    <span
+                      style={{
+                        minWidth: 18,
+                        padding: "2px 6px",
+                        borderRadius: 999,
+                        background: "#f97316",
+                        color: "white",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        textAlign: "center",
+                      }}
+                    >
+                      {c.unread}
+                    </span>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
 
         <div
@@ -794,6 +867,7 @@ export default function AdminChat() {
           </div>
         ) : (
           <>
+            {/* Active chat header */}
             <div
               style={{
                 display: "flex",
@@ -802,69 +876,25 @@ export default function AdminChat() {
                 marginBottom: 12,
               }}
             >
-              <div>
-                <div
-                  style={{
-                    fontSize: 16,
-                    fontWeight: 800,
-                    color: "#0f172a",
-                  }}
-                >
-                  Kevin
-                </div>
+              <div
+                style={{
+                  fontSize: 16,
+                  fontWeight: 800,
+                  color: "#0f172a",
+                }}
+              >
+                {activeConversation
+                  ? getUserDisplayName(activeConversation)
+                  : "No chat selected"}
+              </div>
+              {activeConversation && (
                 <div style={{ fontSize: 12, color: "#64748b" }}>
-                  UI / UX Designer
+                  Chat with user
                 </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <button
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: "50%",
-                    border: "1px solid #e5e7eb",
-                    background: "#ffffff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    cursor: "pointer",
-                  }}
-                >
-                  🔍
-                </button>
-                <button
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: "50%",
-                    border: "1px solid #e5e7eb",
-                    background: "#ffffff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    cursor: "pointer",
-                  }}
-                >
-                  📞
-                </button>
-                <button
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: "50%",
-                    border: "1px solid #e5e7eb",
-                    background: "#ffffff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    cursor: "pointer",
-                  }}
-                >
-                  ⋮
-                </button>
-              </div>
+              )}
             </div>
 
+            {/* Messages list */}
             <div
               style={{
                 flex: 1,
@@ -875,43 +905,97 @@ export default function AdminChat() {
                 overflowY: "auto",
                 display: "flex",
                 flexDirection: "column",
-                gap: 12,
+                gap: 8,
               }}
             >
-              <div
-                style={{ fontSize: 12, color: "#9ca3af", textAlign: "center" }}
-              >
-                Yesterday 10:44 AM
-              </div>
-              <div
-                style={{
-                  alignSelf: "flex-start",
-                  maxWidth: "70%",
-                  padding: "8px 12px",
-                  borderRadius: 16,
-                  background: "#f3f4ff",
-                  fontSize: 13,
-                  color: "#0f172a",
-                }}
-              >
-                User message preview. This is where the user text will appear.
-              </div>
-              <div
-                style={{
-                  alignSelf: "flex-end",
-                  maxWidth: "70%",
-                  padding: "8px 12px",
-                  borderRadius: 16,
-                  background: "#4f46e5",
-                  fontSize: 13,
-                  color: "#ffffff",
-                }}
-              >
-                Admin reply bubble example to match the modern UI.
-              </div>
+              {!activeConversation && (
+                <div
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 13,
+                    color: "#64748b",
+                    textAlign: "center",
+                  }}
+                >
+                  Select a chat on the left to start messaging.
+                </div>
+              )}
+
+              {activeConversation && chatMessages.length === 0 && !chatLoading && (
+                <div
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 13,
+                    color: "#64748b",
+                    textAlign: "center",
+                  }}
+                >
+                  No messages yet. Say hello to the user.
+                </div>
+              )}
+
+              {activeConversation &&
+                chatMessages.map((m: any) => {
+                  const userId = activeConversation.user?.id;
+                  const isAdmin =
+                    !m.is_system && userId && m.sender && m.sender.id !== userId;
+                  return (
+                    <div
+                      key={m.id}
+                      style={{
+                        display: "flex",
+                        justifyContent: isAdmin
+                          ? "flex-end"
+                          : "flex-start",
+                      }}
+                    >
+                      <div
+                        style={{
+                          maxWidth: "70%",
+                          padding: "8px 12px",
+                          borderRadius: 18,
+                          fontSize: 13,
+                          lineHeight: 1.4,
+                          background: isAdmin ? "#4f46e5" : "#e5e7eb",
+                          color: isAdmin ? "#ffffff" : "#111827",
+                        }}
+                      >
+                        {m.text}
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
 
-            <div
+            {/* Bottom admin chat input */}
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!activeConversation || !chatInput.trim()) return;
+                const text = chatInput.trim();
+                setChatInput("");
+                setChatError(null);
+                const res = await sendChatMessageAdmin(activeConversation.id, text);
+                if (res.ok) {
+                  setChatMessages((prev) => [
+                    ...prev,
+                    {
+                      id: res.data?.id ?? `local-${Date.now()}`,
+                      text,
+                      is_system: false,
+                      sender: activeConversation.admin || null,
+                    },
+                  ]);
+                } else if (res.error) {
+                  setChatError(res.error);
+                }
+              }}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -923,32 +1007,47 @@ export default function AdminChat() {
               }}
             >
               <input
-                type="text"
-                placeholder="Type a message here…"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Type a message here..."
                 style={{
                   flex: 1,
                   border: "none",
                   outline: "none",
                   fontSize: 13,
+                  color: "#111827",
+                  background: "#ffffff",
                 }}
               />
-              <span style={{ cursor: "pointer" }}>😊</span>
-              <span style={{ cursor: "pointer" }}>📎</span>
               <button
+                type="submit"
                 style={{
                   border: "none",
                   borderRadius: 999,
                   padding: "6px 14px",
                   background: "#4f46e5",
-                  color: "white",
+                  color: "#ffffff",
                   fontSize: 13,
                   fontWeight: 600,
-                  cursor: "pointer",
+                  cursor: activeConversation ? "pointer" : "not-allowed",
+                  opacity: activeConversation ? 1 : 0.5,
                 }}
               >
                 Send
               </button>
-            </div>
+            </form>
+
+            {chatError && (
+              <div
+                style={{
+                  marginTop: 4,
+                  fontSize: 12,
+                  color: "#b91c1c",
+                }}
+              >
+                {chatError}
+              </div>
+            )}
           </>
         )}
       </div>

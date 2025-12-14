@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import {
@@ -6,7 +6,14 @@ import {
   getRooms,
   createChatConversationWithPet,
   sendChatMessageUser,
+  fetchChatMessagesUser,
+  confirmChatConversation,
+  getProfile,
 } from "../services/api";
+
+import emojiIcon from "../assets/chat/emoji.png";
+import galleryIcon from "../assets/chat/gallery.png";
+import sendIcon from "../assets/chat/send.png";
 
 // Minimal room type matching the getRooms response shape
 type Room = {
@@ -46,7 +53,18 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
   const [requestReason, setRequestReason] = useState("");
   const [requestSubmitting, setRequestSubmitting] = useState(false);
   const [requestMessage, setRequestMessage] = useState<string | null>(null);
+  const [selectedConversationId, setSelectedConversationId] =
+    useState<number | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [messageInput, setMessageInput] = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [messageError, setMessageError] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
 
+  // Load conversations and rooms
   useEffect(() => {
     const load = async () => {
       setLoading(true);
@@ -67,7 +85,13 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
       }
 
       if (convRes.ok && Array.isArray(convRes.data)) {
-        setConversations(convRes.data as Conversation[]);
+        const list = convRes.data as Conversation[];
+        setConversations(list);
+        // Auto-select the most recent conversation so the chat bar works
+        // immediately without requiring a manual click.
+        if (!selectedConversationId && list.length > 0) {
+          setSelectedConversationId(list[0].id);
+        }
       }
       if (roomRes.ok) {
         setRooms((roomRes.rooms ?? []) as Room[]);
@@ -75,7 +99,45 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
       setLoading(false);
     };
     load();
+  }, [selectedConversationId]);
+
+  // Load current user profile to know which sender is "me"
+  useEffect(() => {
+    async function loadProfile() {
+      const res = await getProfile();
+      if (res.ok && res.data?.id) {
+        setCurrentUserId(res.data.id);
+      }
+    }
+    loadProfile();
   }, []);
+
+  // Load messages for the selected conversation and poll periodically
+  useEffect(() => {
+    if (!selectedConversationId) {
+      setMessages([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadMessages = async () => {
+      setMessagesLoading(true);
+      const res = await fetchChatMessagesUser(selectedConversationId);
+      if (!cancelled && res.ok && Array.isArray(res.data?.messages ?? res.data)) {
+        const list = (res.data.messages ?? res.data) as any[];
+        setMessages(list);
+      }
+      setMessagesLoading(false);
+    };
+
+    loadMessages();
+    const id = window.setInterval(loadMessages, 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [selectedConversationId]);
 
   const card = (
     <div
@@ -309,10 +371,14 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                           style={{
                             borderRadius: 10,
                             padding: "8px 10px",
-                            background: "#f8fafc",
+                            background:
+                              selectedConversationId === c.id
+                                ? "#e0f2fe"
+                                : "#f8fafc",
                             border: "1px solid rgba(148,163,184,0.6)",
                             cursor: "pointer",
                           }}
+                          onClick={() => setSelectedConversationId(c.id)}
                         >
                           <div
                             style={{
@@ -343,7 +409,7 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                 </div>
               </div>
 
-              {/* Middle column: main chat area placeholder */}
+              {/* Middle column: main chat area */}
               <div
                 style={{
                   flex: "1 1 auto",
@@ -366,22 +432,307 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                 >
                   Admin Chat
                 </div>
+                {/* Messages area */}
                 <div
                   style={{
                     flex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
                     background: "#f8fafc",
-                    fontSize: 13,
-                    color: "#64748b",
-                    textAlign: "center",
-                    padding: 16,
+                    padding: 12,
+                    overflowY: "auto",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
                   }}
                 >
-                  Select a chat on the left to view messages. Chat messages will
-                  appear here.
+                  {!selectedConversationId && (
+                    <div
+                      style={{
+                        flex: 1,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 13,
+                        color: "#64748b",
+                        textAlign: "center",
+                      }}
+                    >
+                      Select a chat on the left to view messages. Chat messages
+                      will appear here.
+                    </div>
+                  )}
+
+                  {selectedConversationId &&
+                    messages.length === 0 &&
+                    !messagesLoading && (
+                      <div
+                        style={{
+                          flex: 1,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 13,
+                          color: "#64748b",
+                          textAlign: "center",
+                        }}
+                      >
+                        No messages yet. Say hello to the admin.
+                      </div>
+                    )}
+
+                  {selectedConversationId &&
+                    messages.map((m) => {
+                      const isUser =
+                        !m.is_system &&
+                        (m.sender_role === "user" ||
+                          (currentUserId != null &&
+                            (m.sender?.id === currentUserId ||
+                              m.sender === currentUserId)));
+
+                      return (
+                        <div
+                          key={m.id || `${m.created_at}-${Math.random()}`}
+                          style={{
+                            display: "flex",
+                            justifyContent: isUser
+                              ? "flex-end"
+                              : "flex-start",
+                          }}
+                        >
+                          <div
+                            style={{
+                              maxWidth: "70%",
+                              padding: "8px 12px",
+                              borderRadius: 18,
+                              fontSize: 13,
+                              lineHeight: 1.4,
+                              background: isUser ? "#0ea5e9" : "#e5e7eb",
+                              color: isUser ? "#ffffff" : "#111827",
+                            }}
+                          >
+                            {m.text || m.content}
+                          </div>
+                        </div>
+                      );
+                    })}
                 </div>
+
+                {/* Bottom chat bar */}
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!selectedConversationId || !messageInput.trim()) return;
+
+                    const text = messageInput.trim();
+                    setMessageInput("");
+                    setShowEmojiPicker(false);
+                    setMessageError(null);
+
+                    // Ensure conversation is active before sending
+                    const convo = conversations.find(
+                      (c) => c.id === selectedConversationId,
+                    );
+                    if (convo && convo.status !== "active") {
+                      const confirmRes = await confirmChatConversation(
+                        selectedConversationId,
+                      );
+                      if (!confirmRes.ok) {
+                        setMessageError(
+                          confirmRes.error ||
+                            "Conversation is not ready for messages yet.",
+                        );
+                        return;
+                      }
+                      setConversations((prev) =>
+                        prev.map((c) =>
+                          c.id === selectedConversationId
+                            ? { ...c, status: "active" }
+                            : c,
+                        ),
+                      );
+                    }
+
+                    const res = await sendChatMessageUser(
+                      selectedConversationId,
+                      text,
+                    );
+                    if (res.ok) {
+                      setMessages((prev) => [
+                        ...prev,
+                        {
+                          id: res.data?.id ?? `local-${Date.now()}`,
+                          text,
+                          sender_role: "user",
+                          sender: { id: currentUserId },
+                        },
+                      ]);
+                    } else if (res.error) {
+                      setMessageError(res.error);
+                    }
+                  }}
+                  style={{
+                    padding: 10,
+                    borderTop: "1px solid #e5e7eb",
+                    background: "#ffffff",
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "relative",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                    }}
+                  >
+                    {showEmojiPicker && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: "110%",
+                          left: 12,
+                          zIndex: 10,
+                          padding: 6,
+                          borderRadius: 12,
+                          background: "#ffffff",
+                          border: "1px solid #e5e7eb",
+                          boxShadow: "0 8px 20px rgba(15,23,42,0.12)",
+                          display: "flex",
+                          gap: 4,
+                          fontSize: 18,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {["😊", "😂", "😍", "👍", "🙏", "😢"].map((emo) => (
+                          <span
+                            key={emo}
+                            onClick={() => {
+                              setMessageInput((prev) => prev + emo);
+                            }}
+                          >
+                            {emo}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        borderRadius: 999,
+                        border: "1px solid #e5e7eb",
+                        padding: "6px 10px",
+                        background: "#ffffff",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setShowEmojiPicker((v) => !v)}
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          cursor: "pointer",
+                          padding: 0,
+                          display: "flex",
+                          alignItems: "center",
+                        }}
+                      >
+                        <img
+                          src={emojiIcon}
+                          alt="Emoji"
+                          style={{ width: 20, height: 20 }}
+                        />
+                      </button>
+                      <input
+                        type="text"
+                        value={messageInput}
+                        onChange={(e) => setMessageInput(e.target.value)}
+                        placeholder="Type a message"
+                        style={{
+                          flex: 1,
+                          border: "none",
+                          outline: "none",
+                          fontSize: 13,
+                          background: "#ffffff",
+                          color: "#111827",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          cursor: "pointer",
+                          padding: 0,
+                          display: "flex",
+                          alignItems: "center",
+                        }}
+                      >
+                        <img
+                          src={galleryIcon}
+                          alt="Gallery"
+                          style={{ width: 20, height: 20 }}
+                        />
+                      </button>
+                      <button
+                        type="submit"
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          cursor: selectedConversationId
+                            ? "pointer"
+                            : "not-allowed",
+                          opacity: selectedConversationId ? 0.9 : 0.5,
+                          padding: 0,
+                          display: "flex",
+                          alignItems: "center",
+                        }}
+                      >
+                        <img
+                          src={sendIcon}
+                          alt="Send"
+                          style={{ width: 20, height: 20 }}
+                        />
+                      </button>
+                    </div>
+
+                    {selectedFileName && (
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "#6b7280",
+                          paddingLeft: 6,
+                        }}
+                      >
+                        Selected file: {selectedFileName}
+                      </div>
+                    )}
+
+                    {messageError && (
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "#b91c1c",
+                          paddingLeft: 6,
+                          marginTop: 2,
+                        }}
+                      >
+                        {messageError}
+                      </div>
+                    )}
+
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        setSelectedFileName(file ? file.name : null);
+                      }}
+                    />
+                  </div>
+                </form>
               </div>
             </div>
           )}
@@ -441,6 +792,7 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                     border: "1px solid #cbd5e1",
                     padding: "8px 10px",
                     fontSize: 13,
+                    
                   }}
                   placeholder="Enter pet ID"
                 />

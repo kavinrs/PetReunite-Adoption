@@ -13,6 +13,7 @@ from .views import (
     AdminUpdateAdoptionRequestView,
     AdminUserListView,
     AdminUserActivityView,
+    AdminChatMessageListCreateView,
     AdoptionRequestDetailView,
     AdoptionRequestListView,
     AllReportsView,
@@ -149,6 +150,11 @@ urlpatterns = [
         "admin/chat/conversations/",
         AdminConversationListView.as_view(),
         name="chat-conversations-admin",
+    ),
+    path(
+        "admin/chat/conversations/<int:conversation_id>/messages/",
+        AdminChatMessageListCreateView.as_view(),
+        name="chat-messages-admin",
     ),
     path(
         "admin/chat/conversations/<int:pk>/accept/",

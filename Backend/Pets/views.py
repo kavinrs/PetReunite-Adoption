@@ -661,6 +661,38 @@ class UserChatMessageListCreateView(generics.ListCreateAPIView):
         serializer.save(conversation=convo, sender=self.request.user)
 
 
+class AdminChatMessageListCreateView(generics.ListCreateAPIView):
+    """List/send messages in a conversation for admins.
+
+    This mirrors UserChatMessageListCreateView but uses admin permissions and
+    does not restrict by owning user. It is used by the admin chat UI to see
+    and reply to user conversations.
+    """
+
+    permission_classes = [IsAdminOrStaff]
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return ChatMessageCreateSerializer
+        return ChatMessageSerializer
+
+    def get_queryset(self):
+        convo_id = self.kwargs["conversation_id"]
+        convo = get_object_or_404(Conversation, pk=convo_id)
+        return convo.messages.select_related("sender")
+
+    def perform_create(self, serializer):
+        convo_id = self.kwargs["conversation_id"]
+        convo = get_object_or_404(Conversation, pk=convo_id)
+        if convo.status != "active":
+            raise permissions.PermissionDenied("Conversation is not active.")
+        # Optionally claim the conversation for this admin if not already set.
+        if convo.admin_id is None:
+            convo.admin = self.request.user
+            convo.save(update_fields=["admin", "updated_at"])
+        serializer.save(conversation=convo, sender=self.request.user)
+
+
 class AdminConversationListView(generics.ListAPIView):
     """List conversations for admins with optional status filter."""
 

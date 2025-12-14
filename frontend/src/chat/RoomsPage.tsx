@@ -5,6 +5,7 @@ import {
   fetchChatConversations,
   getRooms,
   createChatConversationWithPet,
+  sendChatMessageUser,
 } from "../services/api";
 
 // Minimal room type matching the getRooms response shape
@@ -396,12 +397,17 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                 setRequestSubmitting(true);
                 setRequestMessage(null);
                 const payload = {
+                  // Backend expects pet_id to link the conversation to a pet.
                   pet_id: Number(requestPetId),
-                  pet_name: "",
-                  pet_kind: requestReason.trim() || undefined,
                 };
                 const res = await createChatConversationWithPet(payload);
                 if (res.ok) {
+                  const convoId = (res.data as any)?.id;
+                  if (convoId && requestReason.trim()) {
+                    // Send the user's reason as the first chat message so that
+                    // admins see it as the conversation preview / reason.
+                    await sendChatMessageUser(convoId, requestReason.trim());
+                  }
                   setRequestMessage("Chat request sent to admin.");
                   setRequestPetId("");
                   setRequestReason("");

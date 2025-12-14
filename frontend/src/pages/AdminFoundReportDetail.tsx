@@ -40,6 +40,8 @@ export default function AdminFoundReportDetail() {
     const from = (location.state as any)?.from;
     if (from === "admin-map") {
       navigate("/admin?tab=stats", { state: { openMap: true } });
+    } else if (from === "admin-chat-requests") {
+      navigate("/admin?tab=chat", { replace: true });
     } else if (from === "admin-found") {
       navigate("/admin?tab=found", { replace: true });
     } else if (from === "pending-approvals") {

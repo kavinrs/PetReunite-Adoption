@@ -243,6 +243,7 @@ class Conversation(models.Model):
       - requested: user requested chat, no admin has accepted yet
       - pending_user: admin accepted, waiting for user confirmation
       - active: both parties can chat
+      - read_only: admin can chat, user cannot (waiting)
       - closed: conversation finished (history is read-only)
     """
 
@@ -250,6 +251,7 @@ class Conversation(models.Model):
         ("requested", "Requested"),
         ("pending_user", "Pending User Confirmation"),
         ("active", "Active"),
+        ("read_only", "Read Only"),
         ("closed", "Closed"),
     ]
 
@@ -302,6 +304,17 @@ class ChatMessage(models.Model):
     )
     sender = models.ForeignKey(User, on_delete=models.CASCADE)
     text = models.TextField()
+    # Reply support (WhatsApp-like)
+    reply_to = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="replies",
+    )
+    # Delete support
+    is_deleted = models.BooleanField(default=False)
+    deleted_for = models.JSONField(default=list, blank=True)
     is_system = models.BooleanField(
         default=False,
         help_text="True for system-generated messages like status changes.",

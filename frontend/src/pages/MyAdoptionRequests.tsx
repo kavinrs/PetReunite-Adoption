@@ -32,6 +32,7 @@ export default function MyAdoptionRequests() {
   const [selectedChat, setSelectedChat] = useState<{
     requestId: number;
     petName: string;
+    petId: string | number;
     status: "pending" | "approved" | "rejected";
   } | null>(null);
 
@@ -422,6 +423,7 @@ export default function MyAdoptionRequests() {
                         setSelectedChat({
                           requestId: request.id,
                           petName: request.pet.name,
+                          petId: (request.pet as any).pet_unique_id || (request.pet as any).unique_id || request.pet.id,
                           status: request.status,
                         })
                       }
@@ -469,6 +471,7 @@ export default function MyAdoptionRequests() {
         <ChatWidget
           adoptionRequestId={selectedChat.requestId}
           petName={selectedChat.petName}
+          petId={selectedChat.petId}
           status={selectedChat.status}
           onClose={() => setSelectedChat(null)}
         />

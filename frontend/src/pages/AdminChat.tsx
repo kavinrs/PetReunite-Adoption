@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   fetchAdminChatConversations,
@@ -7,7 +7,11 @@ import {
   fetchAdminLostReports,
   fetchAdminFoundReports,
   fetchChatMessagesAdmin,
-  sendChatMessageAdmin,
+  sendChatMessageAdminWithReply,
+  updateAdminConversationStatus,
+  deleteAdminConversation,
+  deleteChatMessageAdminForMe,
+  deleteChatMessageAdminForEveryone,
   type ApiResult,
 } from "../services/api";
 
@@ -36,6 +40,21 @@ export default function AdminChat() {
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<any | null>(null);
+  const [hoveredMessageId, setHoveredMessageId] = useState<number | null>(null);
+  const [menuForMessageId, setMenuForMessageId] = useState<number | null>(null);
+  const [optionsMenu, setOptionsMenu] = useState<{
+    message: any;
+    x: number;
+    y: number;
+    items: { label: string; onClick: () => void }[];
+  } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    messageId: number;
+    x: number;
+    y: number;
+  } | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
 
   // Load admin chat conversations (both pending requests and active chats)
@@ -282,6 +301,22 @@ export default function AdminChat() {
     selectedConversationId != null
       ? conversations.find((c: any) => c.id === selectedConversationId) || null
       : null;
+
+  useEffect(() => {
+    if (!activeConversation) return;
+    // Keep chat pinned to bottom on new messages to avoid "jump to top" annoyance.
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [activeConversation?.id, chatMessages.length]);
+
+  useEffect(() => {
+    const onDocClick = () => {
+      setMenuForMessageId(null);
+      setOptionsMenu(null);
+      setContextMenu(null);
+    };
+    document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
+  }, []);
 
   return (
     <div
@@ -809,7 +844,7 @@ export default function AdminChat() {
                                 {selectedPet?.pet_unique_id ||
                                   c.pet_unique_id ||
                                   (c.pet_id != null
-                                    ? `ID ${c.pet_id}`
+                                    ? `${c.pet_id}`
                                     : "-")}
                               </span>
                               {(selectedPet?.id || c.pet_id) && (
@@ -951,13 +986,102 @@ export default function AdminChat() {
                   color: "#0f172a",
                 }}
               >
-                {activeConversation
-                  ? getUserDisplayName(activeConversation)
-                  : "No chat selected"}
+                {(() => {
+                  if (!activeConversation) return "No chat selected";
+                  const name = getUserDisplayName(activeConversation);
+                  const rawPetId =
+                    activeConversation.pet_unique_id ??
+                    (activeConversation.pet_id != null
+                      ? String(activeConversation.pet_id)
+                      : "");
+                  const petLabel =
+                    rawPetId && !rawPetId.toUpperCase().startsWith("ID #")
+                      ? `ID #${rawPetId}`
+                      : rawPetId;
+                  return petLabel ? `${name} – ${petLabel}` : name;
+                })()}
               </div>
               {activeConversation && (
-                <div style={{ fontSize: 12, color: "#64748b" }}>
-                  Chat with user
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    fontSize: 12,
+                    color: "#64748b",
+                  }}
+                >
+                  {(() => {
+                    const rawStatus = (activeConversation.status || "").toLowerCase();
+                    const selectValue =
+                      rawStatus === "closed"
+                        ? "closed"
+                        : rawStatus === "read_only"
+                          ? "read_only"
+                          : "active";
+                    return (
+                      <select
+                        value={selectValue}
+                        onChange={async (e) => {
+                          const next = e.target.value as
+                            | "active"
+                            | "read_only"
+                            | "closed";
+                          const res = await updateAdminConversationStatus(
+                            activeConversation.id,
+                            next,
+                          );
+                          if (res.ok) {
+                            await loadConversations();
+                          }
+                        }}
+                        style={{
+                          fontSize: 12,
+                          borderRadius: 999,
+                          border: "1px solid #e5e7eb",
+                          padding: "4px 8px",
+                          background: "#ffffff",
+                          color: "#111827",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <option value="active">Active</option>
+                        <option value="read_only">Waiting</option>
+                        <option value="closed">Close</option>
+                      </select>
+                    );
+                  })()}
+                  <span>Chat with user</span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (
+                        !activeConversation ||
+                        !window.confirm(
+                          "Delete this entire chat and all its messages?",
+                        )
+                      ) {
+                        return;
+                      }
+                      const res = await deleteAdminConversation(
+                        activeConversation.id,
+                      );
+                      if (res.ok) {
+                        setSelectedConversationId(null);
+                        await loadConversations();
+                      }
+                    }}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      color: "#dc2626",
+                      cursor: "pointer",
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Delete chat
+                  </button>
                 </div>
               )}
             </div>
@@ -1013,32 +1137,189 @@ export default function AdminChat() {
                   const userId = activeConversation.user?.id;
                   const isAdmin =
                     !m.is_system && userId && m.sender && m.sender.id !== userId;
+                  const isSystem = Boolean(m.is_system);
+                  const text = (m.text || m.content || "") as string;
+                  const systemColor = (() => {
+                    const t = text.toLowerCase();
+                    if (t.includes("active")) return "#16a34a";
+                    if (t.includes("close") || t.includes("closed")) return "#dc2626";
+                    if (t.includes("waiting")) return "#f59e0b";
+                    return "#4b5563";
+                  })();
                   return (
                     <div
                       key={m.id}
                       style={{
                         display: "flex",
-                        justifyContent: isAdmin
-                          ? "flex-end"
-                          : "flex-start",
+                        justifyContent: isSystem
+                          ? "center"
+                          : isAdmin
+                            ? "flex-end"
+                            : "flex-start",
+                        // Leave a small gutter on the right for the 3-dot menu (so it never overlaps text)
+                        paddingRight: !isSystem && isAdmin ? 32 : 0,
                       }}
                     >
                       <div
                         style={{
-                          maxWidth: "70%",
-                          padding: "8px 12px",
-                          borderRadius: 18,
-                          fontSize: 13,
+                          position: "relative",
+                          maxWidth: isSystem ? "80%" : "70%",
+                          padding: isSystem ? "4px 10px" : "8px 12px",
+                          borderRadius: isSystem ? 999 : 18,
+                          fontSize: isSystem ? 11 : 13,
                           lineHeight: 1.4,
-                          background: isAdmin ? "#4f46e5" : "#e5e7eb",
-                          color: isAdmin ? "#ffffff" : "#111827",
+                          background: isSystem
+                            ? "#e5e7eb"
+                            : isAdmin
+                              ? "#4f46e5"
+                              : "#e5e7eb",
+                          color: isSystem ? systemColor : isAdmin ? "#ffffff" : "#111827",
+                        }}
+                        onMouseEnter={() => {
+                          if (!isSystem) setHoveredMessageId(Number(m.id));
+                        }}
+                        onMouseLeave={() => {
+                          if (!isSystem) setHoveredMessageId(null);
+                        }}
+                        onContextMenu={(e) => {
+                          if (isSystem) return;
+                          e.preventDefault();
+                          setContextMenu({
+                            messageId: Number(m.id),
+                            x: e.clientX,
+                            y: e.clientY,
+                          });
                         }}
                       >
-                        {m.text}
+                        {m.reply_to && !isSystem && (
+                          <div
+                            style={{
+                              marginBottom: 6,
+                              padding: "6px 8px",
+                              borderRadius: 12,
+                              background: isAdmin ? "rgba(255,255,255,0.18)" : "#f3f4f6",
+                              borderLeft: `3px solid ${isAdmin ? "#ffffff" : "#0ea5e9"}`,
+                              fontSize: 11,
+                              opacity: 0.95,
+                            }}
+                          >
+                            <div style={{ fontWeight: 700, marginBottom: 2 }}>
+                              {m.reply_to?.sender?.username ?? "Reply"}
+                            </div>
+                            <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {m.reply_to?.text ?? ""}
+                            </div>
+                          </div>
+                        )}
+                        {m.text ?? ""}
+
+                        {!isSystem && hoveredMessageId === Number(m.id) && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMenuForMessageId((prev) =>
+                                prev === Number(m.id) ? null : Number(m.id),
+                              );
+                              setContextMenu(null);
+                              const rect = (
+                                e.currentTarget as HTMLButtonElement
+                              ).getBoundingClientRect();
+                              const items: {
+                                label: string;
+                                onClick: () => void;
+                              }[] = [
+                                {
+                                  label: "Reply",
+                                  onClick: () => {
+                                    setReplyingTo(m);
+                                    setMenuForMessageId(null);
+                                    setOptionsMenu(null);
+                                  },
+                                },
+                                {
+                                  label: "Delete for me",
+                                  onClick: async () => {
+                                    if (!activeConversation) return;
+                                    await deleteChatMessageAdminForMe(
+                                      activeConversation.id,
+                                      Number(m.id),
+                                    );
+                                    setMenuForMessageId(null);
+                                    setOptionsMenu(null);
+                                    const res = await fetchChatMessagesAdmin(
+                                      activeConversation.id,
+                                    );
+                                    if (res.ok) {
+                                      setChatMessages(
+                                        (res.data?.messages ?? res.data) as any[],
+                                      );
+                                    }
+                                  },
+                                },
+                                {
+                                  label: "Delete for everyone",
+                                  onClick: async () => {
+                                    if (!activeConversation) return;
+                                    await deleteChatMessageAdminForEveryone(
+                                      activeConversation.id,
+                                      Number(m.id),
+                                    );
+                                    setMenuForMessageId(null);
+                                    setOptionsMenu(null);
+                                    const res = await fetchChatMessagesAdmin(
+                                      activeConversation.id,
+                                    );
+                                    if (res.ok) {
+                                      setChatMessages(
+                                        (res.data?.messages ?? res.data) as any[],
+                                      );
+                                    }
+                                  },
+                                },
+                              ];
+
+                              const menuWidth = 180;
+                              const menuHeight = 10 + items.length * 40;
+                              const x = Math.min(
+                                Math.max(rect.right - menuWidth, 8),
+                                window.innerWidth - menuWidth - 8,
+                              );
+                              const y = Math.min(
+                                Math.max(rect.bottom + 6, 8),
+                                window.innerHeight - menuHeight - 8,
+                              );
+                              setOptionsMenu({ message: m, x, y, items });
+                            }}
+                            style={{
+                              position: "absolute",
+                              top: 6,
+                              // Fully outside the bubble, inside the gutter
+                              right: -28,
+                              width: 22,
+                              height: 22,
+                              borderRadius: 999,
+                              border: "1px solid rgba(0,0,0,0.15)",
+                              background: "#111827",
+                              color: "#ffffff",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: 14,
+                              lineHeight: 1,
+                            }}
+                            aria-label="Message options"
+                          >
+                            ⋮
+                          </button>
+                        )}
+
                       </div>
                     </div>
                   );
                 })}
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Bottom admin chat input */}
@@ -1049,7 +1330,12 @@ export default function AdminChat() {
                 const text = chatInput.trim();
                 setChatInput("");
                 setChatError(null);
-                const res = await sendChatMessageAdmin(activeConversation.id, text);
+                const res = await sendChatMessageAdminWithReply(
+                  activeConversation.id,
+                  text,
+                  replyingTo?.id ? Number(replyingTo.id) : undefined,
+                );
+                setReplyingTo(null);
                 if (res.ok) {
                   setChatMessages((prev) => [
                     ...prev,
@@ -1057,6 +1343,13 @@ export default function AdminChat() {
                       id: res.data?.id ?? `local-${Date.now()}`,
                       text,
                       is_system: false,
+                      reply_to: replyingTo
+                        ? {
+                            id: replyingTo.id,
+                            text: replyingTo.text ?? "",
+                            sender: replyingTo.sender ?? null,
+                          }
+                        : null,
                       sender: activeConversation.admin || null,
                     },
                   ]);
@@ -1074,12 +1367,60 @@ export default function AdminChat() {
                 border: "1px solid #e5e7eb",
               }}
             >
+              {replyingTo && (
+                <div
+                  style={{
+                    flex: 1,
+                    borderRadius: 12,
+                    padding: "6px 10px",
+                    background: "#f1f5f9",
+                    border: "1px solid #e2e8f0",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>
+                      Replying to {replyingTo?.sender?.username ?? "message"}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: "#475569",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        maxWidth: 260,
+                      }}
+                    >
+                      {String(replyingTo?.text ?? "").slice(0, 120)}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReplyingTo(null)}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      cursor: "pointer",
+                      fontSize: 16,
+                      lineHeight: 1,
+                      color: "#0f172a",
+                    }}
+                    aria-label="Cancel reply"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
               <input
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 placeholder="Type a message here..."
                 style={{
-                  flex: 1,
+                  flex: replyingTo ? 2 : 1,
                   border: "none",
                   outline: "none",
                   fontSize: 13,
@@ -1104,6 +1445,88 @@ export default function AdminChat() {
                 Send
               </button>
             </form>
+
+            {contextMenu && (
+              <div
+                style={{
+                  position: "fixed",
+                  top: contextMenu.y,
+                  left: contextMenu.x,
+                  zIndex: 9999,
+                  minWidth: 160,
+                  borderRadius: 12,
+                  background: "#ffffff",
+                  border: "1px solid #e5e7eb",
+                  boxShadow: "0 12px 30px rgba(15,23,42,0.18)",
+                  overflow: "hidden",
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!activeConversation) return;
+                    const mid = contextMenu.messageId;
+                    setContextMenu(null);
+                    await deleteChatMessageAdminForMe(activeConversation.id, mid);
+                    const res = await fetchChatMessagesAdmin(activeConversation.id);
+                    if (res.ok) {
+                      setChatMessages((res.data?.messages ?? res.data) as any[]);
+                    }
+                  }}
+                  style={{
+                    width: "100%",
+                    border: "none",
+                    background: "transparent",
+                    padding: "10px 12px",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    fontSize: 13,
+                    color: "#111827",
+                  }}
+                >
+                  Delete message
+                </button>
+              </div>
+            )}
+
+            {optionsMenu && (
+              <div
+                style={{
+                  position: "fixed",
+                  top: optionsMenu.y,
+                  left: optionsMenu.x,
+                  zIndex: 10000,
+                  width: 180,
+                  borderRadius: 12,
+                  background: "#ffffff",
+                  border: "1px solid #e5e7eb",
+                  boxShadow: "0 12px 30px rgba(15,23,42,0.18)",
+                  overflow: "hidden",
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {optionsMenu.items.map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={item.onClick}
+                    style={{
+                      width: "100%",
+                      border: "none",
+                      background: "transparent",
+                      padding: "10px 12px",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      fontSize: 13,
+                      color: "#111827",
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {chatError && (
               <div

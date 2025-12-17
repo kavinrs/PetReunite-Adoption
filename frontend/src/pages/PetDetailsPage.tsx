@@ -452,7 +452,7 @@ export default function PetDetailsPage() {
                   marginBottom: "4px",
                 }}
               >
-                Pet ID: <span style={{ fontWeight: 700, color: "#111827" }}>#{pet.id}</span>
+                Pet ID: <span style={{ fontWeight: 700, color: "#111827" }}>#{(pet as any).pet_unique_id || pet.id}</span>
               </div>
 
               <h1

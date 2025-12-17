@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
-import { fetchAdminFoundReports, updateAdminFoundReport } from "../services/api";
+import { fetchAdminFoundReports } from "../services/api";
 
 export default function AdminFoundReportDetail() {
   useViewportStandardization();
@@ -12,7 +12,6 @@ export default function AdminFoundReportDetail() {
   const [report, setReport] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [savingAction, setSavingAction] = useState<null | "accept" | "reject">(null);
 
   useEffect(() => {
     async function load() {
@@ -49,80 +48,14 @@ export default function AdminFoundReportDetail() {
     } else if (from === "pets") {
       navigate("/admin?tab=pets", { replace: true });
     } else {
-      navigate("/admin/pending-approvals");
+      navigate("/admin?tab=found", { replace: true });
     }
   };
 
-  const handleAcceptUpdate = async () => {
-    if (!id || !report || !report.has_user_update) return;
-    try {
-      setSavingAction("accept");
-      setError(null);
-      const numericId = Number(id);
-      const res = await updateAdminFoundReport(
-        numericId,
-        {
-          has_user_update: false,
-          previous_snapshot: null,
-        } as any,
-      );
-      if (!res.ok) {
-        if (res.error) setError(res.error);
-        return;
-      }
-      setReport(res.data);
-    } finally {
-      setSavingAction(null);
-    }
-  };
-
-  const handleRejectUpdate = async () => {
-    if (!id || !report || !report.has_user_update || !report.previous_snapshot) return;
-    try {
-      setSavingAction("reject");
-      setError(null);
-      const numericId = Number(id);
-      const snap = report.previous_snapshot || {};
-
-      const payload: any = {
-        pet_name: snap.pet_name,
-        pet_type: snap.pet_type,
-        breed: snap.breed,
-        color: snap.color,
-        weight: snap.weight,
-        vaccinated: snap.vaccinated,
-        age: snap.age,
-        found_city: snap.found_city,
-        city: snap.city,
-        state: snap.state,
-        pincode: snap.pincode,
-        description: snap.description,
-        has_user_update: false,
-        previous_snapshot: null,
-      };
-
-      const res = await updateAdminFoundReport(numericId, payload);
-      if (!res.ok) {
-        if (res.error) setError(res.error);
-        return;
-      }
-      setReport(res.data);
-    } finally {
-      setSavingAction(null);
-    }
-  };
-
-  const from = (location.state as any)?.from;
   const backLabel =
-    from === "admin-map"
-      ? "Back To Map"
-      : from === "admin-found"
-        ? "Back to Found Pet Reports"
-        : from === "pets"
-          ? "Back to Pets"
-          : from === "pending-approvals"
-            ? "Back to Pending Approvals"
-            : "Back";
+    (location.state as any)?.from === "pending-approvals"
+      ? "Back to Pending Approvals"
+      : "Back to Pets";
 
   if (loading) return <div style={{ padding: 32 }}>Loading report...</div>;
   if (error)
@@ -161,18 +94,32 @@ export default function AdminFoundReportDetail() {
     : null;
 
   const fieldIcons: Record<string, string> = {
-    pet_name: "🐶",
-    pet_type: "📘",
-    breed: "🧬",
-    gender: "⚧",
-    color: "🎨",
-    weight: "⚖️",
-    estimated_age: "🎂",
-    found_city: "📍",
-    state: "🗺️",
-    pincode: "🏷️",
-    location_url: "🗺️",
+    "Pet Type": "📘",
+    "Breed": "🧬",
+    "Gender": "⚧",
+    "Color": "🎨",
+    "Weight": "⚖️",
+    "Estimated Age": "🎂",
+    "Found City": "📍",
+    "State": "🗺️",
+    "Pincode": "🏷️",
+    "Location URL": "🗺️",
+    "Found Time": "⏱️",
   };
+
+  const fields = [
+    ["Pet Type", report.pet_type],
+    ["Breed", report.breed],
+    ["Gender", report.gender],
+    ["Color", report.color],
+    ["Weight", report.weight],
+    ["Estimated Age", report.estimated_age],
+    ["Found City", report.found_city],
+    ["State", report.state],
+    ["Pincode", report.pincode],
+    ["Location URL", report.location_url],
+    ["Found Time", report.found_time ? new Date(report.found_time).toLocaleString() : null],
+  ];
 
   return (
     <div
@@ -204,26 +151,29 @@ export default function AdminFoundReportDetail() {
           display: "grid",
           gridTemplateColumns: "minmax(0, 2fr) minmax(0, 3fr)",
           gap: 24,
-          alignItems: "flex-start",
+          alignItems: "stretch",
         }}
       >
+        {/* Left: Photo */}
         <div
           style={{
             background: "white",
             borderRadius: 24,
             padding: 16,
             boxShadow: "0 20px 50px rgba(15,23,42,0.12)",
+            display: "flex",
+            flexDirection: "column",
           }}
         >
           {photoSrc ? (
             <img
               src={photoSrc}
-              alt={report.pet_name || report.pet_type || "Pet"}
+              alt={report.pet_type || "Pet"}
               style={{
                 width: "100%",
+                height: "100%",
                 borderRadius: 18,
                 objectFit: "cover",
-                objectPosition: "center top",
               }}
             />
           ) : (
@@ -238,14 +188,12 @@ export default function AdminFoundReportDetail() {
                 justifyContent: "center",
               }}
             >
-              <span role="img" aria-label="No photo">
-                4f7
-              </span>{" "}
-              No photo
+              🐾 No photo
             </div>
           )}
         </div>
 
+        {/* Right: Details */}
         <div
           style={{
             display: "flex",
@@ -253,410 +201,463 @@ export default function AdminFoundReportDetail() {
             gap: 16,
           }}
         >
+          {/* Header */}
+          <div>
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                marginBottom: 8,
+                alignItems: "center",
+              }}
+            >
+              <span
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  background: "#dbeafe",
+                  color: "#1e40af",
+                  fontSize: 12,
+                  fontWeight: 800,
+                }}
+              >
+                Found Pet
+              </span>
+              <span
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  background: "#dcfce7",
+                  color: "#16a34a",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                }}
+              >
+                {report.status}
+              </span>
+            </div>
+            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 2 }}>
+              Pet ID:{" "}
+              <span style={{ fontWeight: 700, color: "#111827" }}>
+                #{report.pet_unique_id || `FP${report.id?.toString().padStart(6, "0")}`}
+              </span>
+            </div>
+            <div
+              style={{
+                fontSize: 24,
+                fontWeight: 900,
+                color: "#0f172a",
+              }}
+            >
+              {report.pet_type || "Found Pet"}
+            </div>
+            {report.found_city && (
+              <div style={{ marginTop: 4, color: "#6b7280", fontSize: 14 }}>
+                {report.found_city}
+                {report.state ? `, ${report.state}` : ""}
+              </div>
+            )}
+          </div>
+
+          {/* Reported on */}
           <div
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
+              background: "white",
+              borderRadius: 16,
+              padding: 14,
+              boxShadow: "0 4px 12px rgba(15,23,42,0.08)",
             }}
           >
-            <div>
-              <div
+            <div style={{ fontSize: 13, color: "#6b7280" }}>
+              Reported on:{" "}
+              <span style={{ fontWeight: 700, color: "#111827" }}>
+                {report.created_at
+                  ? new Date(report.created_at).toLocaleString()
+                  : "—"}
+              </span>
+            </div>
+          </div>
+
+          {/* Pet Details */}
+          <div
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(219,234,254,0.85), rgba(239,246,255,0.9))",
+              borderRadius: 24,
+              padding: 18,
+              boxShadow: "0 14px 40px rgba(15,23,42,0.16)",
+              border: "1px solid rgba(148,163,184,0.35)",
+            }}
+          >
+            {/* Pets Details Header */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                color: "#0f172a",
+                marginBottom: 12,
+              }}
+            >
+              <span
                 style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: "999px",
+                  background: "rgba(59,130,246,0.12)",
                   display: "flex",
-                  gap: 8,
-                  marginBottom: 8,
                   alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 16,
                 }}
               >
-                <span
-                  style={{
-                    padding: "4px 10px",
-                    borderRadius: 999,
-                    background: "#dbeafe",
-                    color: "#1d4ed8",
-                    fontSize: 12,
-                    fontWeight: 800,
-                  }}
-                >
-                  Found Pet
-                </span>
-                <span
-                  style={{
-                    padding: "4px 10px",
-                    borderRadius: 999,
-                    background: "#dcfce7",
-                    color: "#16a34a",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {report.status}
-                </span>
-              </div>
+                🐾
+              </span>
+              <span
+                style={{
+                  fontWeight: 800,
+                  fontSize: 16,
+                  letterSpacing: 0.2,
+                }}
+              >
+                Pets Details
+              </span>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(4, 1fr)",
+                gap: 12,
+                background: "rgba(255,255,255,0.8)",
+                borderRadius: 18,
+                padding: 14,
+              }}
+            >
+              {fields.map(([label, value]) => (
+                <div key={label}>
+                  <div
+                    style={{
+                      background: "rgba(248,250,252,0.95)",
+                      borderRadius: 14,
+                      padding: 10,
+                      boxShadow: "0 4px 10px rgba(15,23,42,0.08)",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 8,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 18,
+                        lineHeight: 1,
+                      }}
+                    >
+                      {fieldIcons[label] || "📌"}
+                    </span>
+                    <div style={{ flex: 1 }}>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "#6b7280",
+                          textTransform: "uppercase",
+                          letterSpacing: 0.6,
+                          fontWeight: 700,
+                          marginBottom: 2,
+                        }}
+                      >
+                        {label}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: "#0f172a",
+                        }}
+                      >
+                        {label === "Location URL" && value ? (
+                          <a
+                            href={
+                              String(value).startsWith("http")
+                                ? String(value)
+                                : `https://www.google.com/maps?q=${encodeURIComponent(String(value))}`
+                            }
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{ color: "#2563eb" }}
+                          >
+                            Open in Google Maps
+                          </a>
+                        ) : value ? (
+                          String(value)
+                        ) : (
+                          <span style={{ color: "#9ca3af" }}>—</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Description */}
+            <div
+              style={{
+                marginTop: 12,
+                background: "rgba(255,255,255,0.9)",
+                borderRadius: 18,
+                padding: 14,
+                border: "1px dashed rgba(148,163,184,0.6)",
+              }}
+            >
               <div
                 style={{
-                  fontSize: 13,
+                  fontSize: 12,
                   color: "#6b7280",
-                  marginBottom: 4,
+                  marginBottom: 6,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.6,
                 }}
               >
-                Pet ID:{" "}
-                <span style={{ fontWeight: 700, color: "#111827" }}>
-                  #{report.pet_unique_id || `FP${report.id?.toString().padStart(6, "0")}`}
-                </span>
+                Description
               </div>
-              <div
-                style={{
-                  fontSize: 28,
-                  fontWeight: 900,
-                  color: "#0f172a",
-                }}
-              >
-                {report.pet_name || report.pet_type || "Found Pet"}
+              <div style={{ fontSize: 13, color: "#111827", lineHeight: 1.6 }}>
+                {report.description || (
+                  <span style={{ color: "#9ca3af" }}>No description</span>
+                )}
               </div>
-              {(report.found_city || report.city || report.state) && (
-                <div style={{ marginTop: 4, color: "#6b7280", fontSize: 14 }}>
-                  {report.found_city || report.city}
-                  {report.state ? `, ${report.state}` : ""}
-                </div>
-              )}
             </div>
           </div>
 
+          {/* Reported Details */}
           <div
             style={{
-              background: "white",
-              borderRadius: 20,
-              padding: 16,
-              boxShadow: "0 10px 30px rgba(15,23,42,0.08)",
-            }}
-          >
-            <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 16 }}>Upload Information</div>
-            <div style={{ fontSize: 14, color: "#6b7280", display: "grid", gap: 6 }}>
-              {report.created_at && (
-                <div>
-                  <strong>Reported on:</strong> {new Date(report.created_at).toLocaleString()}
-                </div>
-              )}
-              {report.found_time && (
-                <div>
-                  <strong>Found time:</strong> {new Date(report.found_time).toLocaleString()}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div
-            style={{
-              background: "white",
-              borderRadius: 20,
-              padding: 16,
-              boxShadow: "0 10px 30px rgba(15,23,42,0.08)",
+              marginTop: 8,
               display: "flex",
-              flexDirection: "column",
-              gap: 16,
+              justifyContent: "flex-start",
             }}
           >
             <div
               style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: 12,
+                background: "#f9fafb",
+                borderRadius: 18,
+                padding: 14,
+                boxShadow: "0 8px 24px rgba(15,23,42,0.08)",
+                border: "1px solid rgba(226,232,240,0.9)",
+                width: "100%",
+                maxWidth: 520,
               }}
             >
-              <div style={{ fontWeight: 700, fontSize: 16 }}>Pet Details</div>
-              {report.has_user_update && report.previous_snapshot && (
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    type="button"
-                    onClick={handleAcceptUpdate}
-                    disabled={savingAction === "accept"}
-                    style={{
-                      borderRadius: 999,
-                      border: "none",
-                      padding: "6px 14px",
-                      background: "#16a34a",
-                      color: "white",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      cursor: savingAction === "accept" ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {savingAction === "accept" ? "Accepting..." : "Accept"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleRejectUpdate}
-                    disabled={savingAction === "reject"}
-                    style={{
-                      borderRadius: 999,
-                      border: "none",
-                      padding: "6px 14px",
-                      background: "#dc2626",
-                      color: "white",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      cursor: savingAction === "reject" ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {savingAction === "reject" ? "Reverting..." : "Reject"}
-                  </button>
-                </div>
-              )}
-            </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginBottom: 8,
+                }}
+              >
+                <span
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: "999px",
+                    background: "rgba(148,163,184,0.2)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 13,
+                    color: "#4b5563",
+                  }}
+                >
+                  👤
+                </span>
+                <span
+                  style={{
+                    fontWeight: 800,
+                    fontSize: 13,
+                    color: "#111827",
+                    letterSpacing: 0.3,
+                  }}
+                >
+                  Reported Details
+                </span>
+              </div>
 
-            {report.has_user_update && report.previous_snapshot ? (
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                  gap: 16,
+                  gridTemplateColumns:
+                    "repeat(auto-fit, minmax(200px, 1fr))",
+                  gap: 10,
                 }}
               >
-                {(["Previous details", "Updated details"] as const).map((title, idx) => {
-                  const source: any = idx === 0 ? report.previous_snapshot : report;
-                  return (
-                    <div
-                      key={title}
-                      style={{
-                        borderRadius: 16,
-                        border: idx === 0 ? "1px solid #e5e7eb" : "1px solid #bfdbfe",
-                        background: idx === 0 ? "#f9fafb" : "#eff6ff",
-                        padding: 12,
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 8,
-                      }}
-                    >
+                <div>
+                  <div
+                    style={{
+                      background: "#ffffff",
+                      borderRadius: 12,
+                      padding: 8,
+                      boxShadow: "0 3px 8px rgba(148,163,184,0.25)",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 8,
+                    }}
+                  >
+                    <span style={{ fontSize: 16, lineHeight: 1 }}>👤</span>
+                    <div style={{ flex: 1 }}>
                       <div
                         style={{
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: idx === 0 ? "#6b7280" : "#1d4ed8",
+                          fontSize: 11,
+                          color: "#6b7280",
                           textTransform: "uppercase",
                           letterSpacing: 0.5,
+                          fontWeight: 700,
+                          marginBottom: 2,
                         }}
                       >
-                        {title}
+                        Reported by
                       </div>
                       <div
                         style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-                          gap: 8,
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: "#111827",
                         }}
                       >
-                        {([
-                          ["pet_type", "Pet Type"],
-                          ["breed", "Breed"],
-                          ["gender", "Gender"],
-                          ["color", "Color"],
-                          ["weight", "Weight"],
-                          ["estimated_age", "Estimated Age"],
-                          ["found_city", "Found City"],
-                          ["state", "State"],
-                          ["pincode", "Pincode"],
-                          ["location_url", "Location URL"],
-                        ] as const).map(([key, label]) => (
-                          <div key={key}>
-                            <div
-                              style={{
-                                fontSize: 13,
-                                color: "#6b7280",
-                                marginBottom: 2,
-                              }}
-                            >
-                              {label}
-                            </div>
-                            {key === "location_url" && source[key] ? (
-                              <a
-                                href={String(source[key]).startsWith("http")
-                                  ? String(source[key])
-                                  : `https://www.google.com/maps?q=${encodeURIComponent(String(source[key]))}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                style={{ fontSize: 13, fontWeight: 700, color: "#2563eb" }}
-                              >
-                                Open in Google Maps
-                              </a>
-                            ) : (
-                              <div
-                                style={{
-                                  fontSize: 15,
-                                  fontWeight: 600,
-                                  color: "#111827",
-                                }}
-                              >
-                                {source[key] || <span style={{ color: "#9ca3af" }}>—</span>}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      <div>
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color: "#6b7280",
-                            marginBottom: 2,
-                          }}
-                        >
-                          Description
-                        </div>
-                        <div style={{ fontSize: 15, color: "#111827", lineHeight: 1.6 }}>
-                          {source.description || (
-                            <span style={{ color: "#9ca3af" }}>No description</span>
-                          )}
-                        </div>
+                        {report.reporter?.username || "Unknown"}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                    gap: 12,
-                  }}
-                >
-                  {([
-                    ["pet_type", "Pet Type"],
-                    ["breed", "Breed"],
-                    ["color", "Color"],
-                    ["weight", "Weight"],
-                    ["estimated_age", "Estimated Age"],
-                    ["found_city", "Found City"],
-                    ["state", "State"],
-                    ["pincode", "Pincode"],
-                    ["location_url", "Location URL"],
-                  ] as const).map(([key, label]) => (
-                    <div key={key}>
-                        <div
-                          style={{ fontSize: 13, color: "#6b7280", marginBottom: 4 }}
-                        >
-                          {label}
-                        </div>
-                        {key === "location_url" && report[key] ? (
-                          <a
-                            href={String(report[key]).startsWith("http")
-                              ? String(report[key])
-                              : `https://www.google.com/maps?q=${encodeURIComponent(String(report[key]))}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{ fontSize: 13, fontWeight: 700, color: "#2563eb" }}
-                          >
-                            Open in Google Maps
-                          </a>
-                        ) : (
-                          <div
-                            style={{
-                              fontSize: 15,
-                              fontWeight: 600,
-                              color: "#111827",
-                            }}
-                          >
-                            {report[key] || (
-                              <span style={{ color: "#9ca3af" }}>—</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                  ))}
+                  </div>
                 </div>
 
                 <div>
                   <div
-                    style={{ fontSize: 13, color: "#6b7280", marginBottom: 4 }}
+                    style={{
+                      background: "#ffffff",
+                      borderRadius: 12,
+                      padding: 8,
+                      boxShadow: "0 3px 8px rgba(148,163,184,0.25)",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 8,
+                    }}
                   >
-                    Description
-                  </div>
-                  <div style={{ fontSize: 15, color: "#111827", lineHeight: 1.6 }}>
-                    {report.description || (
-                      <span style={{ color: "#9ca3af" }}>No description</span>
-                    )}
+                    <span style={{ fontSize: 16, lineHeight: 1 }}>📅</span>
+                    <div style={{ flex: 1 }}>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "#6b7280",
+                          textTransform: "uppercase",
+                          letterSpacing: 0.5,
+                          fontWeight: 700,
+                          marginBottom: 2,
+                        }}
+                      >
+                        Reported on
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 500,
+                          color: "#111827",
+                        }}
+                      >
+                        {report.created_at
+                          ? new Date(report.created_at).toLocaleString()
+                          : "—"}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </>
-            )}
 
-            {/* Status actions inside detail view - only when opened from Pending Approvals */}
-            {location.state.from === "pending-approvals" && (
-              <div
-                style={{
-                  marginTop: 16,
-                  display: "flex",
-                  gap: 8,
-                  justifyContent: "flex-end",
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!report || report.status === "approved") return;
-                    setError(null);
-                    const res = await updateAdminFoundReport(report.id, { status: "approved" } as any);
-                    if (!res.ok) {
-                      if (res.error) setError(res.error);
-                    } else {
-                      setReport(res.data);
-                      window.alert("Found report has been accepted.");
-                      navigate("/admin/pending-approvals", { replace: true });
-                    }
-                  }}
-                  style={{
-                    padding: "10px 24px",
-                    borderRadius: 999,
-                    border: "none",
-                    background: "#16a34a",
-                    color: "white",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    cursor: report?.status === "approved" ? "not-allowed" : "pointer",
-                    opacity: report?.status === "approved" ? 0.7 : 1,
-                  }}
-                >
-                  Accept
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!report || report.status === "rejected") return;
-                    setError(null);
-                    const res = await updateAdminFoundReport(report.id, { status: "rejected" } as any);
-                    if (!res.ok) {
-                      if (res.error) setError(res.error);
-                    } else {
-                      setReport(res.data);
-                      window.alert("Found report has been rejected.");
-                      navigate("/admin/pending-approvals", { replace: true });
-                    }
-                  }}
-                  style={{
-                    padding: "10px 24px",
-                    borderRadius: 999,
-                    border: "1px solid #dc2626",
-                    background: "white",
-                    color: "#dc2626",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    cursor: report?.status === "rejected" ? "not-allowed" : "pointer",
-                    opacity: report?.status === "rejected" ? 0.7 : 1,
-                  }}
-                >
-                  Reject
-                </button>
+                <div>
+                  <div
+                    style={{
+                      background: "#ffffff",
+                      borderRadius: 12,
+                      padding: 8,
+                      boxShadow: "0 3px 8px rgba(148,163,184,0.25)",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 8,
+                    }}
+                  >
+                    <span style={{ fontSize: 16, lineHeight: 1 }}>🔁</span>
+                    <div style={{ flex: 1 }}>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "#6b7280",
+                          textTransform: "uppercase",
+                          letterSpacing: 0.5,
+                          fontWeight: 700,
+                          marginBottom: 2,
+                        }}
+                      >
+                        Last updated
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 500,
+                          color: "#111827",
+                        }}
+                      >
+                        {report.updated_at
+                          ? new Date(report.updated_at).toLocaleString()
+                          : "—"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {report.found_time && (
+                  <div>
+                    <div
+                      style={{
+                        background: "#ffffff",
+                        borderRadius: 12,
+                        padding: 8,
+                        boxShadow:
+                          "0 3px 8px rgba(148,163,184,0.25)",
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 8,
+                      }}
+                    >
+                      <span style={{ fontSize: 16, lineHeight: 1 }}>⏱</span>
+                      <div style={{ flex: 1 }}>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "#6b7280",
+                            textTransform: "uppercase",
+                            letterSpacing: 0.5,
+                            fontWeight: 700,
+                            marginBottom: 2,
+                          }}
+                        >
+                          Found time
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 500,
+                            color: "#111827",
+                          }}
+                        >
+                          {new Date(report.found_time).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
-          {error && (
-            <div style={{ fontSize: 12, color: "#b91c1c" }}>{error}</div>
-          )}
         </div>
       </div>
     </div>

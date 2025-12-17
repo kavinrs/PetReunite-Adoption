@@ -1085,6 +1085,25 @@ export async function sendChatMessageUser(conversationId: number, text: string):
   return { ok: false, status: resp.status, error: message, data };
 }
 
+export async function sendChatMessageUserWithReply(
+  conversationId: number,
+  text: string,
+  reply_to_message_id?: number | null,
+): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chat/conversations/${conversationId}/messages/`;
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: JSON.stringify({
+      text,
+      reply_to_message_id: reply_to_message_id ?? undefined,
+    }),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to send message";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
 export async function fetchAdminChatConversations(statusFilter?: string): Promise<ApiResult> {
   const qs = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : "";
   const url = `${PETS_BASE}/admin/chat/conversations/${qs}`;
@@ -1141,6 +1160,106 @@ export async function sendChatMessageAdmin(conversationId: number, text: string)
     return { ok: true, status: resp.status, data };
   }
   const message = extractErrorMessage(data) ?? "Failed to send message";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function sendChatMessageAdminWithReply(
+  conversationId: number,
+  text: string,
+  reply_to_message_id?: number | null,
+): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/chat/conversations/${conversationId}/messages/`;
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: JSON.stringify({
+      text,
+      reply_to_message_id: reply_to_message_id ?? undefined,
+    }),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to send message";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function updateAdminConversationStatus(
+  id: number,
+  status: "active" | "read_only" | "closed",
+): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/chat/conversations/${id}/status/`;
+  const resp = await fetchWithAuth(url, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to update status";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function deleteAdminConversation(id: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/chat/conversations/${id}/delete/`;
+  const resp = await fetchWithAuth(url, { method: "DELETE" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to delete chat";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function deleteChatConversationUser(id: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chat/conversations/${id}/delete/`;
+  const resp = await fetchWithAuth(url, { method: "DELETE" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to delete chat";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function deleteChatMessageUserForMe(
+  conversationId: number,
+  messageId: number,
+): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chat/conversations/${conversationId}/messages/${messageId}/delete-for-me/`;
+  const resp = await fetchWithAuth(url, { method: "POST", body: JSON.stringify({}) });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to delete message";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function deleteChatMessageUserForEveryone(
+  conversationId: number,
+  messageId: number,
+): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chat/conversations/${conversationId}/messages/${messageId}/delete-for-everyone/`;
+  const resp = await fetchWithAuth(url, { method: "DELETE" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to delete message";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function deleteChatMessageAdminForMe(
+  conversationId: number,
+  messageId: number,
+): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/chat/conversations/${conversationId}/messages/${messageId}/delete-for-me/`;
+  const resp = await fetchWithAuth(url, { method: "POST", body: JSON.stringify({}) });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to delete message";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function deleteChatMessageAdminForEveryone(
+  conversationId: number,
+  messageId: number,
+): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/chat/conversations/${conversationId}/messages/${messageId}/delete-for-everyone/`;
+  const resp = await fetchWithAuth(url, { method: "DELETE" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to delete message";
   return { ok: false, status: resp.status, error: message, data };
 }
 

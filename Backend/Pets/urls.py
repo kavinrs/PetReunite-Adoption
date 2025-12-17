@@ -4,7 +4,9 @@ from .views import (
     AdminClearDataView,
     AdminConversationAcceptView,
     AdminConversationCloseView,
+    AdminConversationDeleteView,
     AdminConversationListView,
+    AdminConversationStatusUpdateView,
     AdminFoundPetDetailView,
     AdminFoundPetListView,
     AdminLostPetDetailView,
@@ -13,6 +15,8 @@ from .views import (
     AdminUpdateAdoptionRequestView,
     AdminUserListView,
     AdminUserActivityView,
+    AdminChatMessageDeleteForEveryoneView,
+    AdminChatMessageDeleteForMeView,
     AdminChatMessageListCreateView,
     AdoptionRequestDetailView,
     AdoptionRequestListView,
@@ -30,8 +34,11 @@ from .views import (
     PublicFoundPetsView,
     PublicLostPetsView,
     UserAdoptionRequestsView,
+    UserChatMessageDeleteForEveryoneView,
+    UserChatMessageDeleteForMeView,
     UserChatMessageListCreateView,
     UserConversationConfirmView,
+    UserConversationDeleteView,
     UserConversationListCreateView,
 )
 
@@ -165,5 +172,40 @@ urlpatterns = [
         "admin/chat/conversations/<int:pk>/close/",
         AdminConversationCloseView.as_view(),
         name="chat-conversation-close",
+    ),
+    path(
+        "admin/chat/conversations/<int:pk>/status/",
+        AdminConversationStatusUpdateView.as_view(),
+        name="chat-conversation-status-update",
+    ),
+    path(
+        "admin/chat/conversations/<int:pk>/delete/",
+        AdminConversationDeleteView.as_view(),
+        name="chat-conversation-delete",
+    ),
+    path(
+        "chat/conversations/<int:pk>/delete/",
+        UserConversationDeleteView.as_view(),
+        name="chat-conversation-user-delete",
+    ),
+    path(
+        "chat/conversations/<int:conversation_id>/messages/<int:message_id>/delete-for-me/",
+        UserChatMessageDeleteForMeView.as_view(),
+        name="chat-message-user-delete-for-me",
+    ),
+    path(
+        "chat/conversations/<int:conversation_id>/messages/<int:message_id>/delete-for-everyone/",
+        UserChatMessageDeleteForEveryoneView.as_view(),
+        name="chat-message-user-delete-for-everyone",
+    ),
+    path(
+        "admin/chat/conversations/<int:conversation_id>/messages/<int:message_id>/delete-for-me/",
+        AdminChatMessageDeleteForMeView.as_view(),
+        name="chat-message-admin-delete-for-me",
+    ),
+    path(
+        "admin/chat/conversations/<int:conversation_id>/messages/<int:message_id>/delete-for-everyone/",
+        AdminChatMessageDeleteForEveryoneView.as_view(),
+        name="chat-message-admin-delete-for-everyone",
     ),
 ]

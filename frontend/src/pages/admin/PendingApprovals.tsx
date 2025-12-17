@@ -291,6 +291,7 @@ export default function PendingApprovals() {
         <nav style={{ flex: 1 }}>
           <div style={{ marginBottom: "24px" }}>
             <button
+              type="button"
               onClick={() => navigate("/admin?tab=dashboard", { replace: true })}
               style={{
                 width: "100%",
@@ -311,6 +312,7 @@ export default function PendingApprovals() {
               <span></span> Home
             </button>
             <button
+              type="button"
               onClick={() => navigate("/admin?tab=found", { replace: true })}
               style={{
                 width: "100%",
@@ -331,6 +333,7 @@ export default function PendingApprovals() {
               <span>👀</span> Found Pet Reports
             </button>
             <button
+              type="button"
               onClick={() => navigate("/admin?tab=lost", { replace: true })}
               style={{
                 width: "100%",
@@ -351,6 +354,7 @@ export default function PendingApprovals() {
               <span>🚨</span> Lost Pet Reports
             </button>
             <button
+              type="button"
               onClick={() => navigate("/admin?tab=adoptions", { replace: true })}
               style={{
                 width: "100%",
@@ -371,6 +375,7 @@ export default function PendingApprovals() {
               <span>💜</span> Adoption Requests
             </button>
             <button
+              type="button"
               onClick={() => navigate("/admin?tab=pets", { replace: true })}
               style={{
                 width: "100%",
@@ -391,6 +396,7 @@ export default function PendingApprovals() {
               <span>🐶</span> Pets
             </button>
             <button
+              type="button"
               onClick={() => navigate("/admin?tab=users", { replace: true })}
               style={{
                 width: "100%",
@@ -411,6 +417,7 @@ export default function PendingApprovals() {
               <span>👥</span> Users
             </button>
             <button
+              type="button"
               onClick={() => navigate("/admin?tab=stats", { replace: true })}
               style={{
                 width: "100%",
@@ -547,6 +554,7 @@ export default function PendingApprovals() {
                     >
                       {items.map((n) => (
                         <button
+                          type="button"
                           key={`${n.kind}-${n.id}`}
                           onClick={() => {
                             // Navigate to the relevant detail or tab view
@@ -624,7 +632,12 @@ export default function PendingApprovals() {
               )}
 
               <button
-                onClick={() => setProfileOpen((prev) => !prev)}
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setProfileOpen((prev) => !prev);
+                }}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -705,6 +718,7 @@ export default function PendingApprovals() {
                     }}
                   />
                   <button
+                    type="button"
                     onClick={() => {
                       setProfileOpen(false);
                       navigate("/admin/profile");
@@ -724,6 +738,7 @@ export default function PendingApprovals() {
                     View Profile
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       clearTokens();
                       setProfileOpen(false);

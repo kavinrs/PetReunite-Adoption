@@ -438,7 +438,7 @@
 // }
 
 // src/pages/AdminHome.tsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   type ApiResult,
   getProfile,
@@ -505,7 +505,7 @@ type TabKey =
   | "stats"
   | "chat";
 
-export default function AdminHome() {
+function AdminHome() {
   // Apply viewport standardization to ensure consistent 100% scaling
   useViewportStandardization();
 
@@ -554,6 +554,23 @@ export default function AdminHome() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Element;
+      if (!target.closest('[data-dropdown]')) {
+        setNotificationOpen(false);
+        setProfileOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Separate useEffect for tab initialization to avoid unnecessary re-renders
   useEffect(() => {
     const qs = new URLSearchParams(location.search);
     const initialTab = qs.get("tab") as TabKey | null;
@@ -573,7 +590,10 @@ export default function AdminHome() {
     ) {
       setTab(initialTab);
     }
+  }, [location.search]);
 
+  // Separate useEffect for initial data loading to avoid re-loading on every navigation
+  useEffect(() => {
     let mounted = true;
 
     async function loadInitial() {
@@ -622,7 +642,7 @@ export default function AdminHome() {
     return () => {
       mounted = false;
     };
-  }, [navigate, location.search]);
+  }, [navigate]); // Remove location.search dependency to prevent unnecessary re-loads
 
   useEffect(() => {
     const open = (location.state as any)?.openMap;
@@ -633,15 +653,9 @@ export default function AdminHome() {
     }
   }, [location.state, location.search]);
 
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      // Avoid kicking off background refreshes while the large
-      // Pet Reports Map overlay is open so that we don't disturb
-      // the map experience.
-      setRefreshTick((t) => (mapExpanded ? t : t + 1));
-    }, 15000);
-    return () => window.clearInterval(id);
-  }, [mapExpanded]);
+  // Note: we intentionally do NOT auto-refresh the admin home.
+  // Data should refresh only on initial load/login, tab changes,
+  // or when the user explicitly presses the refresh button.
 
   const isUpdated = (r: any) => {
     return !!(r && r.has_user_update);
@@ -861,7 +875,9 @@ export default function AdminHome() {
     [lostReports, foundReports, adoptionRequests, volunteerRequests],
   );
 
-  function handleNotificationClick() {
+  function handleNotificationClick(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
     // Toggle panel visibility
     setNotificationOpen((open) => !open);
 
@@ -3903,6 +3919,7 @@ export default function AdminHome() {
                 type="button"
                 onClick={handleNotificationClick}
                 aria-label="Notifications"
+                data-dropdown="notification"
                 style={{
                   position: "relative",
                   width: 40,
@@ -3936,6 +3953,7 @@ export default function AdminHome() {
 
               {notificationOpen && (
                 <div
+                  data-dropdown="notification"
                   style={{
                     position: "absolute",
                     top: 48,
@@ -4067,7 +4085,13 @@ export default function AdminHome() {
               )}
 
               <button
-                onClick={() => setProfileOpen((prev) => !prev)}
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setProfileOpen((prev) => !prev);
+                }}
+                data-dropdown="profile"
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -4132,6 +4156,7 @@ export default function AdminHome() {
               </button>
               {profileOpen && (
                 <div
+                  data-dropdown="profile"
                   style={{
                     position: "absolute",
                     top: "110%",
@@ -4163,6 +4188,7 @@ export default function AdminHome() {
                     }}
                   />
                   <button
+                    type="button"
                     onClick={() => {
                       setProfileOpen(false);
                       navigate("/admin/profile");
@@ -4182,6 +4208,7 @@ export default function AdminHome() {
                     View Profile
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       clearTokens();
                       setProfileOpen(false);
@@ -4772,3 +4799,5 @@ export default function AdminHome() {
     </div>
   );
 }
+
+export default React.memo(AdminHome);

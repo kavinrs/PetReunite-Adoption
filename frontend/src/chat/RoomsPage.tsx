@@ -6,9 +6,13 @@ import {
   getRooms,
   createChatConversationWithPet,
   sendChatMessageUser,
+  sendChatMessageUserWithReply,
   fetchChatMessagesUser,
   confirmChatConversation,
   getProfile,
+  deleteChatConversationUser,
+  deleteChatMessageUserForMe,
+  deleteChatMessageUserForEveryone,
 } from "../services/api";
 
 import emojiIcon from "../assets/chat/emoji.png";
@@ -64,6 +68,21 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [messageError, setMessageError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [replyingTo, setReplyingTo] = useState<any | null>(null);
+  const [hoveredMessageId, setHoveredMessageId] = useState<number | null>(null);
+  const [menuForMessageId, setMenuForMessageId] = useState<number | null>(null);
+  const [optionsMenu, setOptionsMenu] = useState<{
+    message: any;
+    x: number;
+    y: number;
+    items: { label: string; onClick: () => void }[];
+  } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    messageId: number;
+    x: number;
+    y: number;
+  } | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   // Load conversations and rooms
   useEffect(() => {
@@ -139,6 +158,21 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
       window.clearInterval(id);
     };
   }, [selectedConversationId]);
+
+  useEffect(() => {
+    if (!selectedConversationId) return;
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [selectedConversationId, messages.length]);
+
+  useEffect(() => {
+    const onDocClick = () => {
+      setMenuForMessageId(null);
+      setOptionsMenu(null);
+      setContextMenu(null);
+    };
+    document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
+  }, []);
 
   const card = (
     <div
@@ -381,11 +415,15 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                         const status = (c.status || "").toLowerCase();
                         let statusLabel = "Active";
                         let statusColor = "#16a34a"; // green
-                        if (status === "requested" || status === "pending_user") {
+                        if (
+                          status === "requested" ||
+                          status === "pending_user" ||
+                          status === "read_only"
+                        ) {
                           statusLabel = "Waiting";
                           statusColor = "#f59e0b"; // amber
                         } else if (status === "closed") {
-                          statusLabel = "Closed";
+                          statusLabel = "Close";
                           statusColor = "#dc2626"; // red
                         }
 
@@ -416,7 +454,7 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                               Pet Claim Chat
                             </div>
                             <div style={{ fontSize: 11, color: "#64748b" }}>
-                              Pet ID: {c.pet_id ?? "-"}
+                              Pet ID: {c.pet_unique_id || (c.pet_id != null ? `${c.pet_id}` : "-")}
                               {c.pet_name ? ` • ${c.pet_name}` : ""}
                             </div>
                             <div
@@ -471,11 +509,15 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                   const status = (convo?.status || "").toLowerCase();
                   let statusLabel = "Active";
                   let statusColor = "#16a34a";
-                  if (status === "requested" || status === "pending_user") {
+                  if (
+                    status === "requested" ||
+                    status === "pending_user" ||
+                    status === "read_only"
+                  ) {
                     statusLabel = "Waiting";
                     statusColor = "#f59e0b";
                   } else if (status === "closed") {
-                    statusLabel = "Closed";
+                    statusLabel = "Close";
                     statusColor = "#dc2626";
                   }
 
@@ -539,6 +581,40 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                           >
                             {statusLabel}
                           </span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!selectedConversationId) return;
+                              if (
+                                !window.confirm(
+                                  "Delete this entire chat and all its messages?",
+                                )
+                              ) {
+                                return;
+                              }
+                              const res = await deleteChatConversationUser(
+                                selectedConversationId,
+                              );
+                              if (res.ok) {
+                                setSelectedConversationId(null);
+                                setMessages([]);
+                                const convRes = await fetchChatConversations();
+                                if (convRes.ok && Array.isArray(convRes.data)) {
+                                  setConversations(convRes.data as Conversation[]);
+                                }
+                              }
+                            }}
+                            style={{
+                              border: "none",
+                              background: "transparent",
+                              color: "#dc2626",
+                              cursor: "pointer",
+                              fontSize: 12,
+                              fontWeight: 600,
+                            }}
+                          >
+                            Delete chat
+                          </button>
                         </div>
                       )}
                     </div>
@@ -598,6 +674,14 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                       if (m.is_system) {
                         let icon = "🔔";
                         const text = (m.text || m.content || "") as string;
+                        const lower = text.toLowerCase();
+                        const color = lower.includes("active")
+                          ? "#16a34a"
+                          : lower.includes("close") || lower.includes("closed")
+                            ? "#dc2626"
+                            : lower.includes("waiting")
+                              ? "#f59e0b"
+                              : "#4b5563";
                         if (text.toLowerCase().includes("joined")) {
                           icon = "👤";
                         } else if (text.toLowerCase().includes("closed")) {
@@ -618,7 +702,7 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                                 borderRadius: 999,
                                 fontSize: 11,
                                 background: "#e5e7eb",
-                                color: "#4b5563",
+                                color,
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: 6,
@@ -629,6 +713,10 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                             </div>
                           </div>
                         );
+                      }
+
+                      if (m.is_deleted_for_me || m.text === null) {
+                        return null;
                       }
 
                       const isUser =
@@ -646,10 +734,13 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                             justifyContent: isUser
                               ? "flex-end"
                               : "flex-start",
+                            // Leave a small gutter on the right for the 3-dot menu (so it never overlaps text)
+                            paddingRight: isUser ? 32 : 0,
                           }}
                         >
                           <div
                             style={{
+                              position: "relative",
                               maxWidth: "70%",
                               padding: "8px 12px",
                               borderRadius: 18,
@@ -658,12 +749,165 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                               background: isUser ? "#0ea5e9" : "#e5e7eb",
                               color: isUser ? "#ffffff" : "#111827",
                             }}
+                            onMouseEnter={() => setHoveredMessageId(Number(m.id))}
+                            onMouseLeave={() => setHoveredMessageId(null)}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              setContextMenu({
+                                messageId: Number(m.id),
+                                x: e.clientX,
+                                y: e.clientY,
+                              });
+                            }}
                           >
-                            {m.text || m.content}
+                            {m.reply_to && (
+                              <div
+                                style={{
+                                  marginBottom: 6,
+                                  padding: "6px 8px",
+                                  borderRadius: 12,
+                                  background: isUser
+                                    ? "rgba(255,255,255,0.18)"
+                                    : "#f3f4f6",
+                                  borderLeft: `3px solid ${
+                                    isUser ? "#ffffff" : "#0ea5e9"
+                                  }`,
+                                  fontSize: 11,
+                                  opacity: 0.95,
+                                }}
+                              >
+                                <div style={{ fontWeight: 700, marginBottom: 2 }}>
+                                  {m.reply_to?.sender?.username ?? "Reply"}
+                                </div>
+                                <div
+                                  style={{
+                                    whiteSpace: "nowrap",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                  }}
+                                >
+                                  {m.reply_to?.text ?? ""}
+                                </div>
+                              </div>
+                            )}
+
+                            {m.is_deleted ? (
+                              <span style={{ fontStyle: "italic", opacity: 0.85 }}>
+                                Message deleted
+                              </span>
+                            ) : (
+                              (m.text || m.content)
+                            )}
+
+                            {hoveredMessageId === Number(m.id) && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMenuForMessageId((prev) =>
+                                    prev === Number(m.id) ? null : Number(m.id),
+                                  );
+                                  setContextMenu(null);
+                                  const rect = (
+                                    e.currentTarget as HTMLButtonElement
+                                  ).getBoundingClientRect();
+                                  const items: {
+                                    label: string;
+                                    onClick: () => void;
+                                  }[] = [
+                                    {
+                                      label: "Reply",
+                                      onClick: () => {
+                                        setReplyingTo(m);
+                                        setMenuForMessageId(null);
+                                        setOptionsMenu(null);
+                                      },
+                                    },
+                                    {
+                                      label: "Delete for me",
+                                      onClick: async () => {
+                                        if (!selectedConversationId) return;
+                                        await deleteChatMessageUserForMe(
+                                          selectedConversationId,
+                                          Number(m.id),
+                                        );
+                                        setMenuForMessageId(null);
+                                        setOptionsMenu(null);
+                                        const res = await fetchChatMessagesUser(
+                                          selectedConversationId,
+                                        );
+                                        if (res.ok) {
+                                          setMessages(
+                                            (res.data?.messages ?? res.data) as any[],
+                                          );
+                                        }
+                                      },
+                                    },
+                                  ];
+                                  if (isUser) {
+                                    items.push({
+                                      label: "Delete for everyone",
+                                      onClick: async () => {
+                                        if (!selectedConversationId) return;
+                                        await deleteChatMessageUserForEveryone(
+                                          selectedConversationId,
+                                          Number(m.id),
+                                        );
+                                        setMenuForMessageId(null);
+                                        setOptionsMenu(null);
+                                        const res = await fetchChatMessagesUser(
+                                          selectedConversationId,
+                                        );
+                                        if (res.ok) {
+                                          setMessages(
+                                            (res.data?.messages ?? res.data) as any[],
+                                          );
+                                        }
+                                      },
+                                    });
+                                  }
+
+                                  const menuWidth = 180;
+                                  const menuHeight = 10 + items.length * 40;
+                                  const x = Math.min(
+                                    Math.max(rect.right - menuWidth, 8),
+                                    window.innerWidth - menuWidth - 8,
+                                  );
+                                  const y = Math.min(
+                                    Math.max(rect.bottom + 6, 8),
+                                    window.innerHeight - menuHeight - 8,
+                                  );
+                                  setOptionsMenu({ message: m, x, y, items });
+                                }}
+                                style={{
+                                  position: "absolute",
+                                  top: 6,
+                                  // Fully outside the bubble, inside the gutter
+                                  right: -28,
+                                  width: 22,
+                                  height: 22,
+                                  borderRadius: 999,
+                                  border: "1px solid rgba(0,0,0,0.15)",
+                                  background: "#111827",
+                                  color: "#ffffff",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: 14,
+                                  lineHeight: 1,
+                                }}
+                                aria-label="Message options"
+                              >
+                                ⋮
+                              </button>
+                            )}
+
                           </div>
                         </div>
                       );
                     })}
+                  <div ref={messagesEndRef} />
                 </div>
 
                 {/* Bottom chat bar */}
@@ -701,11 +945,15 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                       );
                     }
 
-                    const res = await sendChatMessageUser(
-                      selectedConversationId,
-                      text,
-                    );
+                    const res = replyingTo
+                      ? await sendChatMessageUserWithReply(
+                          selectedConversationId,
+                          text,
+                          replyingTo?.id ? Number(replyingTo.id) : undefined,
+                        )
+                      : await sendChatMessageUser(selectedConversationId, text);
                     if (res.ok) {
+                      setReplyingTo(null);
                       setMessages((prev) => [
                         ...prev,
                         {
@@ -713,6 +961,13 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                           text,
                           sender_role: "user",
                           sender: { id: currentUserId },
+                          reply_to: replyingTo
+                            ? {
+                                id: replyingTo.id,
+                                text: replyingTo.text ?? "",
+                                sender: replyingTo.sender ?? null,
+                              }
+                            : null,
                         },
                       ]);
                     } else if (res.error) {
@@ -733,6 +988,58 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                       gap: 6,
                     }}
                   >
+                    {replyingTo && (
+                      <div
+                        style={{
+                          borderRadius: 12,
+                          padding: "6px 10px",
+                          background: "#f1f5f9",
+                          border: "1px solid #e2e8f0",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 10,
+                        }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: "#0f172a",
+                            }}
+                          >
+                            Replying to {replyingTo?.sender?.username ?? "message"}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color: "#475569",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
+                            {String(replyingTo?.text ?? "").slice(0, 120)}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setReplyingTo(null)}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            cursor: "pointer",
+                            fontSize: 16,
+                            lineHeight: 1,
+                            color: "#0f172a",
+                          }}
+                          aria-label="Cancel reply"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
                     {showEmojiPicker && (
                       <div
                         style={{
@@ -938,7 +1245,7 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                   Pet ID
                 </label>
                 <input
-                  type="number"
+                  type="text"
                   value={requestPetId}
                   onChange={(e) => setRequestPetId(e.target.value)}
                   style={{
@@ -946,7 +1253,7 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                     border: "1px solid #cbd5e1",
                     padding: "8px 10px",
                     fontSize: 13,
-                    
+                    background: "#ffffff",
                   }}
                   placeholder="Enter pet ID"
                 />
@@ -966,6 +1273,7 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                     padding: "8px 10px",
                     fontSize: 13,
                     resize: "vertical",
+                    background: "#ffffff",
                   }}
                   placeholder="Describe why you want to chat with the admin"
                 />
@@ -1071,6 +1379,88 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
             </li>
           ))}
         </ul>
+      )}
+
+      {contextMenu && (
+        <div
+          style={{
+            position: "fixed",
+            top: contextMenu.y,
+            left: contextMenu.x,
+            zIndex: 9999,
+            minWidth: 160,
+            borderRadius: 12,
+            background: "#ffffff",
+            border: "1px solid #e5e7eb",
+            boxShadow: "0 12px 30px rgba(15,23,42,0.18)",
+            overflow: "hidden",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={async () => {
+              if (!selectedConversationId) return;
+              const mid = contextMenu.messageId;
+              setContextMenu(null);
+              await deleteChatMessageUserForMe(selectedConversationId, mid);
+              const res = await fetchChatMessagesUser(selectedConversationId);
+              if (res.ok) {
+                setMessages((res.data?.messages ?? res.data) as any[]);
+              }
+            }}
+            style={{
+              width: "100%",
+              border: "none",
+              background: "transparent",
+              padding: "10px 12px",
+              textAlign: "left",
+              cursor: "pointer",
+              fontSize: 13,
+              color: "#111827",
+            }}
+          >
+            Delete message
+          </button>
+        </div>
+      )}
+
+      {optionsMenu && (
+        <div
+          style={{
+            position: "fixed",
+            top: optionsMenu.y,
+            left: optionsMenu.x,
+            zIndex: 10000,
+            width: 180,
+            borderRadius: 12,
+            background: "#ffffff",
+            border: "1px solid #e5e7eb",
+            boxShadow: "0 12px 30px rgba(15,23,42,0.18)",
+            overflow: "hidden",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {optionsMenu.items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={item.onClick}
+              style={{
+                width: "100%",
+                border: "none",
+                background: "transparent",
+                padding: "10px 12px",
+                textAlign: "left",
+                cursor: "pointer",
+                fontSize: 13,
+                color: "#111827",
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );

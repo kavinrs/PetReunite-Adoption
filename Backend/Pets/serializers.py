@@ -401,6 +401,8 @@ class ConversationCreateSerializer(serializers.ModelSerializer):
 class ChatMessageSerializer(serializers.ModelSerializer):
     sender = UserSummarySerializer(read_only=True)
     sender_role = serializers.SerializerMethodField()
+    reply_to = serializers.SerializerMethodField()
+    is_deleted_for_me = serializers.SerializerMethodField()
 
     class Meta:
         model = ChatMessage
@@ -410,6 +412,9 @@ class ChatMessageSerializer(serializers.ModelSerializer):
             "sender",
             "sender_role",
             "text",
+            "reply_to",
+            "is_deleted",
+            "is_deleted_for_me",
             "is_system",
             "created_at",
         )
@@ -418,6 +423,9 @@ class ChatMessageSerializer(serializers.ModelSerializer):
             "conversation",
             "sender",
             "sender_role",
+            "reply_to",
+            "is_deleted",
+            "is_deleted_for_me",
             "is_system",
             "created_at",
         )
@@ -432,11 +440,51 @@ class ChatMessageSerializer(serializers.ModelSerializer):
             return "user"
         return "admin"
 
+    def get_reply_to(self, obj):
+        if not getattr(obj, "reply_to_id", None):
+            return None
+        try:
+            rt = obj.reply_to
+        except Exception:  # pragma: no cover
+            return None
+        if not rt:
+            return None
+        return {
+            "id": rt.id,
+            "text": "Message deleted" if getattr(rt, "is_deleted", False) else rt.text,
+            "sender": UserSummarySerializer(rt.sender).data if rt.sender_id else None,
+        }
+
+    def get_is_deleted_for_me(self, obj):
+        request = self.context.get("request")
+        if not request or not getattr(request, "user", None) or not request.user.is_authenticated:
+            return False
+        try:
+            uid = int(request.user.id)
+        except Exception:  # pragma: no cover
+            return False
+        deleted_for = getattr(obj, "deleted_for", None) or []
+        return uid in deleted_for
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # If user deleted this message "for me", hide its text entirely.
+        if data.get("is_deleted_for_me"):
+            data["text"] = None
+        # If deleted for everyone, show a standard placeholder.
+        elif data.get("is_deleted"):
+            data["text"] = "Message deleted"
+        return data
+
 
 class ChatMessageCreateSerializer(serializers.ModelSerializer):
+    reply_to_message_id = serializers.IntegerField(
+        write_only=True, required=False, allow_null=True
+    )
+
     class Meta:
         model = ChatMessage
-        fields = ("text",)
+        fields = ("text", "reply_to_message_id")
 
     def validate_text(self, value):
         if not value.strip():

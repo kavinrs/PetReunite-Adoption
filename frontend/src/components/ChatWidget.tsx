@@ -12,6 +12,7 @@ interface Message {
 interface ChatWidgetProps {
   adoptionRequestId: number;
   petName: string;
+  petId?: string | number;
   status: "pending" | "approved" | "rejected";
   onClose: () => void;
 }
@@ -19,6 +20,7 @@ interface ChatWidgetProps {
 export default function ChatWidget({
   adoptionRequestId,
   petName,
+  petId,
   status,
   onClose,
 }: ChatWidgetProps) {
@@ -269,7 +271,9 @@ export default function ChatWidget({
             🐾
           </div>
           <div>
-            <div style={{ fontSize: "18px", fontWeight: "700" }}>{petName}</div>
+            <div style={{ fontSize: "18px", fontWeight: "700" }}>
+              {petName}{petId ? ` - ID #${petId}` : ""}
+            </div>
             <div
               style={{
                 fontSize: "12px",

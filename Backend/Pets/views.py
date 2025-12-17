@@ -420,7 +420,7 @@ class AdminFoundPetListView(generics.ListAPIView):
         return qs
 
 
-class AdminFoundPetDetailView(generics.RetrieveUpdateAPIView):
+class AdminFoundPetDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AdminFoundPetReportSerializer
     permission_classes = [IsAdminOrStaff]
     queryset = FoundPetReport.objects.select_related("reporter").all()
@@ -438,7 +438,7 @@ class AdminLostPetListView(generics.ListAPIView):
         return qs
 
 
-class AdminLostPetDetailView(generics.RetrieveUpdateAPIView):
+class AdminLostPetDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AdminLostPetReportSerializer
     permission_classes = [IsAdminOrStaff]
     queryset = LostPetReport.objects.select_related("reporter").all()
@@ -552,11 +552,11 @@ class AdoptionRequestDetailView(generics.RetrieveAPIView):
         return AdoptionRequest.objects.filter(requester=user).select_related("pet")
 
 
-class AdminUpdateAdoptionRequestView(generics.UpdateAPIView):
+class AdminUpdateAdoptionRequestView(generics.RetrieveUpdateDestroyAPIView):
     """Admin update adoption request status"""
 
     serializer_class = AdminAdoptionRequestSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminOrStaff]
     queryset = AdoptionRequest.objects.all()
 
     def perform_update(self, serializer):
@@ -689,7 +689,13 @@ class UserChatMessageListCreateView(generics.ListCreateAPIView):
         convo = get_object_or_404(Conversation, pk=convo_id, user=self.request.user)
         if convo.status != "active":
             raise permissions.PermissionDenied("Conversation is not active.")
-        serializer.save(conversation=convo, sender=self.request.user)
+        reply_to_id = self.request.data.get("reply_to_message_id")
+        reply_to = None
+        if reply_to_id not in (None, "", "null"):
+            reply_to = get_object_or_404(
+                ChatMessage, pk=reply_to_id, conversation=convo
+            )
+        serializer.save(conversation=convo, sender=self.request.user, reply_to=reply_to)
 
 
 class AdminChatMessageListCreateView(generics.ListCreateAPIView):
@@ -715,13 +721,21 @@ class AdminChatMessageListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         convo_id = self.kwargs["conversation_id"]
         convo = get_object_or_404(Conversation, pk=convo_id)
-        if convo.status != "active":
+        # Admin can message in active or waiting(read_only) states (and also while
+        # waiting for user confirmation).
+        if convo.status not in ("active", "read_only", "pending_user"):
             raise permissions.PermissionDenied("Conversation is not active.")
         # Optionally claim the conversation for this admin if not already set.
         if convo.admin_id is None:
             convo.admin = self.request.user
             convo.save(update_fields=["admin", "updated_at"])
-        serializer.save(conversation=convo, sender=self.request.user)
+        reply_to_id = self.request.data.get("reply_to_message_id")
+        reply_to = None
+        if reply_to_id not in (None, "", "null"):
+            reply_to = get_object_or_404(
+                ChatMessage, pk=reply_to_id, conversation=convo
+            )
+        serializer.save(conversation=convo, sender=self.request.user, reply_to=reply_to)
 
 
 class AdminConversationListView(generics.ListAPIView):
@@ -782,28 +796,118 @@ class AdminConversationCloseView(APIView):
         )
         return Response(ConversationSerializer(convo).data, status=status.HTTP_200_OK)
 
-
-class AdminChatMessageListCreateView(generics.ListCreateAPIView):
-    """List/send messages in a conversation for admins."""
+class AdminConversationStatusUpdateView(APIView):
+    """Admin can set conversation status (active/read_only/closed)."""
 
     permission_classes = [IsAdminOrStaff]
 
-    def get_serializer_class(self):
-        if self.request.method == "POST":
-            return ChatMessageCreateSerializer
-        return ChatMessageSerializer
+    def patch(self, request, pk):
+        convo = get_object_or_404(Conversation, pk=pk)
+        next_status = (request.data.get("status") or "").strip().lower()
+        if next_status not in ("active", "read_only", "closed"):
+            return Response(
+                {"detail": "Invalid status."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if convo.status == next_status:
+            return Response(ConversationSerializer(convo).data, status=status.HTTP_200_OK)
 
-    def get_queryset(self):
-        convo_id = self.kwargs["conversation_id"]
-        convo = get_object_or_404(Conversation, pk=convo_id)
-        return convo.messages.select_related("sender")
+        # Claim convo for this admin if not set.
+        if convo.admin_id is None:
+            convo.admin = request.user
 
-    def perform_create(self, serializer):
-        convo_id = self.kwargs["conversation_id"]
-        convo = get_object_or_404(Conversation, pk=convo_id)
-        if convo.status != "active":
-            raise permissions.PermissionDenied("Conversation is not active.")
-        serializer.save(conversation=convo, sender=self.request.user)
+        convo.status = next_status
+        convo.save(update_fields=["admin", "status", "updated_at"])
+
+        # System message so both sides can see status changes in the timeline.
+        label = "Active" if next_status == "active" else ("Waiting" if next_status == "read_only" else "Close")
+        ChatMessage.objects.create(
+            conversation=convo,
+            sender=request.user,
+            text=f"Chat marked as {label}.",
+            is_system=True,
+        )
+        return Response(ConversationSerializer(convo).data, status=status.HTTP_200_OK)
+
+
+class AdminConversationDeleteView(APIView):
+    """Admin deletes an entire conversation."""
+
+    permission_classes = [IsAdminOrStaff]
+
+    def delete(self, request, pk):
+        convo = get_object_or_404(Conversation, pk=pk)
+        convo.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class UserConversationDeleteView(APIView):
+    """User deletes their own conversation."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, pk):
+        convo = get_object_or_404(Conversation, pk=pk, user=request.user)
+        convo.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class UserChatMessageDeleteForMeView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, conversation_id, message_id):
+        convo = get_object_or_404(Conversation, pk=conversation_id, user=request.user)
+        msg = get_object_or_404(ChatMessage, pk=message_id, conversation=convo)
+        uid = int(request.user.id)
+        deleted_for = msg.deleted_for or []
+        if uid not in deleted_for:
+            deleted_for.append(uid)
+            msg.deleted_for = deleted_for
+            msg.save(update_fields=["deleted_for"])
+        return Response(ChatMessageSerializer(msg, context={"request": request}).data)
+
+
+class UserChatMessageDeleteForEveryoneView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, conversation_id, message_id):
+        convo = get_object_or_404(Conversation, pk=conversation_id, user=request.user)
+        msg = get_object_or_404(ChatMessage, pk=message_id, conversation=convo)
+        if msg.is_system:
+            return Response({"detail": "Cannot delete system message."}, status=status.HTTP_400_BAD_REQUEST)
+        if msg.sender_id != request.user.id:
+            return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
+        msg.is_deleted = True
+        msg.save(update_fields=["is_deleted"])
+        return Response(ChatMessageSerializer(msg, context={"request": request}).data)
+
+
+class AdminChatMessageDeleteForMeView(APIView):
+    permission_classes = [IsAdminOrStaff]
+
+    def post(self, request, conversation_id, message_id):
+        convo = get_object_or_404(Conversation, pk=conversation_id)
+        msg = get_object_or_404(ChatMessage, pk=message_id, conversation=convo)
+        uid = int(request.user.id)
+        deleted_for = msg.deleted_for or []
+        if uid not in deleted_for:
+            deleted_for.append(uid)
+            msg.deleted_for = deleted_for
+            msg.save(update_fields=["deleted_for"])
+        return Response(ChatMessageSerializer(msg, context={"request": request}).data)
+
+
+class AdminChatMessageDeleteForEveryoneView(APIView):
+    permission_classes = [IsAdminOrStaff]
+
+    def delete(self, request, conversation_id, message_id):
+        convo = get_object_or_404(Conversation, pk=conversation_id)
+        msg = get_object_or_404(ChatMessage, pk=message_id, conversation=convo)
+        if msg.is_system:
+            return Response({"detail": "Cannot delete system message."}, status=status.HTTP_400_BAD_REQUEST)
+        msg.is_deleted = True
+        msg.save(update_fields=["is_deleted"])
+        return Response(ChatMessageSerializer(msg, context={"request": request}).data)
 
 class CreateMessageView(APIView):
     """Create a new message in adoption request chat"""

@@ -1030,9 +1030,11 @@ export async function createChatConversation(): Promise<ApiResult> {
 // Create a conversation with optional pet context so admin knows which pet
 // the user is chatting about (lost / found / adoption).
 export async function createChatConversationWithPet(payload: {
-  pet_id?: number;
+  pet_id?: number; // Legacy, kept for backward compatibility
+  pet_unique_id?: string; // Preferred: unique ID like FP000024 or LP000029
   pet_name?: string;
   pet_kind?: string; // "lost" | "found" | "adoption" etc
+  initial_message?: string; // optional first message describing the request
 }): Promise<ApiResult> {
   const url = `${PETS_BASE}/chat/conversations/`;
   const resp = await fetchWithAuth(url, {

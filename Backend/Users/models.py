@@ -2,6 +2,7 @@
 from django.conf import settings
 from django.db import models
 from django.contrib.auth import get_user_model
+import uuid
 
 User = get_user_model()
 
@@ -24,10 +25,31 @@ class UserProfile(models.Model):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="owner")
     profile_photo = models.ImageField(upload_to="profile_photos/%Y/%m/%d/", blank=True, null=True)
     verified = models.BooleanField(default=False)
-    pincode=models.CharField(max_length=10,blank=True,null=True)
+    pincode = models.CharField(max_length=10, blank=True, null=True)
+    # Stable public user id used for communication and referencing users
+    user_unique_id = models.CharField(max_length=32, unique=True, blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):  # type: ignore[override]
+        """Ensure every profile has a stable, unique public user id."""
+        if not self.user_unique_id:
+            base = None
+            if self.user_id:
+                base = f"USR{self.user_id:06d}"
+            else:
+                base = f"USR{uuid.uuid4().hex[:8].upper()}"
+
+            candidate = base
+            suffix = 1
+            while UserProfile.objects.filter(user_unique_id=candidate).exclude(pk=self.pk).exists():
+                candidate = f"{base}-{suffix}"
+                suffix += 1
+
+            self.user_unique_id = candidate
+
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.user.username} Profile"

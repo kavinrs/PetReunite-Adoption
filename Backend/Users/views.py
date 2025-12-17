@@ -54,6 +54,9 @@ class MeView(APIView):
 
     def get(self, request):
         profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        # Backfill missing public id for existing users
+        if not getattr(profile, "user_unique_id", None):
+            profile.save()
         serializer = UserProfileSerializer(profile, context={"request": request})
         return Response(serializer.data)
 

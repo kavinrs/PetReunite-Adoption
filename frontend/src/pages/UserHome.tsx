@@ -1789,9 +1789,13 @@ export default function UserHome() {
                     <button
                       onClick={() => {
                         if (pet.petCategory === "lost") {
-                          navigate("/user/report-found");
+                          navigate(`/user/lost/${pet.id}?mode=view`, {
+                            state: { from: "home" },
+                          });
                         } else if (pet.petCategory === "found") {
-                          navigate(`/user/found/${pet.id}`, { state: { report: pet } });
+                          navigate(`/user/found/${pet.id}`, {
+                            state: { report: pet, from: "home" },
+                          });
                         } else if (pet.petCategory === "adoption") {
                           navigate(`/pets/${pet.id}`);
                         }
@@ -1813,11 +1817,7 @@ export default function UserHome() {
                         fontSize: 14,
                       }}
                     >
-                      {pet.petCategory === "lost"
-                        ? "Help Find This Pet"
-                        : pet.petCategory === "found"
-                          ? "View Found Pet"
-                          : "View Details & Adopt"}
+                      View pet details
                     </button>
                   </div>
                 ))}

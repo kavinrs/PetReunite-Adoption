@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.db import models
 from django.db.models import JSONField
+import uuid
 
 User = get_user_model()
 
@@ -41,11 +42,31 @@ class FoundPetReport(models.Model):
     admin_notes = models.TextField(blank=True)
     has_user_update = models.BooleanField(default=False)
     previous_snapshot = JSONField(blank=True, null=True)
+    # Stable public unique ID used for communication and referencing found pets
+    pet_unique_id = models.CharField(max_length=32, unique=True, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        """Ensure every found pet report has a stable, unique public ID."""
+        # Save first to get the ID if this is a new record
+        super().save(*args, **kwargs)
+        
+        # Now generate pet_unique_id if it doesn't exist
+        if not self.pet_unique_id:
+            base = f"FP{self.id:06d}"
+            candidate = base
+            suffix = 1
+            while FoundPetReport.objects.filter(pet_unique_id=candidate).exclude(pk=self.pk).exists():
+                candidate = f"{base}-{suffix}"
+                suffix += 1
+
+            self.pet_unique_id = candidate
+            # Update only the pet_unique_id field to avoid triggering save again
+            FoundPetReport.objects.filter(pk=self.pk).update(pet_unique_id=candidate)
 
     def __str__(self):
         return f"[Pets] Found {self.pet_type} by {self.reporter.username}"
@@ -78,11 +99,31 @@ class LostPetReport(models.Model):
     admin_notes = models.TextField(blank=True)
     has_user_update = models.BooleanField(default=False)
     previous_snapshot = JSONField(blank=True, null=True)
+    # Stable public unique ID used for communication and referencing lost pets
+    pet_unique_id = models.CharField(max_length=32, unique=True, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        """Ensure every lost pet report has a stable, unique public ID."""
+        # Save first to get the ID if this is a new record
+        super().save(*args, **kwargs)
+        
+        # Now generate pet_unique_id if it doesn't exist
+        if not self.pet_unique_id:
+            base = f"LP{self.id:06d}"
+            candidate = base
+            suffix = 1
+            while LostPetReport.objects.filter(pet_unique_id=candidate).exclude(pk=self.pk).exists():
+                candidate = f"{base}-{suffix}"
+                suffix += 1
+
+            self.pet_unique_id = candidate
+            # Update only the pet_unique_id field to avoid triggering save again
+            LostPetReport.objects.filter(pk=self.pk).update(pet_unique_id=candidate)
 
     def __str__(self):
         return f"[Pets] Lost {self.pet_type} by {self.reporter.username}"
@@ -104,11 +145,31 @@ class Pet(models.Model):
     posted_by = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="posted_pets"
     )
+    # Stable public unique ID used for communication and referencing adoption pets
+    pet_unique_id = models.CharField(max_length=32, unique=True, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
 
     class Meta:
         ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        """Ensure every adoption pet has a stable, unique public ID."""
+        # Save first to get the ID if this is a new record
+        super().save(*args, **kwargs)
+        
+        # Now generate pet_unique_id if it doesn't exist
+        if not self.pet_unique_id:
+            base = f"AP{self.id:06d}"
+            candidate = base
+            suffix = 1
+            while Pet.objects.filter(pet_unique_id=candidate).exclude(pk=self.pk).exists():
+                candidate = f"{base}-{suffix}"
+                suffix += 1
+
+            self.pet_unique_id = candidate
+            # Update only the pet_unique_id field to avoid triggering save again
+            Pet.objects.filter(pk=self.pk).update(pet_unique_id=candidate)
 
     def __str__(self):
         return f"{self.name} - {self.species} ({self.breed})"
@@ -206,7 +267,13 @@ class Conversation(models.Model):
     )
     # Optional pet context so admin can see which pet/report this chat is about.
     # For example, a lost report, found report, or adoption pet.
-    pet_id = models.IntegerField(null=True, blank=True)
+    pet_id = models.IntegerField(null=True, blank=True)  # Legacy field, kept for backward compatibility
+    pet_unique_id = models.CharField(
+        max_length=32,
+        blank=True,
+        null=True,
+        help_text="Unique public ID like FP000024 or LP000029 to avoid confusion between lost/found pets with same numeric ID",
+    )
     pet_name = models.CharField(max_length=150, blank=True)
     pet_kind = models.CharField(
         max_length=50,

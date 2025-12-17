@@ -170,27 +170,58 @@ class AllReportsView(APIView):
 
 
 class PublicLostPetsView(generics.ListAPIView):
-    """Public view of all lost pets for dashboard display"""
+    """Public view of all lost pets for dashboard display.
+
+    Previously this endpoint only exposed reports with a very small set of
+    statuses (approved / investigating / matched). That meant newer or
+    recently-updated reports that were still marked as "pending", "resolved",
+    or "closed" silently disappeared from the public dashboard even though
+    they existed in the system.
+
+    To ensure users always see an accurate picture of current cases,
+    we now include all non-rejected statuses.
+    """
 
     serializer_class = LostPetReportSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        # Show latest 20 lost reports that have not been explicitly rejected.
         return LostPetReport.objects.filter(
-            status__in=["approved", "investigating", "matched"]
-        ).order_by("-created_at")[:20]  # Show latest 20
+            status__in=[
+                "pending",
+                "approved",
+                "investigating",
+                "matched",
+                "resolved",
+                "closed",
+            ]
+        ).order_by("-created_at")[:20]
 
 
 class PublicFoundPetsView(generics.ListAPIView):
-    """Public view of all found pets for dashboard display"""
+    """Public view of all found pets for dashboard display.
+
+    As with lost pets, we widen the visible statuses so that users can
+    still see found pet reports that are pending review or have been
+    marked resolved/closed, instead of only a narrow subset.
+    """
 
     serializer_class = FoundPetReportSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        # Show latest 20 found reports that have not been explicitly rejected.
         return FoundPetReport.objects.filter(
-            status__in=["approved", "investigating", "matched"]
-        ).order_by("-created_at")[:20]  # Show latest 20
+            status__in=[
+                "pending",
+                "approved",
+                "investigating",
+                "matched",
+                "resolved",
+                "closed",
+            ]
+        ).order_by("-created_at")[:20]
 
 
 class AdminReportSummaryView(APIView):

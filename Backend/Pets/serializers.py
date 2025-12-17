@@ -28,6 +28,7 @@ class FoundPetReportSerializer(serializers.ModelSerializer):
         model = FoundPetReport
         fields = (
             "id",
+            "pet_unique_id",
             "reporter",
             "pet_type",
             "breed",
@@ -52,6 +53,7 @@ class FoundPetReportSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             "id",
+            "pet_unique_id",
             "reporter",
             "status",
             "admin_notes",
@@ -74,11 +76,13 @@ class FoundPetReportSerializer(serializers.ModelSerializer):
 class LostPetReportSerializer(serializers.ModelSerializer):
     reporter = UserSummarySerializer(read_only=True)
     photo_url = serializers.SerializerMethodField()
+    public_id = serializers.SerializerMethodField()
 
     class Meta:
         model = LostPetReport
         fields = (
             "id",
+            "public_id",
             "reporter",
             "pet_name",
             "pet_type",
@@ -121,6 +125,10 @@ class LostPetReportSerializer(serializers.ModelSerializer):
         except Exception:
             pass
         return str(obj.photo) if obj.photo else None
+
+    def get_public_id(self, obj):
+        # Prefix with L to distinguish from found/adoption IDs in the UI
+        return f"L{obj.id}"
 
     def update(self, instance, validated_data):
         """On user edits of already-reviewed reports, capture a snapshot.
@@ -167,6 +175,7 @@ class PetSerializer(serializers.ModelSerializer):
         model = Pet
         fields = (
             "id",
+            "pet_unique_id",
             "name",
             "species",
             "breed",
@@ -181,7 +190,7 @@ class PetSerializer(serializers.ModelSerializer):
             "created_at",
             "is_active",
         )
-        read_only_fields = ("id", "posted_by", "created_at")
+        read_only_fields = ("id", "pet_unique_id", "posted_by", "created_at")
 
 
 class AdoptionRequestSerializer(serializers.ModelSerializer):
@@ -323,6 +332,7 @@ class ConversationSerializer(serializers.ModelSerializer):
             "user",
             "admin",
             "pet_id",
+            "pet_unique_id",
             "pet_name",
             "pet_kind",
             "status",
@@ -334,6 +344,7 @@ class ConversationSerializer(serializers.ModelSerializer):
             "user",
             "admin",
             "pet_id",
+            "pet_unique_id",
             "pet_name",
             "pet_kind",
             "created_at",
@@ -342,18 +353,49 @@ class ConversationSerializer(serializers.ModelSerializer):
 
 
 class ConversationCreateSerializer(serializers.ModelSerializer):
+    # Optional initial message that will be stored as the first chat message
+    # in the conversation. This allows users to explain why they are requesting
+    # a chat (e.g. claiming a found pet) without immediately starting an
+    # interactive chat session.
+    initial_message = serializers.CharField(
+        write_only=True, required=False, allow_blank=True
+    )
+
     class Meta:
         model = Conversation
         # Optional pet context can be passed from the frontend when the
         # conversation is created so admins see which pet/report it refers to.
-        fields = ("pet_id", "pet_name", "pet_kind")
+        # initial_message is write-only and is not stored on the Conversation
+        # model itself; instead, it becomes the first ChatMessage.
+        # pet_unique_id is preferred over pet_id to avoid confusion when lost/found
+        # pets have the same numeric ID.
+        fields = ("pet_id", "pet_unique_id", "pet_name", "pet_kind", "initial_message")
 
     def create(self, validated_data):
         request = self.context["request"]
         user = request.user
-        # Allow multiple conversations; create a fresh one in requested state,
-        # attaching any provided pet context.
-        return Conversation.objects.create(user=user, **validated_data)
+
+        # Pull out the optional initial message text.
+        initial_message = validated_data.pop("initial_message", "").strip()
+
+        # If pet_unique_id is provided, prefer it over pet_id to avoid confusion.
+        # If only pet_id is provided (legacy), keep it for backward compatibility.
+        # Create a fresh conversation in requested state, attaching any
+        # provided pet context so admins can see what this is about.
+        convo = Conversation.objects.create(user=user, **validated_data)
+
+        # If the user provided an initial message, save it as the first
+        # ChatMessage in this conversation. The conversation remains in the
+        # "requested" state; admins must still accept before chat is active.
+        if initial_message:
+            ChatMessage.objects.create(
+                conversation=convo,
+                sender=user,
+                text=initial_message,
+                is_system=False,
+            )
+
+        return convo
 
 
 class ChatMessageSerializer(serializers.ModelSerializer):

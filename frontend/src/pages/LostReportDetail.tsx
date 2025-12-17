@@ -8,6 +8,7 @@ export default function LostReportDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const fromHome = (location.state as any)?.from === "home";
   const mode = (new URLSearchParams(location.search).get("mode") || "view") as
     | "view"
     | "edit";
@@ -90,7 +91,11 @@ export default function LostReportDetail() {
   };
 
   const handleBack = () => {
-    navigate("/user", { state: { tab: "activity" } });
+    if (fromHome) {
+      navigate("/user");
+    } else {
+      navigate("/user", { state: { tab: "activity" } });
+    }
   };
 
   if (loading) return <div style={{ padding: 32 }}>Loading report...</div>;
@@ -98,7 +103,7 @@ export default function LostReportDetail() {
     return (
       <div style={{ padding: 32 }}>
         <button onClick={handleBack} style={{ marginBottom: 16 }}>
-          ← Back to activity
+          {fromHome ? "Back" : "Back to activity"}
         </button>
         <div>{error}</div>
       </div>
@@ -117,6 +122,22 @@ export default function LostReportDetail() {
         ? origin + String(raw)
         : origin + "/media/" + String(raw)
     : null;
+
+  const fieldIcons: Record<string, string> = {
+    pet_name: "🐶",
+    pet_type: "📘",
+    breed: "🧬",
+    gender: "⚧",
+    color: "🎨",
+    weight: "⚖️",
+    vaccinated: "💉",
+    age: "🎂",
+    city: "📍",
+    state: "🗺️",
+    pincode: "🏷️",
+    location_url: "🗺️",
+    lost_time: "⏱️",
+  };
 
   return (
     <div
@@ -140,14 +161,14 @@ export default function LostReportDetail() {
           cursor: "pointer",
         }}
       >
-        ← Back to activity
+        {fromHome ? "Back" : "Back to activity"}
       </button>
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "minmax(0, 2fr) minmax(0, 3fr)",
           gap: 24,
-          alignItems: "flex-start",
+          alignItems: "stretch",
         }}
       >
         <div
@@ -156,13 +177,20 @@ export default function LostReportDetail() {
             borderRadius: 24,
             padding: 16,
             boxShadow: "0 20px 50px rgba(15,23,42,0.12)",
+            display: "flex",
+            flexDirection: "column",
           }}
         >
           {photoSrc ? (
             <img
               src={photoSrc}
               alt={report.pet_name || report.pet_type || "Pet"}
-              style={{ width: "100%", borderRadius: 18, objectFit: "cover" }}
+              style={{
+                width: "100%",
+                height: "100%",
+                borderRadius: 18,
+                objectFit: "cover",
+              }}
             />
           ) : (
             <div
@@ -229,9 +257,12 @@ export default function LostReportDetail() {
                   {report.status}
                 </span>
               </div>
-              <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 2 }}>
-                Pet ID: <span style={{ fontWeight: 700, color: "#111827" }}>#{report.id}</span>
-              </div>
+            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 2 }}>
+              Pet ID:{" "}
+              <span style={{ fontWeight: 700, color: "#111827" }}>
+                #{report.pet_unique_id || `LP${report.id.toString().padStart(6, "0")}`}
+              </span>
+            </div>
               <div
                 style={{
                   fontSize: 24,
@@ -250,65 +281,61 @@ export default function LostReportDetail() {
             </div>
           </div>
 
-          <div
-            style={{
-              background: "white",
-              borderRadius: 20,
-              padding: 16,
-              boxShadow: "0 10px 30px rgba(15,23,42,0.08)",
-            }}
-          >
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Upload Information</div>
-            <div style={{ fontSize: 12, color: "#6b7280", display: "grid", gap: 4 }}>
-              <div>
-                <strong>Reported on:</strong>{" "}
-                {new Date(report.created_at).toLocaleString()}
-              </div>
-              <div>
-                <strong>Last updated:</strong>{" "}
-                {new Date(report.updated_at).toLocaleString()}
-              </div>
-              {report.lost_time && (
-                <div>
-                  <strong>Lost time:</strong>{" "}
-                  {new Date(report.lost_time).toLocaleString()}
-                </div>
-              )}
-            </div>
-          </div>
-
           <form
             onSubmit={handleSave}
             style={{
-              background: "white",
-              borderRadius: 20,
-              padding: 16,
-              boxShadow: "0 10px 30px rgba(15,23,42,0.08)",
+              background:
+                "linear-gradient(135deg, rgba(219,234,254,0.85), rgba(239,246,255,0.9))",
+              borderRadius: 24,
+              padding: 18,
+              boxShadow: "0 14px 40px rgba(15,23,42,0.16)",
               display: "flex",
               flexDirection: "column",
-              gap: 16,
+              gap: 18,
+              border: "1px solid rgba(148,163,184,0.35)",
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontWeight: 700 }}>Pet Details</div>
-              {mode === "view" ? (
-                <button
-                  type="button"
-                  onClick={() => navigate(`/user/lost/${report.id}?mode=edit`)}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 4,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  color: "#0f172a",
+                }}
+              >
+                <span
                   style={{
-                    borderRadius: 999,
-                    border: "1px solid #9ca3af",
-                    padding: "6px 14px",
-                    background: "#111827",
-                    color: "#f9fafb",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: "pointer",
+                    width: 28,
+                    height: 28,
+                    borderRadius: "999px",
+                    background: "rgba(59,130,246,0.12)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 16,
                   }}
                 >
-                  Edit
-                </button>
-              ) : (
+                  🐾
+                </span>
+                <span
+                  style={{
+                    fontWeight: 800,
+                    fontSize: 16,
+                    letterSpacing: 0.2,
+                  }}
+                >
+                  Pets Details
+                </span>
+              </div>
+              {mode === "edit" && (
                 <button
                   type="submit"
                   disabled={saving}
@@ -316,11 +343,13 @@ export default function LostReportDetail() {
                     borderRadius: 999,
                     border: "none",
                     padding: "6px 16px",
-                    background: "#2563eb",
+                    background:
+                      "linear-gradient(135deg, #2563eb, #4f46e5)",
                     color: "white",
                     fontSize: 12,
                     fontWeight: 700,
                     cursor: saving ? "not-allowed" : "pointer",
+                    boxShadow: "0 8px 18px rgba(37,99,235,0.35)",
                   }}
                 >
                   {saving ? "Saving..." : "Save"}
@@ -333,6 +362,9 @@ export default function LostReportDetail() {
                 display: "grid",
                 gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
                 gap: 12,
+                background: "rgba(255,255,255,0.8)",
+                borderRadius: 18,
+                padding: 14,
               }}
             >
               {([
@@ -351,66 +383,122 @@ export default function LostReportDetail() {
                 ["lost_time", "Lost Time"],
               ] as const).map(([key, label]) => (
                 <div key={key}>
-                  <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>{label}</div>
-                  {mode === "view" ? (
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>
-                      {key === "location_url" && form[key]
-                        ? (
-                            <a
-                              href={String(form[key]).startsWith("http")
-                                ? String(form[key])
-                                : `https://www.google.com/maps?q=${encodeURIComponent(String(form[key]))}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              style={{ color: "#2563eb" }}
-                            >
-                              Open in Google Maps
-                            </a>
-                          )
-                        : key === "lost_time" && form[key]
-                          ? new Date(form[key]).toLocaleString()
-                          : form[key] || <span style={{ color: "#9ca3af" }}>—</span>}
+                  <div
+                    style={{
+                      background: "rgba(248,250,252,0.95)",
+                      borderRadius: 14,
+                      padding: 10,
+                      boxShadow: "0 4px 10px rgba(15,23,42,0.08)",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 8,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 18,
+                        lineHeight: 1,
+                      }}
+                    >
+                      {fieldIcons[key] || "📌"}
+                    </span>
+                    <div style={{ flex: 1 }}>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "#6b7280",
+                          textTransform: "uppercase",
+                          letterSpacing: 0.6,
+                          fontWeight: 700,
+                          marginBottom: 2,
+                        }}
+                      >
+                        {label}
+                      </div>
+                      {mode === "view" ? (
+                        <div
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 700,
+                            color: "#0f172a",
+                          }}
+                        >
+                          {key === "location_url" && form[key]
+                            ? (
+                                <a
+                                  href={String(form[key]).startsWith("http")
+                                    ? String(form[key])
+                                    : `https://www.google.com/maps?q=${encodeURIComponent(String(form[key]))}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  style={{ color: "#2563eb" }}
+                                >
+                                  Open in Google Maps
+                                </a>
+                              )
+                            : key === "lost_time" && form[key]
+                              ? new Date(form[key]).toLocaleString()
+                              : form[key] || (
+                                  <span style={{ color: "#9ca3af" }}>—</span>
+                                )}
+                        </div>
+                      ) : key === "lost_time" ? (
+                        <input
+                          type="datetime-local"
+                          value={form[key]}
+                          onChange={(e) => handleChange(key, e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            borderRadius: 10,
+                            border: "1px solid #e5e7eb",
+                            fontSize: 12,
+                          }}
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          value={form[key]}
+                          onChange={(e) => handleChange(key, e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            borderRadius: 10,
+                            border: "1px solid #e5e7eb",
+                            fontSize: 12,
+                          }}
+                        />
+                      )}
+                    </div>
                   </div>
-                  ) : (
-                    key === "lost_time" ? (
-                      <input
-                        type="datetime-local"
-                        value={form[key]}
-                        onChange={(e) => handleChange(key, e.target.value)}
-                        style={{
-                          width: "100%",
-                          padding: "8px 10px",
-                          borderRadius: 10,
-                          border: "1px solid #e5e7eb",
-                          fontSize: 12,
-                        }}
-                      />
-                    ) : (
-                      <input
-                        type="text"
-                        value={form[key]}
-                        onChange={(e) => handleChange(key, e.target.value)}
-                        style={{
-                          width: "100%",
-                          padding: "8px 10px",
-                          borderRadius: 10,
-                          border: "1px solid #e5e7eb",
-                          fontSize: 12,
-                        }}
-                      />
-                    )
-                  )}
                 </div>
               ))}
             </div>
 
-            <div>
-              <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
+            <div
+              style={{
+                marginTop: 8,
+                background: "rgba(255,255,255,0.9)",
+                borderRadius: 18,
+                padding: 14,
+                border: "1px dashed rgba(148,163,184,0.6)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "#6b7280",
+                  marginBottom: 4,
+                  fontWeight: 700,
+                }}
+              >
                 Description
               </div>
               {mode === "view" ? (
-                <div style={{ fontSize: 13, color: "#111827" }}>
-                  {form.description || <span style={{ color: "#9ca3af" }}>No description</span>}
+                <div style={{ fontSize: 13, color: "#111827", lineHeight: 1.6 }}>
+                  {form.description || (
+                    <span style={{ color: "#9ca3af" }}>No description</span>
+                  )}
                 </div>
               ) : (
                 <textarea
@@ -424,6 +512,7 @@ export default function LostReportDetail() {
                     border: "1px solid #e5e7eb",
                     fontSize: 12,
                     resize: "vertical",
+                    background: "rgba(248,250,252,0.9)",
                   }}
                 />
               )}
@@ -433,6 +522,250 @@ export default function LostReportDetail() {
               <div style={{ fontSize: 12, color: "#b91c1c" }}>{error}</div>
             )}
           </form>
+
+          <div
+            style={{
+              marginTop: 8,
+              display: "flex",
+              justifyContent: "flex-start",
+            }}
+          >
+            <div
+              style={{
+                background: "#f9fafb",
+                borderRadius: 18,
+                padding: 14,
+                boxShadow: "0 8px 24px rgba(15,23,42,0.08)",
+                border: "1px solid rgba(226,232,240,0.9)",
+                width: "100%",
+                maxWidth: 520,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginBottom: 8,
+                }}
+              >
+                <span
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: "999px",
+                    background: "rgba(148,163,184,0.2)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 13,
+                    color: "#4b5563",
+                  }}
+                >
+                  👤
+                </span>
+                <span
+                  style={{
+                    fontWeight: 800,
+                    fontSize: 13,
+                    color: "#111827",
+                    letterSpacing: 0.3,
+                  }}
+                >
+                  Reported Details
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(auto-fit, minmax(200px, 1fr))",
+                  gap: 10,
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      background: "#ffffff",
+                      borderRadius: 12,
+                      padding: 8,
+                      boxShadow: "0 3px 8px rgba(148,163,184,0.25)",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 8,
+                    }}
+                  >
+                    <span style={{ fontSize: 16, lineHeight: 1 }}>👤</span>
+                    <div style={{ flex: 1 }}>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "#6b7280",
+                          textTransform: "uppercase",
+                          letterSpacing: 0.5,
+                          fontWeight: 700,
+                          marginBottom: 2,
+                        }}
+                      >
+                        Reported by
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: "#111827",
+                        }}
+                      >
+                        {(() => {
+                          const r = report as any;
+                          const fromRoot =
+                            r.reporter_full_name ||
+                            r.reporter_name ||
+                            r.reporter_username;
+                          if (fromRoot) return fromRoot;
+
+                          const nested = r.reporter || r.user || null;
+                          if (nested && typeof nested === "object") {
+                            return (
+                              nested.full_name ||
+                              nested.username ||
+                              nested.email ||
+                              "You"
+                            );
+                          }
+
+                          if (nested && typeof nested !== "object")
+                            return String(nested);
+                          return "You";
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div
+                    style={{
+                      background: "#ffffff",
+                      borderRadius: 12,
+                      padding: 8,
+                      boxShadow: "0 3px 8px rgba(148,163,184,0.25)",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 8,
+                    }}
+                  >
+                    <span style={{ fontSize: 16, lineHeight: 1 }}>📅</span>
+                    <div style={{ flex: 1 }}>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "#6b7280",
+                          textTransform: "uppercase",
+                          letterSpacing: 0.5,
+                          fontWeight: 700,
+                          marginBottom: 2,
+                        }}
+                      >
+                        Reported on
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 500,
+                          color: "#111827",
+                        }}
+                      >
+                        {new Date(report.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div
+                    style={{
+                      background: "#ffffff",
+                      borderRadius: 12,
+                      padding: 8,
+                      boxShadow: "0 3px 8px rgba(148,163,184,0.25)",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 8,
+                    }}
+                  >
+                    <span style={{ fontSize: 16, lineHeight: 1 }}>🔁</span>
+                    <div style={{ flex: 1 }}>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "#6b7280",
+                          textTransform: "uppercase",
+                          letterSpacing: 0.5,
+                          fontWeight: 700,
+                          marginBottom: 2,
+                        }}
+                      >
+                        Last updated
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 500,
+                          color: "#111827",
+                        }}
+                      >
+                        {new Date(report.updated_at).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {report.lost_time && (
+                  <div>
+                    <div
+                      style={{
+                        background: "#ffffff",
+                        borderRadius: 12,
+                        padding: 8,
+                        boxShadow:
+                          "0 3px 8px rgba(148,163,184,0.25)",
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 8,
+                      }}
+                    >
+                      <span style={{ fontSize: 16, lineHeight: 1 }}>⏱</span>
+                      <div style={{ flex: 1 }}>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "#6b7280",
+                            textTransform: "uppercase",
+                            letterSpacing: 0.5,
+                            fontWeight: 700,
+                            marginBottom: 2,
+                          }}
+                        >
+                          Lost time
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 500,
+                            color: "#111827",
+                          }}
+                        >
+                          {new Date(report.lost_time).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -81,6 +81,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "user",
+            "user_unique_id",
             "full_name",
             "phone_number",
             "address",
@@ -95,7 +96,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("role", "verified")
+        read_only_fields = ("role", "verified", "user_unique_id")
 
 
 class VolunteerRequestCreateSerializer(serializers.ModelSerializer):

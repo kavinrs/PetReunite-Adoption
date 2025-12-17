@@ -80,6 +80,7 @@ export default function UserProfile() {
       label: "Username",
       value: profile?.user?.username ?? profile?.username ?? "—",
     },
+    { label: "User ID", value: profile?.user_unique_id ?? "—" },
     { label: "Email", value: profile?.user?.email ?? "—" },
     { label: "Phone number", value: profile?.phone_number ?? "—" },
     { label: "Address", value: profile?.address ?? "—" },

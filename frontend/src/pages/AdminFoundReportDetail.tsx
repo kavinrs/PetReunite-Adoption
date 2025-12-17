@@ -160,6 +160,20 @@ export default function AdminFoundReportDetail() {
         : origin + "/media/" + String(raw)
     : null;
 
+  const fieldIcons: Record<string, string> = {
+    pet_name: "🐶",
+    pet_type: "📘",
+    breed: "🧬",
+    gender: "⚧",
+    color: "🎨",
+    weight: "⚖️",
+    estimated_age: "🎂",
+    found_city: "📍",
+    state: "🗺️",
+    pincode: "🏷️",
+    location_url: "🗺️",
+  };
+
   return (
     <div
       style={{
@@ -288,7 +302,10 @@ export default function AdminFoundReportDetail() {
                   marginBottom: 4,
                 }}
               >
-                Pet ID: <span style={{ fontWeight: 700, color: "#111827" }}>#{report.id}</span>
+                Pet ID:{" "}
+                <span style={{ fontWeight: 700, color: "#111827" }}>
+                  #{report.pet_unique_id || `FP${report.id?.toString().padStart(6, "0")}`}
+                </span>
               </div>
               <div
                 style={{

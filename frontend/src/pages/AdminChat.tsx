@@ -69,35 +69,96 @@ export default function AdminChat() {
       setPetError(null);
       setSelectedReason(null);
 
-      const petId = selectedRequest?.pet_id;
+      const petUniqueId = selectedRequest?.pet_unique_id;
+      const petKind = selectedRequest?.pet_kind;
+      const petId = selectedRequest?.pet_id; // Legacy fallback
       const convoId = selectedRequest?.id;
-      if (!petId && !convoId) return;
+      if (!petUniqueId && !petId && !convoId) return;
 
       setPetLoading(true);
       try {
-        // First try lost reports
-        const lostRes = await fetchAdminLostReports("all");
-        if (lostRes.ok && Array.isArray(lostRes.data)) {
-          const list = lostRes.data as any[];
-          const found = list.find((r) => String(r.id) === String(petId));
-          if (found) {
-            setSelectedPet(found);
-            setSelectedPetSource("lost");
-            setPetLoading(false);
-            return;
+        // Use pet_unique_id + pet_kind for accurate lookup (avoids confusion when lost/found have same numeric ID)
+        if (petUniqueId && petKind) {
+          if (petKind === "lost") {
+            const lostRes = await fetchAdminLostReports("all");
+            if (lostRes.ok && Array.isArray(lostRes.data)) {
+              const list = lostRes.data as any[];
+              const found = list.find((r) => r.pet_unique_id === petUniqueId);
+              if (found) {
+                setSelectedPet(found);
+                setSelectedPetSource("lost");
+                setPetLoading(false);
+                return;
+              }
+            }
+          } else if (petKind === "found") {
+            const foundRes = await fetchAdminFoundReports("all");
+            if (foundRes.ok && Array.isArray(foundRes.data)) {
+              const list = foundRes.data as any[];
+              const found = list.find((r) => r.pet_unique_id === petUniqueId);
+              if (found) {
+                setSelectedPet(found);
+                setSelectedPetSource("found");
+                setPetLoading(false);
+                return;
+              }
+            }
           }
         }
 
-        // Then try found reports
-        const foundRes = await fetchAdminFoundReports("all");
-        if (foundRes.ok && Array.isArray(foundRes.data)) {
-          const list = foundRes.data as any[];
-          const found = list.find((r) => String(r.id) === String(petId));
-          if (found) {
-            setSelectedPet(found);
-            setSelectedPetSource("found");
-            setPetLoading(false);
-            return;
+        // Legacy fallback: use pet_id + pet_kind if pet_unique_id not available
+        if (petId && petKind) {
+          if (petKind === "lost") {
+            const lostRes = await fetchAdminLostReports("all");
+            if (lostRes.ok && Array.isArray(lostRes.data)) {
+              const list = lostRes.data as any[];
+              const found = list.find((r) => String(r.id) === String(petId));
+              if (found) {
+                setSelectedPet(found);
+                setSelectedPetSource("lost");
+                setPetLoading(false);
+                return;
+              }
+            }
+          } else if (petKind === "found") {
+            const foundRes = await fetchAdminFoundReports("all");
+            if (foundRes.ok && Array.isArray(foundRes.data)) {
+              const list = foundRes.data as any[];
+              const found = list.find((r) => String(r.id) === String(petId));
+              if (found) {
+                setSelectedPet(found);
+                setSelectedPetSource("found");
+                setPetLoading(false);
+                return;
+              }
+            }
+          }
+        }
+
+        // Last resort: try both without pet_kind (old behavior, may be inaccurate)
+        if (petId && !petKind) {
+          const lostRes = await fetchAdminLostReports("all");
+          if (lostRes.ok && Array.isArray(lostRes.data)) {
+            const list = lostRes.data as any[];
+            const found = list.find((r) => String(r.id) === String(petId));
+            if (found) {
+              setSelectedPet(found);
+              setSelectedPetSource("lost");
+              setPetLoading(false);
+              return;
+            }
+          }
+
+          const foundRes = await fetchAdminFoundReports("all");
+          if (foundRes.ok && Array.isArray(foundRes.data)) {
+            const list = foundRes.data as any[];
+            const found = list.find((r) => String(r.id) === String(petId));
+            if (found) {
+              setSelectedPet(found);
+              setSelectedPetSource("found");
+              setPetLoading(false);
+              return;
+            }
           }
         }
 
@@ -239,7 +300,7 @@ export default function AdminChat() {
         style={{
           width: 320,
           borderRight: "1px solid #e5e7eb",
-          background: "#f8fafc",
+          background: "#f3f4f6", // slightly darker than center column
           display: "flex",
           flexDirection: "column",
           padding: 16,
@@ -744,11 +805,18 @@ export default function AdminChat() {
                                 gap: 8,
                               }}
                             >
-                              <span>{c.pet_id ?? "-"}</span>
-                              {c.pet_id && (
+                              <span>
+                                {selectedPet?.pet_unique_id ||
+                                  c.pet_unique_id ||
+                                  (c.pet_id != null
+                                    ? `ID ${c.pet_id}`
+                                    : "-")}
+                              </span>
+                              {(selectedPet?.id || c.pet_id) && (
                                 <button
                                   onClick={() => {
-                                    const reportId = selectedPet?.id ?? c.pet_id;
+                                    const reportId =
+                                      selectedPet?.id ?? c.pet_id;
                                     if (selectedPetSource === "found") {
                                       navigate(`/admin/found/${reportId}`, {
                                         state: { from: "admin-chat-requests" },
@@ -757,8 +825,8 @@ export default function AdminChat() {
                                       navigate(`/admin/lost/${reportId}`, {
                                         state: { from: "admin-chat-requests" },
                                       });
-                                    } else {
-                                      navigate(`/pets/${c.pet_id}`);
+                                    } else if (reportId) {
+                                      navigate(`/pets/${reportId}`);
                                     }
                                   }}
                                   style={{

@@ -283,7 +283,10 @@ export default function AdminLostReportDetail() {
                 </span>
               </div>
               <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 2 }}>
-                Pet ID: <span style={{ fontWeight: 700, color: "#111827" }}>#{report.id}</span>
+                Pet ID:{" "}
+                <span style={{ fontWeight: 700, color: "#111827" }}>
+                  #{report.pet_unique_id || `LP${report.id?.toString().padStart(6, "0")}`}
+                </span>
               </div>
               <div
                 style={{

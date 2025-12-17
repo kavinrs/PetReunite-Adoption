@@ -28,7 +28,8 @@ type Conversation = {
   status: string;
   created_at: string;
   updated_at: string;
-  pet_id?: number | null;
+  pet_id?: number | null; // legacy numeric ID
+  pet_unique_id?: string | null; // preferred stable ID (FP..., LP..., AP...)
   pet_name?: string | null;
   pet_kind?: string | null;
 };
@@ -249,14 +250,19 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
             border: "1px solid #e2e8f0",
           }}
         >
+          {/* Inner taskbar for Active Chats / My Requests */}
           <div
             style={{
-              display: "inline-flex",
-              gap: 10,
+              display: "flex",
+              gap: 0,
               padding: 4,
-              borderRadius: 999,
+              borderRadius: 14,
               background: "#f1f5f9",
+              border: "1px solid #e2e8f0",
               marginBottom: 18,
+              height: 44,
+              boxSizing: "border-box",
+              width: "50%",
             }}
           >
             {(
@@ -274,14 +280,20 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                     setRequestMessage(null);
                   }}
                   style={{
+                    flex: 1,
                     border: "none",
-                    background: active ? "white" : "transparent",
-                    padding: "6px 14px",
-                    borderRadius: 999,
+                    background: active ? "#2563eb" : "transparent",
+                    height: "100%",
+                    borderRadius: 10,
                     fontSize: 13,
-                    fontWeight: active ? 700 : 500,
-                    color: active ? "#0f172a" : "#64748b",
+                    fontWeight: 500,
+                    color: active ? "#ffffff" : "#475569",
                     cursor: "pointer",
+                    boxShadow: active
+                      ? "0 3px 8px rgba(37,99,235,0.30)"
+                      : "none",
+                    transition:
+                      "background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease",
                   }}
                 >
                   {t.label}
@@ -304,7 +316,7 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                 style={{
                   flex: "0 0 30%",
                   borderRadius: 12,
-                  background: "#ffffff",
+                  background: "#f3f4f6", // slightly darker than main chat
                   border: "1px solid #e2e8f0",
                   display: "flex",
                   flexDirection: "column",
@@ -365,45 +377,75 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                         gap: 6,
                       }}
                     >
-                      {conversations.map((c) => (
-                        <li
-                          key={c.id}
-                          style={{
-                            borderRadius: 10,
-                            padding: "8px 10px",
-                            background:
-                              selectedConversationId === c.id
-                                ? "#e0f2fe"
-                                : "#f8fafc",
-                            border: "1px solid rgba(148,163,184,0.6)",
-                            cursor: "pointer",
-                          }}
-                          onClick={() => setSelectedConversationId(c.id)}
-                        >
-                          <div
+                      {conversations.map((c) => {
+                        const status = (c.status || "").toLowerCase();
+                        let statusLabel = "Active";
+                        let statusColor = "#16a34a"; // green
+                        if (status === "requested" || status === "pending_user") {
+                          statusLabel = "Waiting";
+                          statusColor = "#f59e0b"; // amber
+                        } else if (status === "closed") {
+                          statusLabel = "Closed";
+                          statusColor = "#dc2626"; // red
+                        }
+
+                        const isSelected = selectedConversationId === c.id;
+
+                        return (
+                          <li
+                            key={c.id}
                             style={{
-                              fontSize: 13,
-                              fontWeight: 600,
-                              marginBottom: 2,
+                              borderRadius: 10,
+                              padding: "8px 10px",
+                              background: isSelected ? "#e0f2fe" : "#f8fafc",
+                              border: isSelected
+                                ? "1px solid #38bdf8"
+                                : "1px solid rgba(148,163,184,0.6)",
+                              cursor: "pointer",
+                              transition: "background 0.15s ease, border-color 0.15s ease",
                             }}
+                            onClick={() => setSelectedConversationId(c.id)}
                           >
-                            Pet Claim Chat
-                          </div>
-                          <div style={{ fontSize: 11, color: "#64748b" }}>
-                            Pet ID: {c.pet_id ?? "-"}
-                            {c.pet_name ? ` • ${c.pet_name}` : ""}
-                          </div>
-                          <div
-                            style={{
-                              fontSize: 11,
-                              color: "#9ca3af",
-                              marginTop: 2,
-                            }}
-                          >
-                            Created: {new Date(c.created_at).toLocaleDateString()}
-                          </div>
-                        </li>
-                      ))}
+                            <div
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 600,
+                                marginBottom: 2,
+                              }}
+                            >
+                              Pet Claim Chat
+                            </div>
+                            <div style={{ fontSize: 11, color: "#64748b" }}>
+                              Pet ID: {c.pet_id ?? "-"}
+                              {c.pet_name ? ` • ${c.pet_name}` : ""}
+                            </div>
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                marginTop: 4,
+                                fontSize: 10,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  padding: "2px 6px",
+                                  borderRadius: 999,
+                                  background: "#f1f5f9",
+                                  color: statusColor,
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {statusLabel}
+                              </span>
+                              <span style={{ color: "#9ca3af" }}>
+                                {new Date(c.created_at).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </div>
@@ -421,17 +463,88 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                   overflow: "hidden",
                 }}
               >
-                <div
-                  style={{
-                    padding: "10px 14px",
-                    borderBottom: "1px solid #e5e7eb",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: "#0f172a",
-                  }}
-                >
-                  Admin Chat
-                </div>
+                {/* Chat header with context */}
+                {(() => {
+                  const convo = conversations.find(
+                    (c) => c.id === selectedConversationId,
+                  );
+                  const status = (convo?.status || "").toLowerCase();
+                  let statusLabel = "Active";
+                  let statusColor = "#16a34a";
+                  if (status === "requested" || status === "pending_user") {
+                    statusLabel = "Waiting";
+                    statusColor = "#f59e0b";
+                  } else if (status === "closed") {
+                    statusLabel = "Closed";
+                    statusColor = "#dc2626";
+                  }
+
+                  return (
+                    <div
+                      style={{
+                        padding: "10px 14px",
+                        borderBottom: "1px solid #e5e7eb",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 700,
+                            color: "#0f172a",
+                          }}
+                        >
+                          {convo?.pet_id || convo?.pet_unique_id
+                            ? `Pet Claim – ID #${
+                                convo.pet_unique_id ??
+                                (convo.pet_id != null
+                                  ? String(convo.pet_id)
+                                  : "?")
+                              }`
+                            : "Admin Chat"}
+                        </div>
+                        {convo?.pet_name && (
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color: "#64748b",
+                              marginTop: 2,
+                            }}
+                          >
+                            Pet: {convo.pet_name}
+                          </div>
+                        )}
+                      </div>
+                      {convo && (
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                          }}
+                        >
+                          <span
+                            style={{
+                              padding: "2px 8px",
+                              borderRadius: 999,
+                              background: "#f1f5f9",
+                              color: statusColor,
+                              fontSize: 11,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {statusLabel}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Messages area */}
                 <div
                   style={{
@@ -481,6 +594,43 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
 
                   {selectedConversationId &&
                     messages.map((m) => {
+                      // System messages: center-aligned pill with icon
+                      if (m.is_system) {
+                        let icon = "🔔";
+                        const text = (m.text || m.content || "") as string;
+                        if (text.toLowerCase().includes("joined")) {
+                          icon = "👤";
+                        } else if (text.toLowerCase().includes("closed")) {
+                          icon = "🔒";
+                        }
+                        return (
+                          <div
+                            key={m.id || `${m.created_at}-${Math.random()}`}
+                            style={{
+                              display: "flex",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <div
+                              style={{
+                                maxWidth: "80%",
+                                padding: "4px 10px",
+                                borderRadius: 999,
+                                fontSize: 11,
+                                background: "#e5e7eb",
+                                color: "#4b5563",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 6,
+                              }}
+                            >
+                              <span>{icon}</span>
+                              <span>{text}</span>
+                            </div>
+                          </div>
+                        );
+                      }
+
                       const isUser =
                         !m.is_system &&
                         (m.sender_role === "user" ||
@@ -747,18 +897,22 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                 }
                 setRequestSubmitting(true);
                 setRequestMessage(null);
-                const payload = {
-                  // Backend expects pet_id to link the conversation to a pet.
-                  pet_id: Number(requestPetId),
-                };
-                const res = await createChatConversationWithPet(payload);
+                const res = await createChatConversationWithPet({
+                  // Prefer unique ID if user enters FP/LP/AP..., otherwise fall back to numeric
+                  pet_unique_id:
+                    requestPetId && /[A-Za-z]/.test(requestPetId)
+                      ? requestPetId.trim()
+                      : undefined,
+                  // Legacy fallback: numeric id
+                  pet_id:
+                    requestPetId && !/[A-Za-z]/.test(requestPetId)
+                      ? Number(requestPetId)
+                      : undefined,
+                  // Store the user's reason as the initial message on the
+                  // conversation so admins see the context when reviewing.
+                  initial_message: requestReason.trim() || undefined,
+                });
                 if (res.ok) {
-                  const convoId = (res.data as any)?.id;
-                  if (convoId && requestReason.trim()) {
-                    // Send the user's reason as the first chat message so that
-                    // admins see it as the conversation preview / reason.
-                    await sendChatMessageUser(convoId, requestReason.trim());
-                  }
                   setRequestMessage("Chat request sent to admin.");
                   setRequestPetId("");
                   setRequestReason("");

@@ -282,6 +282,12 @@ class Conversation(models.Model):
         blank=True,
         help_text="Type of context: lost, found, adoption, etc.",
     )
+    # Reason for chat provided by user when requesting the conversation
+    reason_for_chat = models.TextField(
+        blank=True,
+        null=True,
+        help_text="User's explanation for why they want to chat with admin",
+    )
     status = models.CharField(max_length=32, choices=STATUS_CHOICES, default="requested")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -326,3 +332,226 @@ class ChatMessage(models.Model):
 
     def __str__(self) -> str:  # pragma: no cover - string repr
         return f"ChatMessage[{self.conversation_id}] from {self.sender_id}"
+
+
+class Notification(models.Model):
+    """Notification model for storing user and admin notifications"""
+    
+    NOTIFICATION_TYPES = [
+        ('chat_request', 'Chat Request'),
+        ('chat_accepted', 'Chat Accepted'),
+        ('chat_rejected', 'Chat Rejected'),
+        ('chat_message', 'Chat Message'),
+        ('chat_room_created', 'Chat Room Created'),
+        ('chat_status_changed', 'Chat Status Changed'),
+        ('chatroom_invitation', 'Chatroom Invitation'),
+        ('chatroom_request_accepted', 'Chatroom Request Accepted'),
+        ('chatroom_request_rejected', 'Chatroom Request Rejected'),
+        ('adoption_request', 'Adoption Request'),
+        ('adoption_status', 'Adoption Status'),
+        ('report_status', 'Report Status'),
+    ]
+    
+    recipient = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='notifications'
+    )
+    notification_type = models.CharField(max_length=32, choices=NOTIFICATION_TYPES)
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    from_user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sent_notifications'
+    )
+    conversation = models.ForeignKey(
+        'Conversation',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='notifications'
+    )
+    chatroom_access_request = models.ForeignKey(
+        'ChatroomAccessRequest',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='notifications'
+    )
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.notification_type} for {self.recipient.username}"
+
+
+class Chatroom(models.Model):
+    """Chatroom for multi-user conversations related to a pet case"""
+    
+    name = models.CharField(max_length=255)
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name='chatrooms',
+        help_text="Parent conversation this chatroom belongs to"
+    )
+    pet_id = models.IntegerField(null=True, blank=True)
+    pet_unique_id = models.CharField(max_length=32, blank=True, null=True)
+    pet_kind = models.CharField(max_length=50, blank=True)
+    purpose = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Purpose: Lost/Found/Reunite"
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_chatrooms'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
+    
+    class Meta:
+        ordering = ['-updated_at']
+    
+    def __str__(self):
+        return f"Chatroom: {self.name}"
+
+
+class ChatroomParticipant(models.Model):
+    """Participant in a chatroom with role-based access"""
+    
+    ROLE_CHOICES = [
+        ('admin', 'Admin'),
+        ('requested_user', 'Requested User'),
+        ('founded_user', 'Founded User'),
+    ]
+    
+    chatroom = models.ForeignKey(
+        Chatroom,
+        on_delete=models.CASCADE,
+        related_name='participants'
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='chatroom_participations'
+    )
+    role = models.CharField(max_length=50, choices=ROLE_CHOICES)
+    joined_at = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
+    
+    class Meta:
+        unique_together = ['chatroom', 'user']
+        ordering = ['joined_at']
+    
+    def __str__(self):
+        return f"{self.user.username} in {self.chatroom.name} as {self.role}"
+
+
+class ChatroomAccessRequest(models.Model):
+    """Access request for users to join a chatroom (requires approval)"""
+    
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('rejected', 'Rejected'),
+    ]
+    
+    chatroom = models.ForeignKey(
+        Chatroom,
+        on_delete=models.CASCADE,
+        related_name='access_requests'
+    )
+    pet = models.ForeignKey(
+        'LostPetReport',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='chatroom_access_requests',
+        help_text="Pet related to this chatroom (can be Lost or Found)"
+    )
+    pet_unique_id = models.CharField(
+        max_length=32,
+        blank=True,
+        null=True,
+        help_text="Unique ID of the pet (FP/LP prefix)"
+    )
+    pet_kind = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="lost or found"
+    )
+    requested_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='chatroom_requests'
+    )
+    added_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='chatroom_invitations'
+    )
+    role = models.CharField(
+        max_length=50,
+        default='requested_user',
+        help_text="Role the user will have if accepted"
+    )
+    request_type = models.CharField(
+        max_length=100,
+        default='chatroom_join_request'
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        unique_together = ['chatroom', 'requested_user']
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"Access request for {self.requested_user.username} to {self.chatroom.name} ({self.status})"
+
+
+class ChatroomMessage(models.Model):
+    """Message in a chatroom"""
+    
+    chatroom = models.ForeignKey(
+        Chatroom,
+        on_delete=models.CASCADE,
+        related_name='messages'
+    )
+    sender = models.ForeignKey(User, on_delete=models.CASCADE)
+    text = models.TextField()
+    reply_to = models.ForeignKey(
+        'self',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='replies'
+    )
+    is_deleted = models.BooleanField(default=False)
+    deleted_for = models.JSONField(default=list, blank=True)
+    is_system = models.BooleanField(
+        default=False,
+        help_text="True for system messages like 'User joined'"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['created_at']
+    
+    def __str__(self):
+        return f"ChatroomMessage in {self.chatroom.name} from {self.sender.username}"

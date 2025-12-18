@@ -458,6 +458,7 @@ import {
   fetchAdminVolunteerRequests,
   updateAdminVolunteerRequest,
   deleteAdminVolunteerRequest,
+  fetchNotifications,
 } from "../services/api";
 import AdminChat from "./AdminChat";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -548,6 +549,7 @@ function AdminHome() {
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [dismissedNotifications, setDismissedNotifications] = useState<string[]>([]);
   const lastSeenPendingRef = useRef(0);
+  const [chatNotifications, setChatNotifications] = useState<any[]>([]);
 
   const [error, setError] = useState<string | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -610,12 +612,13 @@ function AdminHome() {
       }
       setProfile(profileRes.data);
 
-      const [summaryRes, foundRes, lostRes, adoptionRes, volunteersRes] = await Promise.all([
+      const [summaryRes, foundRes, lostRes, adoptionRes, volunteersRes, notificationsRes] = await Promise.all([
         fetchAdminSummary(),
         fetchAdminFoundReports(),
         fetchAdminLostReports(),
         fetchAllAdoptionRequests(),
         fetchAdminVolunteerRequests(),
+        fetchNotifications(),
       ]);
       if (!mounted) return;
 
@@ -624,6 +627,13 @@ function AdminHome() {
       if (lostRes.ok) setLostReports(lostRes.data ?? []);
       if (adoptionRes.ok) setAdoptionRequests(adoptionRes.data ?? []);
       if (volunteersRes.ok) setVolunteerRequests(volunteersRes.data ?? []);
+      if (notificationsRes.ok) {
+        // Filter for chat-related notifications
+        const chatNotifs = (notificationsRes.data ?? []).filter((n: any) => 
+          n.notification_type && n.notification_type.startsWith('chat_')
+        );
+        setChatNotifications(chatNotifs);
+      }
 
       if (!summaryRes.ok || !foundRes.ok || !lostRes.ok || !adoptionRes.ok || !volunteersRes.ok) {
         const msg =
@@ -785,6 +795,7 @@ function AdminHome() {
         tab: TabKey;
         filter: string;
         backendStatus: string;
+        notificationType?: string;
       }[] = [];
 
       if (Array.isArray(lostReports)) {
@@ -864,6 +875,29 @@ function AdminHome() {
         }
       }
 
+      // Add chat notifications
+      if (Array.isArray(chatNotifications)) {
+        for (const n of chatNotifications as any[]) {
+          let context = "Chat Notification";
+          if (n.notification_type === "chat_request") {
+            context = "New Chat Request";
+          } else if (n.notification_type === "chat_message") {
+            context = "New Chat Message";
+          }
+          
+          items.push({
+            id: `chat-notif-${n.id}`,
+            context,
+            from: n.from_username || "User",
+            createdAt: n.created_at || null,
+            tab: "chat",
+            filter: "all",
+            backendStatus: "all",
+            notificationType: n.notification_type,
+          });
+        }
+      }
+
       items.sort((a, b) => {
         const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -872,7 +906,7 @@ function AdminHome() {
 
       return items;
     },
-    [lostReports, foundReports, adoptionRequests, volunteerRequests],
+    [lostReports, foundReports, adoptionRequests, volunteerRequests, chatNotifications],
   );
 
   function handleNotificationClick(e: React.MouseEvent) {
@@ -4017,14 +4051,27 @@ function AdminHome() {
                                     ? prev
                                     : [...prev, n.id],
                                 );
-                                setTab(n.tab);
-                                setStatusFilter(n.filter);
-                                navigate(`/admin?tab=${n.tab}`, { replace: true });
-                                const backendStatus =
-                                  n.tab === "lost" || n.tab === "found"
-                                    ? "all"
-                                    : n.backendStatus || n.filter;
-                                reloadTable(n.tab, backendStatus);
+                                
+                                // Handle chat notifications differently
+                                if (n.tab === "chat") {
+                                  setTab("chat");
+                                  // If it's a chat request notification, show the requests view
+                                  if (n.notificationType === "chat_request") {
+                                    navigate(`/admin?tab=chat&view=requests`, { replace: true });
+                                  } else {
+                                    // For chat messages, show the chat view
+                                    navigate(`/admin?tab=chat`, { replace: true });
+                                  }
+                                } else {
+                                  setTab(n.tab);
+                                  setStatusFilter(n.filter);
+                                  navigate(`/admin?tab=${n.tab}`, { replace: true });
+                                  const backendStatus =
+                                    n.tab === "lost" || n.tab === "found"
+                                      ? "all"
+                                      : n.backendStatus || n.filter;
+                                  reloadTable(n.tab, backendStatus);
+                                }
                                 setNotificationOpen(false);
                               }}
                               style={{

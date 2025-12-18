@@ -40,6 +40,17 @@ from .views import (
     UserConversationConfirmView,
     UserConversationDeleteView,
     UserConversationListCreateView,
+    NotificationListView,
+    NotificationMarkReadView,
+    NotificationMarkAllReadView,
+    # Chatroom Access Approval Views
+    ChatroomInviteUserView,
+    ChatroomAccessRequestListView,
+    ChatroomAccessRequestAcceptView,
+    ChatroomAccessRequestRejectView,
+    MyChatroomsView,
+    AdminChatroomParticipantsView,
+    AdminChatroomAccessRequestsView,
 )
 
 urlpatterns = [
@@ -207,5 +218,57 @@ urlpatterns = [
         "admin/chat/conversations/<int:conversation_id>/messages/<int:message_id>/delete-for-everyone/",
         AdminChatMessageDeleteForEveryoneView.as_view(),
         name="chat-message-admin-delete-for-everyone",
+    ),
+    # Notification endpoints
+    path(
+        "notifications/",
+        NotificationListView.as_view(),
+        name="notifications-list",
+    ),
+    path(
+        "notifications/<int:pk>/mark-read/",
+        NotificationMarkReadView.as_view(),
+        name="notification-mark-read",
+    ),
+    path(
+        "notifications/mark-all-read/",
+        NotificationMarkAllReadView.as_view(),
+        name="notifications-mark-all-read",
+    ),
+    # Chatroom Access Approval endpoints
+    path(
+        "chatrooms/<int:chatroom_id>/invite-user/",
+        ChatroomInviteUserView.as_view(),
+        name="chatroom-invite-user",
+    ),
+    path(
+        "chatroom-access-requests/",
+        ChatroomAccessRequestListView.as_view(),
+        name="chatroom-access-requests-list",
+    ),
+    path(
+        "chatroom-access-requests/<int:request_id>/accept/",
+        ChatroomAccessRequestAcceptView.as_view(),
+        name="chatroom-access-request-accept",
+    ),
+    path(
+        "chatroom-access-requests/<int:request_id>/reject/",
+        ChatroomAccessRequestRejectView.as_view(),
+        name="chatroom-access-request-reject",
+    ),
+    path(
+        "chatrooms/my-chatrooms/",
+        MyChatroomsView.as_view(),
+        name="my-chatrooms",
+    ),
+    path(
+        "admin/chatrooms/<int:chatroom_id>/participants/",
+        AdminChatroomParticipantsView.as_view(),
+        name="admin-chatroom-participants",
+    ),
+    path(
+        "admin/chatrooms/<int:chatroom_id>/access-requests/",
+        AdminChatroomAccessRequestsView.as_view(),
+        name="admin-chatroom-access-requests",
     ),
 ]

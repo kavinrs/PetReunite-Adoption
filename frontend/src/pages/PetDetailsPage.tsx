@@ -199,8 +199,15 @@ export default function PetDetailsPage() {
           <button
             onClick={() => {
               const fromMap = (location.state as any)?.from === "admin-map";
-              if (fromMap) navigate("/admin?tab=stats", { state: { openMap: true } });
-              else navigate("/user");
+              const fromAdminRequests = (location.state as any)?.from === "admin-chat-requests";
+              
+              if (fromMap) {
+                navigate("/admin?tab=stats", { state: { openMap: true } });
+              } else if (fromAdminRequests) {
+                navigate("/admin?tab=chat&view=requests");
+              } else {
+                navigate("/user");
+              }
             }}
             style={{
               background: "linear-gradient(135deg, #ff8a00, #ff2fab)",
@@ -212,7 +219,7 @@ export default function PetDetailsPage() {
               fontWeight: "600",
             }}
           >
-            {(location.state as any)?.from === "admin-map" ? "Back" : "Back to Dashboard"}
+            {(location.state as any)?.from === "admin-chat-requests" ? "Back" : (location.state as any)?.from === "admin-map" ? "Back" : "Back to Dashboard"}
           </button>
         </div>
       </div>
@@ -303,8 +310,15 @@ export default function PetDetailsPage() {
             <button
               onClick={() => {
                 const fromMap = (location.state as any)?.from === "admin-map";
-                if (fromMap) navigate("/admin?tab=stats", { state: { openMap: true } });
-                else navigate("/user");
+                const fromAdminRequests = (location.state as any)?.from === "admin-chat-requests";
+                
+                if (fromMap) {
+                  navigate("/admin?tab=stats", { state: { openMap: true } });
+                } else if (fromAdminRequests) {
+                  navigate("/admin?tab=chat&view=requests");
+                } else {
+                  navigate("/user");
+                }
               }}
               style={{
                 background: "transparent",
@@ -316,7 +330,7 @@ export default function PetDetailsPage() {
                 fontWeight: "600",
               }}
             >
-              Back to Dashboard
+              {(location.state as any)?.from === "admin-chat-requests" ? "Back" : "Back to Dashboard"}
             </button>
           </div>
         </div>
@@ -355,8 +369,15 @@ export default function PetDetailsPage() {
           <button
             onClick={() => {
               const fromMap = (location.state as any)?.from === "admin-map";
-              if (fromMap) navigate("/admin?tab=stats", { state: { openMap: true } });
-              else navigate("/user");
+              const fromAdminRequests = (location.state as any)?.from === "admin-chat-requests";
+              
+              if (fromMap) {
+                navigate("/admin?tab=stats", { state: { openMap: true } });
+              } else if (fromAdminRequests) {
+                navigate("/admin?tab=chat&view=requests");
+              } else {
+                navigate("/user");
+              }
             }}
             style={{
               background: "transparent",
@@ -370,7 +391,7 @@ export default function PetDetailsPage() {
               fontWeight: "600",
             }}
           >
-            ← Back to Dashboard
+            ← {(location.state as any)?.from === "admin-chat-requests" ? "Back" : "Back to Dashboard"}
           </button>
           <div
             style={{

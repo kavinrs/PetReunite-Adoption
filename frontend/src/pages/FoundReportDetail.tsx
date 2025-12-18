@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
 import { createChatConversationWithPet } from "../services/api";
+import Toast from "../components/Toast";
+import { markRequestAsSent, isRequestSent, cleanupOldRequests } from "../utils/requestTracker";
 
 export default function FoundReportDetail() {
   useViewportStandardization();
@@ -76,6 +78,45 @@ export default function FoundReportDetail() {
   const [claimStatus, setClaimStatus] = useState<string | null>(null);
   const [claimSubmitting, setClaimSubmitting] = useState(false);
   const [claimModalOpen, setClaimModalOpen] = useState(false);
+  
+  // State for request tracking and toast
+  const [requestSent, setRequestSent] = useState(false);
+  const [toast, setToast] = useState<{
+    type: "success" | "error";
+    title: string;
+    message: string;
+    isVisible: boolean;
+  } | null>(null);
+
+  // Get unique pet identifier for tracking requests
+  const petUniqueId = (report as any)?.pet_unique_id || `FP${report?.id?.toString().padStart(6, "0")}`;
+
+  // Check if request was already sent (persist across page refreshes)
+  useEffect(() => {
+    if (petUniqueId) {
+      // Clean up old requests on component mount
+      cleanupOldRequests();
+      
+      // Check if request was already sent
+      if (isRequestSent(petUniqueId)) {
+        // setRequestSent(true); // Commented out to keep "Request to Reunite" button visible
+      }
+    }
+  }, [petUniqueId]);
+
+  // Close modal on escape key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && claimModalOpen) {
+        setClaimModalOpen(false);
+      }
+    };
+
+    if (claimModalOpen) {
+      document.addEventListener("keydown", handleEscape);
+      return () => document.removeEventListener("keydown", handleEscape);
+    }
+  }, [claimModalOpen]);
 
   async function handleRequestToReunite(e: React.FormEvent) {
     e.preventDefault();
@@ -85,26 +126,57 @@ export default function FoundReportDetail() {
       setClaimStatus("Please describe how you are connected to this pet.");
       return;
     }
+    
+    // Prevent double submission
+    if (claimSubmitting) return;
+    
     try {
       setClaimSubmitting(true);
       const res = await createChatConversationWithPet({
-        pet_unique_id: (report as any).pet_unique_id || `FP${report.id.toString().padStart(6, "0")}`,
+        pet_unique_id: petUniqueId,
         pet_name: report.pet_name || report.pet_type || "Found pet",
         pet_kind: "found",
-        initial_message: trimmed,
+        reason_for_chat: trimmed,
       });
+      
       if (res.ok) {
-        setClaimStatus(
-          "Your request has been sent to the admin. They will review it and start a chat if appropriate.",
-        );
+        // Mark request as sent and persist in localStorage (but don't change UI state)
+        // setRequestSent(true); // Commented out to keep "Request to Reunite" button visible
+        markRequestAsSent(petUniqueId, report.pet_name || report.pet_type || "Found pet");
+        
+        // Close modal immediately
+        setClaimModalOpen(false);
         setClaimMessage("");
+        setClaimStatus(null);
+        
+        // Show success toast
+        setToast({
+          type: "success",
+          title: "Request Sent",
+          message: "Your request has been successfully sent to the admin",
+          isVisible: true,
+        });
       } else {
-        setClaimStatus(res.error || "Failed to send request. Please try again.");
+        // Show error toast
+        setToast({
+          type: "error",
+          title: "Request Failed",
+          message: res.error || "Failed to send request. Please try again.",
+          isVisible: true,
+        });
       }
     } finally {
       setClaimSubmitting(false);
     }
   }
+
+  const showToast = (type: "success" | "error", title: string, message: string) => {
+    setToast({ type, title, message, isVisible: true });
+  };
+
+  const hideToast = () => {
+    setToast(null);
+  };
 
   return (
     <div
@@ -677,36 +749,68 @@ export default function FoundReportDetail() {
                  marginTop: 24, // clear separation from Reported Details
                }}
              >
-               <button
-                 type="button"
-                 onClick={() => {
-                   setClaimStatus(null);
-                   setClaimModalOpen(true);
-                 }}
-                 style={{
-                   borderRadius: 999,
-                   border: "none",
-                   padding: "10px 18px",
-                   background: "#e9dcc8",
-                   color: "#5b3b1a",
-                   fontSize: 13,
-                   fontWeight: 700,
-                   cursor: "pointer",
-                   boxShadow: "0 2px 6px rgba(15,23,42,0.15)",
-                   display: "inline-flex",
-                   alignItems: "center",
-                   gap: 8,
-                 }}
-               >
-                 <span>🤝 Request to Reunite</span>
-               </button>
+               {requestSent ? (
+                 <div
+                   style={{
+                     borderRadius: 999,
+                     border: "1px solid #d1fae5",
+                     padding: "10px 18px",
+                     background: "#f0fdf4",
+                     color: "#166534",
+                     fontSize: 13,
+                     fontWeight: 700,
+                     display: "inline-flex",
+                     alignItems: "center",
+                     gap: 8,
+                   }}
+                 >
+                   <span>✓ Request Sent - Waiting for Admin Response</span>
+                 </div>
+               ) : (
+                 <button
+                   type="button"
+                   onClick={() => {
+                     if (!requestSent) {
+                       setClaimStatus(null);
+                       setClaimModalOpen(true);
+                     }
+                   }}
+                   style={{
+                     borderRadius: 999,
+                     border: "none",
+                     padding: "10px 18px",
+                     background: "#e9dcc8",
+                     color: "#5b3b1a",
+                     fontSize: 13,
+                     fontWeight: 700,
+                     cursor: "pointer",
+                     boxShadow: "0 2px 6px rgba(15,23,42,0.15)",
+                     display: "inline-flex",
+                     alignItems: "center",
+                     gap: 8,
+                   }}
+                 >
+                   <span>🤝 Request to Reunite</span>
+                 </button>
+               )}
              </div>
           </div>
         </div>
       </div>
 
+      {/* Toast notification */}
+      {toast && (
+        <Toast
+          type={toast.type}
+          title={toast.title}
+          message={toast.message}
+          isVisible={toast.isVisible}
+          onClose={hideToast}
+        />
+      )}
+
       {/* Centered modal for Request to Reunite */}
-      {claimModalOpen && (
+      {claimModalOpen && !requestSent && (
         <div
           style={{
             position: "fixed",
@@ -716,6 +820,12 @@ export default function FoundReportDetail() {
             alignItems: "center",
             justifyContent: "center",
             zIndex: 1000,
+          }}
+          onClick={(e) => {
+            // Close modal when clicking on backdrop
+            if (e.target === e.currentTarget) {
+              setClaimModalOpen(false);
+            }
           }}
         >
           <div
@@ -809,20 +919,7 @@ export default function FoundReportDetail() {
               placeholder="Explain how you know this pet, including unique marks, past photos, vet or microchip records, etc."
             />
 
-            {claimStatus && (
-              <div
-                style={{
-                  fontSize: 12,
-                  marginBottom: 8,
-                  color: claimStatus.startsWith("Failed")
-                    ? "#b91c1c"
-                    : "#166534",
-                  fontWeight: 600,
-                }}
-              >
-                {claimStatus}
-              </div>
-            )}
+
 
             <div
               style={{
@@ -851,18 +948,23 @@ export default function FoundReportDetail() {
               <button
                 type="button"
                 onClick={handleRequestToReunite}
-                disabled={claimSubmitting}
+                disabled={claimSubmitting || !claimMessage.trim()}
                 style={{
                   borderRadius: 999,
                   border: "none",
                   padding: "8px 16px",
-                  background:
-                    "linear-gradient(135deg, #f97316, #ea580c, #c2410c)",
+                  background: claimSubmitting || !claimMessage.trim()
+                    ? "#9ca3af"
+                    : "linear-gradient(135deg, #f97316, #ea580c, #c2410c)",
                   color: "white",
                   fontSize: 13,
                   fontWeight: 700,
-                  cursor: claimSubmitting ? "not-allowed" : "pointer",
-                  boxShadow: "0 10px 22px rgba(248,113,113,0.45)",
+                  cursor: claimSubmitting || !claimMessage.trim() ? "not-allowed" : "pointer",
+                  boxShadow: claimSubmitting || !claimMessage.trim() 
+                    ? "none" 
+                    : "0 10px 22px rgba(248,113,113,0.45)",
+                  opacity: claimSubmitting || !claimMessage.trim() ? 0.6 : 1,
+                  transition: "all 0.2s ease",
                 }}
               >
                 {claimSubmitting ? "Sending..." : "Send Request"}

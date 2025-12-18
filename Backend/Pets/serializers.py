@@ -9,15 +9,28 @@ from .models import (
     LostPetReport,
     Message,
     Pet,
+    Notification,
+    Chatroom,
+    ChatroomParticipant,
+    ChatroomAccessRequest,
+    ChatroomMessage,
 )
 
 User = get_user_model()
 
 
 class UserSummarySerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+    
     class Meta:
         model = User
-        fields = ("id", "username", "email")
+        fields = ("id", "username", "email", "full_name")
+    
+    def get_full_name(self, obj):
+        """Get full name from user profile if it exists"""
+        if hasattr(obj, 'profile') and obj.profile:
+            return obj.profile.full_name or obj.username
+        return obj.username
 
 
 class FoundPetReportSerializer(serializers.ModelSerializer):
@@ -335,6 +348,7 @@ class ConversationSerializer(serializers.ModelSerializer):
             "pet_unique_id",
             "pet_name",
             "pet_kind",
+            "reason_for_chat",
             "status",
             "created_at",
             "updated_at",
@@ -369,7 +383,8 @@ class ConversationCreateSerializer(serializers.ModelSerializer):
         # model itself; instead, it becomes the first ChatMessage.
         # pet_unique_id is preferred over pet_id to avoid confusion when lost/found
         # pets have the same numeric ID.
-        fields = ("pet_id", "pet_unique_id", "pet_name", "pet_kind", "initial_message")
+        # reason_for_chat is now stored directly on the Conversation model
+        fields = ("pet_id", "pet_unique_id", "pet_name", "pet_kind", "reason_for_chat", "initial_message")
 
     def create(self, validated_data):
         request = self.context["request"]
@@ -382,6 +397,7 @@ class ConversationCreateSerializer(serializers.ModelSerializer):
         # If only pet_id is provided (legacy), keep it for backward compatibility.
         # Create a fresh conversation in requested state, attaching any
         # provided pet context so admins can see what this is about.
+        # reason_for_chat is now stored directly on the Conversation model
         convo = Conversation.objects.create(user=user, **validated_data)
 
         # If the user provided an initial message, save it as the first
@@ -490,3 +506,224 @@ class ChatMessageCreateSerializer(serializers.ModelSerializer):
         if not value.strip():
             raise serializers.ValidationError("Message cannot be empty.")
         return value.strip()
+
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    """Serializer for notifications"""
+    from_user = UserSummarySerializer(read_only=True)
+    from_username = serializers.CharField(source='from_user.username', read_only=True)
+    conversation_id = serializers.IntegerField(source='conversation.id', read_only=True)
+    chatroom_access_request_id = serializers.IntegerField(source='chatroom_access_request.id', read_only=True)
+    
+    class Meta:
+        model = Notification
+        fields = [
+            'id',
+            'notification_type',
+            'title',
+            'message',
+            'from_user',
+            'from_username',
+            'conversation_id',
+            'chatroom_access_request_id',
+            'is_read',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+
+
+
+class ChatroomSerializer(serializers.ModelSerializer):
+    """Serializer for Chatroom"""
+    created_by = UserSummarySerializer(read_only=True)
+    participant_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Chatroom
+        fields = [
+            'id',
+            'name',
+            'conversation',
+            'pet_id',
+            'pet_unique_id',
+            'pet_kind',
+            'purpose',
+            'created_by',
+            'created_at',
+            'updated_at',
+            'is_active',
+            'participant_count',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_participant_count(self, obj):
+        return obj.participants.filter(is_active=True).count()
+
+
+class ChatroomParticipantSerializer(serializers.ModelSerializer):
+    """Serializer for Chatroom Participant"""
+    user = UserSummarySerializer(read_only=True)
+    
+    class Meta:
+        model = ChatroomParticipant
+        fields = [
+            'id',
+            'chatroom',
+            'user',
+            'role',
+            'joined_at',
+            'is_active',
+        ]
+        read_only_fields = ['id', 'joined_at']
+
+
+class ChatroomAccessRequestSerializer(serializers.ModelSerializer):
+    """Serializer for Chatroom Access Request"""
+    requested_user = UserSummarySerializer(read_only=True)
+    added_by = UserSummarySerializer(read_only=True)
+    chatroom_name = serializers.CharField(source='chatroom.name', read_only=True)
+    pet_name = serializers.SerializerMethodField()
+    pet_type = serializers.SerializerMethodField()
+    pet_image = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ChatroomAccessRequest
+        fields = [
+            'id',
+            'chatroom',
+            'chatroom_name',
+            'pet',
+            'pet_unique_id',
+            'pet_kind',
+            'pet_name',
+            'pet_type',
+            'pet_image',
+            'requested_user',
+            'added_by',
+            'role',
+            'request_type',
+            'status',
+            'created_at',
+            'responded_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'responded_at']
+    
+    def get_pet_name(self, obj):
+        """Get pet name from LostPetReport or FoundPetReport"""
+        if obj.pet:
+            return getattr(obj.pet, 'pet_name', '') or f"{obj.pet.pet_type}"
+        # Try to fetch from pet_unique_id
+        if obj.pet_unique_id:
+            if obj.pet_kind == 'lost':
+                from .models import LostPetReport
+                try:
+                    pet = LostPetReport.objects.get(pet_unique_id=obj.pet_unique_id)
+                    return pet.pet_name or pet.pet_type
+                except LostPetReport.DoesNotExist:
+                    pass
+            elif obj.pet_kind == 'found':
+                from .models import FoundPetReport
+                try:
+                    pet = FoundPetReport.objects.get(pet_unique_id=obj.pet_unique_id)
+                    return pet.pet_type
+                except FoundPetReport.DoesNotExist:
+                    pass
+        return "Unknown Pet"
+    
+    def get_pet_type(self, obj):
+        """Get pet type"""
+        if obj.pet:
+            return obj.pet.pet_type
+        if obj.pet_unique_id:
+            if obj.pet_kind == 'lost':
+                from .models import LostPetReport
+                try:
+                    pet = LostPetReport.objects.get(pet_unique_id=obj.pet_unique_id)
+                    return pet.pet_type
+                except LostPetReport.DoesNotExist:
+                    pass
+            elif obj.pet_kind == 'found':
+                from .models import FoundPetReport
+                try:
+                    pet = FoundPetReport.objects.get(pet_unique_id=obj.pet_unique_id)
+                    return pet.pet_type
+                except FoundPetReport.DoesNotExist:
+                    pass
+        return "Unknown"
+    
+    def get_pet_image(self, obj):
+        """Get pet image URL"""
+        request = self.context.get('request')
+        if obj.pet and obj.pet.photo:
+            if request:
+                return request.build_absolute_uri(obj.pet.photo.url)
+            return obj.pet.photo.url
+        if obj.pet_unique_id:
+            if obj.pet_kind == 'lost':
+                from .models import LostPetReport
+                try:
+                    pet = LostPetReport.objects.get(pet_unique_id=obj.pet_unique_id)
+                    if pet.photo:
+                        if request:
+                            return request.build_absolute_uri(pet.photo.url)
+                        return pet.photo.url
+                except LostPetReport.DoesNotExist:
+                    pass
+            elif obj.pet_kind == 'found':
+                from .models import FoundPetReport
+                try:
+                    pet = FoundPetReport.objects.get(pet_unique_id=obj.pet_unique_id)
+                    if pet.photo:
+                        if request:
+                            return request.build_absolute_uri(pet.photo.url)
+                        return pet.photo.url
+                except FoundPetReport.DoesNotExist:
+                    pass
+        return None
+
+
+class ChatroomMessageSerializer(serializers.ModelSerializer):
+    """Serializer for Chatroom Message"""
+    sender = UserSummarySerializer(read_only=True)
+    reply_to = serializers.SerializerMethodField()
+    is_deleted_for_me = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ChatroomMessage
+        fields = [
+            'id',
+            'chatroom',
+            'sender',
+            'text',
+            'reply_to',
+            'is_deleted',
+            'is_deleted_for_me',
+            'is_system',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+    
+    def get_reply_to(self, obj):
+        if not obj.reply_to:
+            return None
+        return {
+            'id': obj.reply_to.id,
+            'text': 'Message deleted' if obj.reply_to.is_deleted else obj.reply_to.text,
+            'sender': UserSummarySerializer(obj.reply_to.sender).data if obj.reply_to.sender else None,
+        }
+    
+    def get_is_deleted_for_me(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        deleted_for = obj.deleted_for or []
+        return request.user.id in deleted_for
+    
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if data.get('is_deleted_for_me'):
+            data['text'] = None
+        elif data.get('is_deleted'):
+            data['text'] = 'Message deleted'
+        return data

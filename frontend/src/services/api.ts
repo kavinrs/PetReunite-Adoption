@@ -1034,6 +1034,7 @@ export async function createChatConversationWithPet(payload: {
   pet_unique_id?: string; // Preferred: unique ID like FP000024 or LP000029
   pet_name?: string;
   pet_kind?: string; // "lost" | "found" | "adoption" etc
+  reason_for_chat?: string; // User's reason for requesting the chat
   initial_message?: string; // optional first message describing the request
 }): Promise<ApiResult> {
   const url = `${PETS_BASE}/chat/conversations/`;
@@ -1319,4 +1320,35 @@ export async function adminClearAllData(): Promise<ApiResult> {
   if (resp.ok) return { ok: true, status: resp.status, data };
   const message = extractErrorMessage(data) ?? "Failed to clear data";
   return { ok: false, status: resp.status, error: message, data };
+}
+
+
+/* Fetch notifications for current user */
+export async function fetchNotifications(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/notifications/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  if (!resp.ok) {
+    return { ok: false, error: await resp.text() };
+  }
+  return { ok: true, data: await resp.json() };
+}
+
+/* Mark a notification as read */
+export async function markNotificationRead(notificationId: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/notifications/${notificationId}/mark-read/`;
+  const resp = await fetchWithAuth(url, { method: "POST" });
+  if (!resp.ok) {
+    return { ok: false, error: await resp.text() };
+  }
+  return { ok: true, data: await resp.json() };
+}
+
+/* Mark all notifications as read */
+export async function markAllNotificationsRead(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/notifications/mark-all-read/`;
+  const resp = await fetchWithAuth(url, { method: "POST" });
+  if (!resp.ok) {
+    return { ok: false, error: await resp.text() };
+  }
+  return { ok: true, data: await resp.json() };
 }

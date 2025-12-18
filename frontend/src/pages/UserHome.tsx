@@ -9,6 +9,8 @@ import {
   fetchMyActivity,
   updateMyLostReport,
   updateMyFoundReport,
+  fetchChatConversations,
+  fetchNotifications,
 } from "../services/api";
 import RoomsPage from "../chat/RoomsPage";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -43,9 +45,12 @@ export default function UserHome() {
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityExpanded, setActivityExpanded] = useState<string | null>(null);
   const [updatingReportId, setUpdatingReportId] = useState<string | null>(null);
+  const [chatRequests, setChatRequests] = useState<any[]>([]);
+  const [chatRequestsLoading, setChatRequestsLoading] = useState(false);
   const [userHasNotification, setUserHasNotification] = useState(false);
   const [userNotificationOpen, setUserNotificationOpen] = useState(false);
   const [dismissedUserNotifications, setDismissedUserNotifications] = useState<string[]>([]);
+  const [chatNotifications, setChatNotifications] = useState<any[]>([]);
 
   // Function to get sample pet images
   const getSamplePetImage = (petType: string, index: number): string => {
@@ -173,9 +178,40 @@ export default function UserHome() {
       if (res.ok) setActivity(res.data);
       setActivityLoading(false);
     }
+    async function loadChatRequests() {
+      setChatRequestsLoading(true);
+      const res = await fetchChatConversations();
+      if (!mounted) return;
+      if (res.ok) {
+        // Filter for pending/requested conversations
+        const pending = (res.data as any[]).filter((c: any) => {
+          const status = (c.status || "").toLowerCase();
+          return status === "pending" || status === "requested";
+        });
+        setChatRequests(pending);
+      }
+      setChatRequestsLoading(false);
+    }
+    async function loadNotifications() {
+      const res = await fetchNotifications();
+      if (!mounted) return;
+      if (res.ok) {
+        // Filter for chat-related notifications
+        const chatNotifs = (res.data ?? []).filter((n: any) => 
+          n.notification_type && n.notification_type.startsWith('chat_')
+        );
+        setChatNotifications(chatNotifs);
+      }
+    }
     // Always load activity so notifications work from any tab
     loadActivity();
-    const id = window.setInterval(loadActivity, 15000);
+    loadChatRequests();
+    loadNotifications();
+    const id = window.setInterval(() => {
+      loadActivity();
+      loadChatRequests();
+      loadNotifications();
+    }, 15000);
     return () => {
       mounted = false;
       window.clearInterval(id);
@@ -364,8 +400,8 @@ export default function UserHome() {
   const email = profile?.user?.email ?? profile?.email ?? "";
 
   const userNotificationFeed = useMemo(() => {
-    const items: { id: string; title: string; from: string; createdAt: string | null; tab: "lost" | "found" | "adoption"; rowId?: number; status?: string }[] = [];
-    const pushItem = (id: string, title: string, createdAt: string | null, tab: "lost" | "found" | "adoption", rowId?: number, status?: string) => {
+    const items: { id: string; title: string; from: string; createdAt: string | null; tab: "lost" | "found" | "adoption" | "chat"; rowId?: number; status?: string }[] = [];
+    const pushItem = (id: string, title: string, createdAt: string | null, tab: "lost" | "found" | "adoption" | "chat", rowId?: number, status?: string) => {
       items.push({ id, title, from: "Admin", createdAt, tab, rowId, status });
     };
     for (const r of (activity.lost ?? []) as any[]) {
@@ -386,13 +422,29 @@ export default function UserHome() {
         pushItem(`adoption-${a.id}`, "Adoption Request", a.updated_at || a.created_at || null, "adoption", a.id, a.status);
       }
     }
+    // Add chat notifications
+    for (const n of (chatNotifications ?? []) as any[]) {
+      let title = "Chat Notification";
+      if (n.notification_type === "chat_accepted") {
+        title = "Chat Request Accepted";
+      } else if (n.notification_type === "chat_rejected") {
+        title = "Chat Request Closed";
+      } else if (n.notification_type === "chat_message") {
+        title = "New Chat Message";
+      } else if (n.notification_type === "chat_room_created") {
+        title = "Chat Room Created";
+      } else if (n.notification_type === "chat_status_changed") {
+        title = "Chat Status Changed";
+      }
+      pushItem(`chat-notif-${n.id}`, title, n.created_at || null, "chat");
+    }
     items.sort((a, b) => {
       const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
       return tb - ta;
     });
     return items;
-  }, [activity.lost, activity.found, activity.adoptions]);
+  }, [activity.lost, activity.found, activity.adoptions, chatNotifications]);
 
   useEffect(() => {
     if (!hasLoadedDismissedUserNotificationsRef.current) return;
@@ -416,17 +468,23 @@ export default function UserHome() {
     setUserHasNotification(false);
   }
 
-  function handleUserNotificationItemClick(item: { id: string; tab: "lost" | "found" | "adoption"; rowId?: number }) {
+  function handleUserNotificationItemClick(item: { id: string; tab: "lost" | "found" | "adoption" | "chat"; rowId?: number }) {
     // Mark this notification as read
     setDismissedUserNotifications((prev) =>
       prev.includes(item.id) ? prev : [...prev, item.id],
     );
 
-    // Always switch the main section to My Activity
-    setPageTab("activity");
-
     // Hide the dropdown so the focus moves to the details view
     setUserNotificationOpen(false);
+
+    // Handle chat notifications differently
+    if (item.tab === "chat") {
+      setPageTab("chat");
+      return;
+    }
+
+    // Always switch the main section to My Activity for other notifications
+    setPageTab("activity");
 
     // Deep-link to the appropriate detail page for this notification
     if (item.tab === "lost" && item.rowId) {
@@ -1586,6 +1644,213 @@ export default function UserHome() {
                       ))
                         )}
                       </>
+                    )}
+                    
+                    {/* My Chat Requests section */}
+                    <div style={{ fontSize: 18, fontWeight: 800, marginTop: 16 }}>
+                      My Chat Requests
+                    </div>
+                    {chatRequestsLoading ? (
+                      <div style={{ padding: 12, color: "#64748b" }}>
+                        Loading chat requests...
+                      </div>
+                    ) : chatRequests.length === 0 ? (
+                      <div style={{ padding: 12, color: "#64748b" }}>
+                        No pending chat requests.
+                      </div>
+                    ) : (
+                      chatRequests.map((req: any) => {
+                        const isExpanded = activityExpanded === `chat-req-${req.id}`;
+                        return (
+                          <div
+                            key={`chat-req-${req.id}`}
+                            style={{
+                              background: "white",
+                              border: "1px solid #f1f5f9",
+                              borderRadius: 16,
+                              padding: 16,
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 12,
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                              <div
+                                style={{
+                                  width: 48,
+                                  height: 48,
+                                  borderRadius: "50%",
+                                  background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  color: "white",
+                                  fontWeight: 700,
+                                  fontSize: 20,
+                                }}
+                              >
+                                💬
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                                  <span
+                                    style={{
+                                      padding: "2px 8px",
+                                      borderRadius: 999,
+                                      background: "#fef3c7",
+                                      color: "#92400e",
+                                      fontSize: 12,
+                                      fontWeight: 800,
+                                    }}
+                                  >
+                                    PENDING
+                                  </span>
+                                  {req.pet_kind && (
+                                    <span
+                                      style={{
+                                        padding: "2px 8px",
+                                        borderRadius: 999,
+                                        background: req.pet_kind === "found" ? "#dbeafe" : "#fee2e2",
+                                        color: req.pet_kind === "found" ? "#1e40af" : "#991b1b",
+                                        fontSize: 12,
+                                        fontWeight: 700,
+                                      }}
+                                    >
+                                      {req.pet_kind.toUpperCase()} PET
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{ fontSize: 16, fontWeight: 800 }}>
+                                  Chat Request - {req.pet_name || req.pet_unique_id || `Pet #${req.pet_id}`}
+                                </div>
+                                <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+                                  {req.topic || "Waiting for admin approval"}
+                                </div>
+                              </div>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  alignItems: "flex-end",
+                                  gap: 8,
+                                }}
+                              >
+                                <div style={{ fontSize: 11, color: "#9ca3af" }}>
+                                  {req.created_at
+                                    ? new Date(req.created_at).toLocaleString()
+                                    : ""}
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    setActivityExpanded(isExpanded ? null : `chat-req-${req.id}`);
+                                  }}
+                                  style={{
+                                    padding: "6px 12px",
+                                    borderRadius: 999,
+                                    border: "1px solid #e5e7eb",
+                                    background: "#eef2ff",
+                                    color: "#4f46e5",
+                                    cursor: "pointer",
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {isExpanded ? "Hide Details" : "View Request"}
+                                </button>
+                              </div>
+                            </div>
+                            
+                            {/* Expanded Details */}
+                            {isExpanded && (
+                              <div
+                                style={{
+                                  marginTop: 8,
+                                  padding: 12,
+                                  background: "#f9fafb",
+                                  borderRadius: 12,
+                                  fontSize: 12,
+                                  color: "#374151",
+                                }}
+                              >
+                                <div style={{ fontWeight: 700, marginBottom: 8, color: "#0f172a" }}>
+                                  Request Details
+                                </div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                  {req.pet_unique_id && (
+                                    <div>
+                                      <strong>Pet ID:</strong> {req.pet_unique_id}
+                                    </div>
+                                  )}
+                                  {req.pet_name && (
+                                    <div>
+                                      <strong>Pet Name:</strong> {req.pet_name}
+                                    </div>
+                                  )}
+                                  {req.pet_kind && (
+                                    <div>
+                                      <strong>Pet Type:</strong> {req.pet_kind === "found" ? "Found Pet" : "Lost Pet"}
+                                    </div>
+                                  )}
+                                  {req.status && (
+                                    <div>
+                                      <strong>Status:</strong> {req.status}
+                                    </div>
+                                  )}
+                                  {req.created_at && (
+                                    <div>
+                                      <strong>Requested On:</strong> {new Date(req.created_at).toLocaleString()}
+                                    </div>
+                                  )}
+                                  {req.updated_at && (
+                                    <div>
+                                      <strong>Last Updated:</strong> {new Date(req.updated_at).toLocaleString()}
+                                    </div>
+                                  )}
+                                  {req.last_message_preview && (
+                                    <div>
+                                      <strong>Your Message:</strong>
+                                      <div
+                                        style={{
+                                          marginTop: 4,
+                                          padding: 8,
+                                          background: "#ffffff",
+                                          borderRadius: 8,
+                                          fontStyle: "italic",
+                                        }}
+                                      >
+                                        "{req.last_message_preview}"
+                                      </div>
+                                    </div>
+                                  )}
+                                  {req.topic && (
+                                    <div>
+                                      <strong>Topic:</strong> {req.topic}
+                                    </div>
+                                  )}
+                                </div>
+                                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #e5e7eb" }}>
+                                  <button
+                                    onClick={() => setPageTab("chat")}
+                                    style={{
+                                      padding: "8px 16px",
+                                      borderRadius: 999,
+                                      border: "none",
+                                      background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                                      color: "white",
+                                      cursor: "pointer",
+                                      fontSize: 12,
+                                      fontWeight: 600,
+                                      width: "100%",
+                                    }}
+                                  >
+                                    Go to Chat
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
                     )}
                   </>
                 )}

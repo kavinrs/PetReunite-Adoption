@@ -319,9 +319,13 @@ export default function ChatWidget({
       <div
         style={{
           flex: 1,
-          overflow: "auto",
+          overflowY: "auto",
+          overflowX: "hidden",
           padding: "16px",
           background: "#f9fafb",
+          scrollBehavior: "smooth",
+          maxHeight: "calc(100vh - 280px)",
+          minHeight: 0,
         }}
       >
         {loading ? (

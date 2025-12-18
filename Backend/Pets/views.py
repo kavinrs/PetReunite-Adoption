@@ -17,6 +17,7 @@ from .models import (
     LostPetReport,
     Message,
     Pet,
+    Notification,
 )
 from .serializers import (
     AdminAdoptionRequestSerializer,
@@ -34,6 +35,11 @@ from .serializers import (
     MessageCreateSerializer,
     MessageSerializer,
     PetSerializer,
+    NotificationSerializer,
+    ChatroomSerializer,
+    ChatroomParticipantSerializer,
+    ChatroomAccessRequestSerializer,
+    ChatroomMessageSerializer,
 )
 from .permissions import IsAdminOrStaff
 
@@ -1078,3 +1084,274 @@ class AdminUserListView(APIView):
             )
 
         return Response(data, status=status.HTTP_200_OK)
+
+
+
+class NotificationListView(generics.ListAPIView):
+    """List notifications for the current user"""
+    serializer_class = NotificationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        return Notification.objects.filter(recipient=self.request.user).order_by('-created_at')
+
+
+class NotificationMarkReadView(APIView):
+    """Mark a notification as read"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request, pk):
+        try:
+            notification = Notification.objects.get(pk=pk, recipient=request.user)
+            notification.is_read = True
+            notification.save()
+            return Response({'status': 'marked as read'}, status=status.HTTP_200_OK)
+        except Notification.DoesNotExist:
+            return Response({'error': 'Notification not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class NotificationMarkAllReadView(APIView):
+    """Mark all notifications as read for the current user"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        Notification.objects.filter(recipient=request.user, is_read=False).update(is_read=True)
+        return Response({'status': 'all notifications marked as read'}, status=status.HTTP_200_OK)
+
+
+
+# ============================================================================
+# CHATROOM ACCESS APPROVAL VIEWS
+# ============================================================================
+
+class ChatroomInviteUserView(APIView):
+    """Admin invites a user to join a chatroom (creates access request)"""
+    permission_classes = [IsAdminOrStaff]
+    
+    def post(self, request, chatroom_id):
+        from .models import Chatroom, ChatroomAccessRequest, Notification
+        from .serializers import ChatroomAccessRequestSerializer
+        from django.utils import timezone
+        
+        try:
+            chatroom = Chatroom.objects.get(id=chatroom_id)
+        except Chatroom.DoesNotExist:
+            return Response(
+                {"error": "Chatroom not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        user_id = request.data.get('user_id')
+        role = request.data.get('role', 'requested_user')
+        
+        if not user_id:
+            return Response(
+                {"error": "user_id is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            invited_user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "User not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check for existing request
+        existing_request = ChatroomAccessRequest.objects.filter(
+            chatroom=chatroom,
+            requested_user=invited_user
+        ).first()
+        
+        if existing_request:
+            if existing_request.status == 'pending':
+                return Response(
+                    {"error": "User already has a pending request for this chatroom"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            elif existing_request.status == 'accepted':
+                return Response(
+                    {"error": "User is already a participant in this chatroom"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            # If rejected, allow creating a new request
+            existing_request.delete()
+        
+        # Create access request
+        access_request = ChatroomAccessRequest.objects.create(
+            chatroom=chatroom,
+            pet_id=chatroom.pet_id,
+            pet_unique_id=chatroom.pet_unique_id,
+            pet_kind=chatroom.pet_kind,
+            requested_user=invited_user,
+            added_by=request.user,
+            role=role,
+            status='pending'
+        )
+        
+        # Create notification for the invited user
+        Notification.objects.create(
+            recipient=invited_user,
+            notification_type='chatroom_invitation',
+            title='Chatroom Invitation',
+            message=f'Admin has invited you to join a chat regarding your pet request.',
+            from_user=request.user,
+            chatroom_access_request=access_request
+        )
+        
+        serializer = ChatroomAccessRequestSerializer(access_request, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class ChatroomAccessRequestListView(generics.ListAPIView):
+    """List chatroom access requests for the current user"""
+    serializer_class = ChatroomAccessRequestSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        from .models import ChatroomAccessRequest
+        return ChatroomAccessRequest.objects.filter(
+            requested_user=self.request.user,
+            status='pending'
+        ).select_related('chatroom', 'requested_user', 'added_by', 'pet')
+
+
+class ChatroomAccessRequestAcceptView(APIView):
+    """User accepts a chatroom access request"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request, request_id):
+        from .models import ChatroomAccessRequest, ChatroomParticipant, ChatroomMessage, Notification
+        from .serializers import ChatroomAccessRequestSerializer
+        from django.utils import timezone
+        
+        try:
+            access_request = ChatroomAccessRequest.objects.get(
+                id=request_id,
+                requested_user=request.user,
+                status='pending'
+            )
+        except ChatroomAccessRequest.DoesNotExist:
+            return Response(
+                {"error": "Access request not found or already processed"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Update request status
+        access_request.status = 'accepted'
+        access_request.responded_at = timezone.now()
+        access_request.save()
+        
+        # Add user as participant
+        ChatroomParticipant.objects.get_or_create(
+            chatroom=access_request.chatroom,
+            user=request.user,
+            defaults={'role': access_request.role}
+        )
+        
+        # Create system message in chatroom
+        ChatroomMessage.objects.create(
+            chatroom=access_request.chatroom,
+            sender=request.user,
+            text=f"{request.user.username} accepted the chat request.",
+            is_system=True
+        )
+        
+        # Notify admin
+        Notification.objects.create(
+            recipient=access_request.added_by,
+            notification_type='chatroom_request_accepted',
+            title='Chatroom Request Accepted',
+            message=f'{request.user.username} accepted your chatroom invitation.',
+            from_user=request.user,
+            chatroom_access_request=access_request
+        )
+        
+        serializer = ChatroomAccessRequestSerializer(access_request, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class ChatroomAccessRequestRejectView(APIView):
+    """User rejects a chatroom access request"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request, request_id):
+        from .models import ChatroomAccessRequest, Notification
+        from .serializers import ChatroomAccessRequestSerializer
+        from django.utils import timezone
+        
+        try:
+            access_request = ChatroomAccessRequest.objects.get(
+                id=request_id,
+                requested_user=request.user,
+                status='pending'
+            )
+        except ChatroomAccessRequest.DoesNotExist:
+            return Response(
+                {"error": "Access request not found or already processed"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Update request status
+        access_request.status = 'rejected'
+        access_request.responded_at = timezone.now()
+        access_request.save()
+        
+        # Notify admin
+        Notification.objects.create(
+            recipient=access_request.added_by,
+            notification_type='chatroom_request_rejected',
+            title='Chatroom Request Rejected',
+            message=f'{request.user.username} rejected your chatroom invitation.',
+            from_user=request.user,
+            chatroom_access_request=access_request
+        )
+        
+        serializer = ChatroomAccessRequestSerializer(access_request, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class MyChatroomsView(generics.ListAPIView):
+    """List chatrooms the user has access to (accepted requests only)"""
+    serializer_class = ChatroomSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        from .models import Chatroom, ChatroomParticipant
+        # Get chatrooms where user is an active participant
+        participant_chatroom_ids = ChatroomParticipant.objects.filter(
+            user=self.request.user,
+            is_active=True
+        ).values_list('chatroom_id', flat=True)
+        
+        return Chatroom.objects.filter(
+            id__in=participant_chatroom_ids,
+            is_active=True
+        ).select_related('created_by', 'conversation')
+
+
+class AdminChatroomParticipantsView(generics.ListAPIView):
+    """Admin view of chatroom participants with their status"""
+    serializer_class = ChatroomParticipantSerializer
+    permission_classes = [IsAdminOrStaff]
+    
+    def get_queryset(self):
+        from .models import ChatroomParticipant
+        chatroom_id = self.kwargs.get('chatroom_id')
+        return ChatroomParticipant.objects.filter(
+            chatroom_id=chatroom_id
+        ).select_related('user', 'chatroom')
+
+
+class AdminChatroomAccessRequestsView(generics.ListAPIView):
+    """Admin view of all access requests for a chatroom"""
+    serializer_class = ChatroomAccessRequestSerializer
+    permission_classes = [IsAdminOrStaff]
+    
+    def get_queryset(self):
+        from .models import ChatroomAccessRequest
+        chatroom_id = self.kwargs.get('chatroom_id')
+        return ChatroomAccessRequest.objects.filter(
+            chatroom_id=chatroom_id
+        ).select_related('chatroom', 'requested_user', 'added_by', 'pet')

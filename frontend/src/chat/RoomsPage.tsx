@@ -1215,9 +1215,8 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                     requestPetId && !/[A-Za-z]/.test(requestPetId)
                       ? Number(requestPetId)
                       : undefined,
-                  // Store the user's reason as the initial message on the
-                  // conversation so admins see the context when reviewing.
-                  initial_message: requestReason.trim() || undefined,
+                  // Store the user's reason for requesting chat
+                  reason_for_chat: requestReason.trim() || undefined,
                 });
                 if (res.ok) {
                   setRequestMessage("Chat request sent to admin.");

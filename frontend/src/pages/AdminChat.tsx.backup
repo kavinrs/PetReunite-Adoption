@@ -12,7 +12,6 @@ import {
   deleteAdminConversation,
   deleteChatMessageAdminForMe,
   deleteChatMessageAdminForEveryone,
-  fetchAdminUsers,
   type ApiResult,
 } from "../services/api";
 
@@ -63,23 +62,6 @@ export default function AdminChat() {
   const [showRoomPanel, setShowRoomPanel] = useState(false);
   const [roomMembers, setRoomMembers] = useState<any[]>([]);
   
-  // Room Members structured state
-  const [requestedUser, setRequestedUser] = useState<any | null>(null);
-  const [foundedUser, setFoundedUser] = useState<any | null>(null);
-  const [admins, setAdmins] = useState<any[]>([
-    { id: 'admin1', name: 'Admin 1', role: 'admin' },
-    { id: 'admin2', name: 'Admin 2', role: 'admin' }
-  ]);
-  
-  // Add action states
-  const [showAddUserFromChat, setShowAddUserFromChat] = useState(false);
-  const [showAddFoundUser, setShowAddFoundUser] = useState(false);
-  const [showAddAdmin, setShowAddAdmin] = useState(false);
-  const [foundUserSearch, setFoundUserSearch] = useState("");
-  const [allUsers, setAllUsers] = useState<any[]>([]);
-  const [usersLoading, setUsersLoading] = useState(false);
-  const [usersError, setUsersError] = useState<string | null>(null);
-  
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
@@ -114,25 +96,6 @@ export default function AdminChat() {
     }, 10000);
     return () => window.clearInterval(id);
   }, []);
-
-  // Fetch all users when "Add Found Pet User" panel is opened
-  useEffect(() => {
-    if (showAddFoundUser && allUsers.length === 0) {
-      loadAllUsers();
-    }
-  }, [showAddFoundUser]);
-
-  async function loadAllUsers() {
-    setUsersLoading(true);
-    setUsersError(null);
-    const res = await fetchAdminUsers();
-    if (res.ok && Array.isArray(res.data)) {
-      setAllUsers(res.data);
-    } else if (res.error) {
-      setUsersError(res.error);
-    }
-    setUsersLoading(false);
-  }
 
   // When a request is selected, try to load its pet details using the
   // existing admin lost/found report APIs so we can show pet_name and
@@ -1851,721 +1814,206 @@ export default function AdminChat() {
             </div>
           </div>
           
-          {/* STRUCTURED SECTIONS - ALWAYS VISIBLE AT TOP */}
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-            }}
-          >
-            {/* 1️⃣ REQUESTED USER SECTION */}
-            <div>
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "#6b7280",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.5px",
-                  marginBottom: 6,
-                }}
-              >
-                Requested User
-              </div>
-              {requestedUser ? (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: 10,
-                    borderRadius: 12,
-                    background: "#ffffff",
-                    border: "1px solid #e5e7eb",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: "50%",
-                      background: "linear-gradient(135deg,#10b981,#059669)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "white",
-                      fontWeight: 700,
-                      fontSize: 14,
-                    }}
-                  >
-                    {(requestedUser.name || requestedUser.username || "U").charAt(0)}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: "#0f172a",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {requestedUser.name || requestedUser.username || "Unknown"}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 10,
-                        padding: "2px 6px",
-                        borderRadius: 999,
-                        background: "#d1fae5",
-                        color: "#065f46",
-                        fontWeight: 600,
-                        display: "inline-block",
-                        marginTop: 2,
-                      }}
-                    >
-                      Requested User
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: "#9ca3af",
-                    fontStyle: "italic",
-                    padding: "8px 10px",
-                    background: "#f9fafb",
-                    borderRadius: 8,
-                    border: "1px dashed #e5e7eb",
-                  }}
-                >
-                  No user added yet
-                </div>
-              )}
-            </div>
-
-            {/* 2️⃣ FOUNDED USER SECTION */}
-            <div>
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "#6b7280",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.5px",
-                  marginBottom: 6,
-                }}
-              >
-                Founded User
-              </div>
-              {foundedUser ? (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: 10,
-                    borderRadius: 12,
-                    background: "#ffffff",
-                    border: "1px solid #e5e7eb",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: "50%",
-                      background: "linear-gradient(135deg,#f59e0b,#d97706)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "white",
-                      fontWeight: 700,
-                      fontSize: 14,
-                    }}
-                  >
-                    {(foundedUser.name || foundedUser.username || "U").charAt(0)}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: "#0f172a",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {foundedUser.name || foundedUser.username || "Unknown"}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 10,
-                        padding: "2px 6px",
-                        borderRadius: 999,
-                        background: "#fef3c7",
-                        color: "#92400e",
-                        fontWeight: 600,
-                        display: "inline-block",
-                        marginTop: 2,
-                      }}
-                    >
-                      Founded User
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: "#9ca3af",
-                    fontStyle: "italic",
-                    padding: "8px 10px",
-                    background: "#f9fafb",
-                    borderRadius: 8,
-                    border: "1px dashed #e5e7eb",
-                  }}
-                >
-                  No user added yet
-                </div>
-              )}
-            </div>
-
-            {/* 3️⃣ ADMINS SECTION */}
-            <div>
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "#6b7280",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.5px",
-                  marginBottom: 6,
-                }}
-              >
-                Admins
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {admins.map((admin) => (
-                  <div
-                    key={admin.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      padding: 10,
-                      borderRadius: 12,
-                      background: "#ffffff",
-                      border: "1px solid #e5e7eb",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: "50%",
-                        background: "linear-gradient(135deg,#6366f1,#4f46e5)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "white",
-                        fontWeight: 700,
-                        fontSize: 14,
-                      }}
-                    >
-                      {(admin.name || "A").charAt(0)}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color: "#0f172a",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                      >
-                        {admin.name}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 10,
-                          padding: "2px 6px",
-                          borderRadius: 999,
-                          background: "#dbeafe",
-                          color: "#1e40af",
-                          fontWeight: 600,
-                          display: "inline-block",
-                          marginTop: 2,
-                        }}
-                      >
-                        Admin
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-          
-          {/* ADD ACTION BUTTONS - BELOW SECTIONS */}
+          {/* Members List */}
           <div
             style={{
               display: "flex",
               flexDirection: "column",
               gap: 8,
-              paddingTop: 12,
-              marginTop: 12,
-              borderTop: "2px solid #e5e7eb",
             }}
           >
-            {/* Add User from Chat Button */}
-            <div>
-              <button
-                type="button"
-                onClick={() => setShowAddUserFromChat(!showAddUserFromChat)}
-                disabled={requestedUser !== null}
+            {roomMembers.length === 0 ? (
+              <div
                 style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "8px 12px",
-                  borderRadius: 10,
-                  border: "1px solid #e5e7eb",
-                  background: requestedUser ? "#f3f4f6" : "#ffffff",
-                  cursor: requestedUser ? "not-allowed" : "pointer",
                   fontSize: 12,
-                  fontWeight: 600,
-                  color: requestedUser ? "#9ca3af" : "#0f172a",
-                  opacity: requestedUser ? 0.6 : 1,
+                  color: "#9ca3af",
+                  textAlign: "center",
+                  padding: 16,
                 }}
               >
-                <span>➕</span>
-                <span>Add User from Chat</span>
-              </button>
-              
-              {/* Show user with (+) button when clicked */}
-              {showAddUserFromChat && !requestedUser && activeConversation && (
+                No members yet
+              </div>
+            ) : (
+              roomMembers.map((member: any) => (
                 <div
+                  key={member.id}
                   style={{
-                    marginTop: 8,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
                     padding: 10,
-                    borderRadius: 10,
-                    background: "#f9fafb",
+                    borderRadius: 12,
+                    background: "#ffffff",
                     border: "1px solid #e5e7eb",
                   }}
                 >
                   <div
                     style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: "50%",
+                      background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 8,
+                      justifyContent: "center",
+                      color: "white",
+                      fontWeight: 700,
+                      fontSize: 14,
                     }}
                   >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: "#0f172a",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                      >
-                        {getUserDisplayName(activeConversation)}
-                      </div>
-                      <div style={{ fontSize: 10, color: "#6b7280" }}>
-                        Chat requester
-                      </div>
+                    {(member.name || member.username || "U").charAt(0)}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: "#0f172a",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {member.name || member.username || "Unknown"}
                     </div>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        padding: "2px 6px",
+                        borderRadius: 999,
+                        background:
+                          member.role === "admin"
+                            ? "#dbeafe"
+                            : member.role === "found_user"
+                              ? "#fef3c7"
+                              : "#f3f4f6",
+                        color:
+                          member.role === "admin"
+                            ? "#1e40af"
+                            : member.role === "found_user"
+                              ? "#92400e"
+                              : "#374151",
+                        fontWeight: 600,
+                        display: "inline-block",
+                        marginTop: 2,
+                      }}
+                    >
+                      {member.role === "admin"
+                        ? "Admin"
+                        : member.role === "found_user"
+                          ? "Found User"
+                          : "User"}
+                    </div>
+                  </div>
+                  {member.role !== "admin" && (
                     <button
                       type="button"
                       onClick={() => {
-                        setRequestedUser({
-                          id: activeConversation.user?.id || activeConversation.id,
-                          name: getUserDisplayName(activeConversation),
-                          username: activeConversation.user?.username || "",
-                        });
-                        setShowAddUserFromChat(false);
-                      }}
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: "50%",
-                        border: "none",
-                        background: "#10b981",
-                        color: "white",
-                        cursor: "pointer",
-                        fontSize: 16,
-                        fontWeight: 700,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                      title="Add to Requested User"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            {/* Add Found Pet User Button */}
-            <div>
-              <button
-                type="button"
-                onClick={() => setShowAddFoundUser(!showAddFoundUser)}
-                disabled={foundedUser !== null}
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "8px 12px",
-                  borderRadius: 10,
-                  border: "1px solid #e5e7eb",
-                  background: foundedUser ? "#f3f4f6" : "#ffffff",
-                  cursor: foundedUser ? "not-allowed" : "pointer",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: foundedUser ? "#9ca3af" : "#0f172a",
-                  opacity: foundedUser ? 0.6 : 1,
-                }}
-              >
-                <span>➕</span>
-                <span>Add Found Pet User</span>
-              </button>
-              
-              {/* Show search panel when clicked */}
-              {showAddFoundUser && !foundedUser && (
-                <div
-                  style={{
-                    marginTop: 8,
-                    padding: 10,
-                    borderRadius: 10,
-                    background: "#f9fafb",
-                    border: "1px solid #e5e7eb",
-                  }}
-                >
-                  <input
-                    type="text"
-                    placeholder="Search users..."
-                    value={foundUserSearch}
-                    onChange={(e) => setFoundUserSearch(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "6px 10px",
-                      borderRadius: 8,
-                      border: "1px solid #e5e7eb",
-                      fontSize: 12,
-                      outline: "none",
-                      marginBottom: 8,
-                      background: "#ffffff",
-                      color: "#111827",
-                    }}
-                  />
-                  
-                  {/* Loading state */}
-                  {usersLoading && (
-                    <div
-                      style={{
-                        fontSize: 11,
-                        color: "#6b7280",
-                        textAlign: "center",
-                        padding: 8,
-                      }}
-                    >
-                      Loading users...
-                    </div>
-                  )}
-                  
-                  {/* Error state */}
-                  {usersError && (
-                    <div
-                      style={{
-                        fontSize: 11,
-                        color: "#dc2626",
-                        background: "#fee2e2",
-                        padding: 8,
-                        borderRadius: 6,
-                        marginBottom: 8,
-                      }}
-                    >
-                      {usersError}
-                    </div>
-                  )}
-                  
-                  {/* Real user search results */}
-                  {!usersLoading && !usersError && (
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 6,
-                        maxHeight: 200,
-                        overflowY: "auto",
-                      }}
-                    >
-                      {(() => {
-                        // Filter users based on search and exclusions
-                        const searchLower = foundUserSearch.toLowerCase();
-                        const filteredUsers = allUsers.filter((user) => {
-                          // Exclude if already added as Requested User
-                          if (requestedUser && user.id === requestedUser.id) {
-                            return false;
-                          }
-                          // Exclude if already added as Founded User
-                          if (foundedUser && user.id === foundedUser.id) {
-                            return false;
-                          }
-                          // Exclude if already in Admins
-                          if (admins.some((admin) => admin.id === user.id)) {
-                            return false;
-                          }
-                          // Filter by search term (name, username, email)
-                          if (searchLower) {
-                            const name = (user.full_name || user.name || "").toLowerCase();
-                            const username = (user.username || "").toLowerCase();
-                            const email = (user.email || "").toLowerCase();
-                            return (
-                              name.includes(searchLower) ||
-                              username.includes(searchLower) ||
-                              email.includes(searchLower)
-                            );
-                          }
-                          return true;
-                        });
-
-                        if (filteredUsers.length === 0) {
-                          return (
-                            <div
-                              style={{
-                                fontSize: 11,
-                                color: "#9ca3af",
-                                textAlign: "center",
-                                padding: 8,
-                                fontStyle: "italic",
-                              }}
-                            >
-                              {foundUserSearch
-                                ? "No users found matching your search"
-                                : "No users available"}
-                            </div>
+                        if (confirm(`Remove ${member.name || member.username} from room?`)) {
+                          setRoomMembers((prev) =>
+                            prev.filter((m) => m.id !== member.id)
                           );
                         }
-
-                        return filteredUsers.map((user) => {
-                          const displayName =
-                            user.full_name || user.name || user.username || "Unknown User";
-                          const displayEmail = user.email || "";
-                          
-                          return (
-                            <div
-                              key={user.id}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                gap: 8,
-                                padding: "6px 8px",
-                                borderRadius: 8,
-                                background: "#ffffff",
-                                border: "1px solid #e5e7eb",
-                              }}
-                            >
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div
-                                  style={{
-                                    fontSize: 11,
-                                    fontWeight: 600,
-                                    color: "#0f172a",
-                                    whiteSpace: "nowrap",
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                  }}
-                                >
-                                  {displayName}
-                                </div>
-                                {displayEmail && (
-                                  <div
-                                    style={{
-                                      fontSize: 9,
-                                      color: "#6b7280",
-                                      whiteSpace: "nowrap",
-                                      overflow: "hidden",
-                                      textOverflow: "ellipsis",
-                                    }}
-                                  >
-                                    {displayEmail}
-                                  </div>
-                                )}
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setFoundedUser({
-                                    id: user.id,
-                                    name: displayName,
-                                    username: user.username || "",
-                                    email: displayEmail,
-                                  });
-                                  setShowAddFoundUser(false);
-                                  setFoundUserSearch("");
-                                }}
-                                style={{
-                                  width: 24,
-                                  height: 24,
-                                  borderRadius: "50%",
-                                  border: "none",
-                                  background: "#f59e0b",
-                                  color: "white",
-                                  cursor: "pointer",
-                                  fontSize: 14,
-                                  fontWeight: 700,
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  flexShrink: 0,
-                                }}
-                                title="Add to Founded User"
-                              >
-                                +
-                              </button>
-                            </div>
-                          );
-                        });
-                      })()}
-                    </div>
+                      }}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: "#dc2626",
+                        cursor: "pointer",
+                        fontSize: 16,
+                        padding: 4,
+                      }}
+                      title="Remove member"
+                    >
+                      ×
+                    </button>
                   )}
                 </div>
-              )}
-            </div>
+              ))
+            )}
+          </div>
+          
+          {/* Add Member Buttons */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              paddingTop: 8,
+              borderTop: "1px solid #e5e7eb",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                // TODO: Open modal to select user from direct chat
+                alert("Add User from Direct Chat - Coming soon!");
+              }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 12px",
+                borderRadius: 10,
+                border: "1px solid #e5e7eb",
+                background: "#ffffff",
+                cursor: "pointer",
+                fontSize: 12,
+                fontWeight: 600,
+                color: "#0f172a",
+              }}
+            >
+              <span>➕</span>
+              <span>Add User from Chat</span>
+            </button>
             
-            {/* Add Admin Button */}
-            <div>
-              <button
-                type="button"
-                onClick={() => setShowAddAdmin(!showAddAdmin)}
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "8px 12px",
-                  borderRadius: 10,
-                  border: "1px solid #e5e7eb",
-                  background: "#ffffff",
-                  cursor: "pointer",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "#0f172a",
-                }}
-              >
-                <span>➕</span>
-                <span>Add Admin</span>
-              </button>
-              
-              {/* Show available admins when clicked */}
-              {showAddAdmin && (
-                <div
-                  style={{
-                    marginTop: 8,
-                    padding: 10,
-                    borderRadius: 10,
-                    background: "#f9fafb",
-                    border: "1px solid #e5e7eb",
-                  }}
-                >
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {[
-                      { id: 'admin1', name: 'Admin 1' },
-                      { id: 'admin2', name: 'Admin 2' }
-                    ]
-                      .filter((admin) => !admins.find((a) => a.id === admin.id))
-                      .map((admin) => (
-                        <div
-                          key={admin.id}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: 8,
-                            padding: "6px 8px",
-                            borderRadius: 8,
-                            background: "#ffffff",
-                            border: "1px solid #e5e7eb",
-                          }}
-                        >
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div
-                              style={{
-                                fontSize: 11,
-                                fontWeight: 600,
-                                color: "#0f172a",
-                                whiteSpace: "nowrap",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                              }}
-                            >
-                              {admin.name}
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (!admins.find((a) => a.id === admin.id)) {
-                                setAdmins((prev) => [
-                                  ...prev,
-                                  { ...admin, role: 'admin' }
-                                ]);
-                              }
-                            }}
-                            style={{
-                              width: 24,
-                              height: 24,
-                              borderRadius: "50%",
-                              border: "none",
-                              background: "#6366f1",
-                              color: "white",
-                              cursor: "pointer",
-                              fontSize: 14,
-                              fontWeight: 700,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                            title="Add to Admins"
-                          >
-                            +
-                          </button>
-                        </div>
-                      ))}
-                    {admins.length >= 2 && (
-                      <div
-                        style={{
-                          fontSize: 10,
-                          color: "#9ca3af",
-                          textAlign: "center",
-                          padding: 4,
-                          fontStyle: "italic",
-                        }}
-                      >
-                        All admins added
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                // TODO: Open modal to select found pet user
+                alert("Add Found Pet User - Coming soon!");
+              }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 12px",
+                borderRadius: 10,
+                border: "1px solid #e5e7eb",
+                background: "#ffffff",
+                cursor: "pointer",
+                fontSize: 12,
+                fontWeight: 600,
+                color: "#0f172a",
+              }}
+            >
+              <span>➕</span>
+              <span>Add Found Pet User</span>
+            </button>
+            
+            <button
+              type="button"
+              onClick={() => {
+                // TODO: Open modal to select admin
+                alert("Add Admin - Coming soon!");
+              }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 12px",
+                borderRadius: 10,
+                border: "1px solid #e5e7eb",
+                background: "#ffffff",
+                cursor: "pointer",
+                fontSize: 12,
+                fontWeight: 600,
+                color: "#0f172a",
+              }}
+            >
+              <span>➕</span>
+              <span>Add Admin</span>
+            </button>
           </div>
         </div>
       )}

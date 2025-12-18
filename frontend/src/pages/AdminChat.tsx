@@ -61,15 +61,13 @@ export default function AdminChat() {
   const [chatRooms, setChatRooms] = useState<Record<number, any[]>>({});
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
   const [showRoomPanel, setShowRoomPanel] = useState(false);
-  const [roomMembers, setRoomMembers] = useState<any[]>([]);
   
-  // Room Members structured state
-  const [requestedUser, setRequestedUser] = useState<any | null>(null);
-  const [foundedUser, setFoundedUser] = useState<any | null>(null);
-  const [admins, setAdmins] = useState<any[]>([
-    { id: 'admin1', name: 'Admin 1', role: 'admin' },
-    { id: 'admin2', name: 'Admin 2', role: 'admin' }
-  ]);
+  // Room Members structured state - ROOM-SCOPED (keyed by room ID)
+  const [roomMembersData, setRoomMembersData] = useState<Record<number, {
+    requestedUser: any | null;
+    foundedUser: any | null;
+    admins: any[];
+  }>>({});
   
   // Add action states
   const [showAddUserFromChat, setShowAddUserFromChat] = useState(false);
@@ -85,6 +83,15 @@ export default function AdminChat() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Get current room's member data (room-scoped)
+  const currentRoomMembers = selectedRoomId ? roomMembersData[selectedRoomId] : null;
+  const requestedUser = currentRoomMembers?.requestedUser ?? null;
+  const foundedUser = currentRoomMembers?.foundedUser ?? null;
+  const admins = currentRoomMembers?.admins ?? [
+    { id: 'admin1', name: 'Admin 1', role: 'admin' },
+    { id: 'admin2', name: 'Admin 2', role: 'admin' }
+  ];
+
   // Check URL parameters to set initial view
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -93,6 +100,49 @@ export default function AdminChat() {
       setCenterView('requests');
     }
   }, [location.search]);
+
+  // CRITICAL: Room-scoped member rehydration
+  // When a room is selected, initialize its member data if it doesn't exist
+  useEffect(() => {
+    if (!selectedRoomId) return;
+
+    // Initialize room member data if this room hasn't been configured yet
+    if (!roomMembersData[selectedRoomId]) {
+      setRoomMembersData((prev) => ({
+        ...prev,
+        [selectedRoomId]: {
+          requestedUser: null,
+          foundedUser: null,
+          admins: [
+            { id: 'admin1', name: 'Admin 1', role: 'admin' },
+            { id: 'admin2', name: 'Admin 2', role: 'admin' }
+          ],
+        },
+      }));
+    }
+
+    // TODO: Fetch room members from backend API
+    // const loadRoomMembers = async () => {
+    //   const res = await fetchRoomMembers(selectedRoomId);
+    //   if (res.ok && res.data) {
+    //     setRoomMembersData((prev) => ({
+    //       ...prev,
+    //       [selectedRoomId]: {
+    //         requestedUser: res.data.requestedUser,
+    //         foundedUser: res.data.foundedUser,
+    //         admins: res.data.admins,
+    //       },
+    //     }));
+    //   }
+    // };
+    // loadRoomMembers();
+
+    // Reset add action panels when switching rooms
+    setShowAddUserFromChat(false);
+    setShowAddFoundUser(false);
+    setShowAddAdmin(false);
+    setFoundUserSearch("");
+  }, [selectedRoomId]);
 
   // Load admin chat conversations (both pending requests and active chats)
   async function loadConversations(statusFilter?: string) {
@@ -2189,11 +2239,20 @@ export default function AdminChat() {
                     <button
                       type="button"
                       onClick={() => {
-                        setRequestedUser({
-                          id: activeConversation.user?.id || activeConversation.id,
-                          name: getUserDisplayName(activeConversation),
-                          username: activeConversation.user?.username || "",
-                        });
+                        if (!selectedRoomId) return;
+                        
+                        // Update room-scoped member data
+                        setRoomMembersData((prev) => ({
+                          ...prev,
+                          [selectedRoomId]: {
+                            ...prev[selectedRoomId],
+                            requestedUser: {
+                              id: activeConversation.user?.id || activeConversation.id,
+                              name: getUserDisplayName(activeConversation),
+                              username: activeConversation.user?.username || "",
+                            },
+                          },
+                        }));
                         setShowAddUserFromChat(false);
                       }}
                       style={{
@@ -2412,12 +2471,21 @@ export default function AdminChat() {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setFoundedUser({
-                                    id: user.id,
-                                    name: displayName,
-                                    username: user.username || "",
-                                    email: displayEmail,
-                                  });
+                                  if (!selectedRoomId) return;
+                                  
+                                  // Update room-scoped member data
+                                  setRoomMembersData((prev) => ({
+                                    ...prev,
+                                    [selectedRoomId]: {
+                                      ...prev[selectedRoomId],
+                                      foundedUser: {
+                                        id: user.id,
+                                        name: displayName,
+                                        username: user.username || "",
+                                        email: displayEmail,
+                                      },
+                                    },
+                                  }));
                                   setShowAddFoundUser(false);
                                   setFoundUserSearch("");
                                 }}
@@ -2522,11 +2590,21 @@ export default function AdminChat() {
                           <button
                             type="button"
                             onClick={() => {
-                              if (!admins.find((a) => a.id === admin.id)) {
-                                setAdmins((prev) => [
+                              if (!selectedRoomId) return;
+                              
+                              const currentAdmins = roomMembersData[selectedRoomId]?.admins || [];
+                              if (!currentAdmins.find((a) => a.id === admin.id)) {
+                                // Update room-scoped member data
+                                setRoomMembersData((prev) => ({
                                   ...prev,
-                                  { ...admin, role: 'admin' }
-                                ]);
+                                  [selectedRoomId]: {
+                                    ...prev[selectedRoomId],
+                                    admins: [
+                                      ...currentAdmins,
+                                      { ...admin, role: 'admin' }
+                                    ],
+                                  },
+                                }));
                               }
                             }}
                             style={{

@@ -11,6 +11,9 @@ import {
   updateMyFoundReport,
   fetchChatConversations,
   fetchNotifications,
+  fetchChatroomAccessRequests,
+  acceptChatroomAccessRequest,
+  rejectChatroomAccessRequest,
 } from "../services/api";
 import RoomsPage from "../chat/RoomsPage";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -75,6 +78,8 @@ export default function UserHome() {
   const [updatingReportId, setUpdatingReportId] = useState<string | null>(null);
   const [chatRequests, setChatRequests] = useState<any[]>([]);
   const [chatRequestsLoading, setChatRequestsLoading] = useState(false);
+  const [chatroomRequests, setChatroomRequests] = useState<any[]>([]);
+  const [chatroomRequestsLoading, setChatroomRequestsLoading] = useState(false);
   const [userHasNotification, setUserHasNotification] = useState(false);
   const [userNotificationOpen, setUserNotificationOpen] = useState(false);
   const [dismissedUserNotifications, setDismissedUserNotifications] = useState<string[]>([]);
@@ -220,6 +225,15 @@ export default function UserHome() {
       }
       setChatRequestsLoading(false);
     }
+    async function loadChatroomRequests() {
+      setChatroomRequestsLoading(true);
+      const res = await fetchChatroomAccessRequests();
+      if (!mounted) return;
+      if (res.ok && Array.isArray(res.data)) {
+        setChatroomRequests(res.data);
+      }
+      setChatroomRequestsLoading(false);
+    }
     async function loadNotifications() {
       const res = await fetchNotifications();
       if (!mounted) return;
@@ -234,10 +248,12 @@ export default function UserHome() {
     // Always load activity so notifications work from any tab
     loadActivity();
     loadChatRequests();
+    loadChatroomRequests();
     loadNotifications();
     const id = window.setInterval(() => {
       loadActivity();
       loadChatRequests();
+      loadChatroomRequests();
       loadNotifications();
     }, 15000);
     return () => {
@@ -602,18 +618,8 @@ export default function UserHome() {
       onClick: () => setPageTab("activity"),
     },
     {
-      label: "Chatroom Requests",
-      icon: "📬",
-      onClick: () => navigate("/user/chatroom-requests"),
-    },
-    {
-      label: "My Chatrooms",
-      icon: "💬",
-      onClick: () => navigate("/user/my-chatrooms"),
-    },
-    {
       label: "Chat",
-      icon: "💭",
+      icon: "💬",
       onClick: () => {
         // Stay on the same route and just switch the in-page tab
         setPageTab("chat");
@@ -1934,6 +1940,228 @@ export default function UserHome() {
                                     }}
                                   >
                                     Go to Chat
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                    
+                    {/* Chatroom Invitations section */}
+                    <div style={{ fontSize: 18, fontWeight: 800, marginTop: 16 }}>
+                      Chatroom Invitations
+                    </div>
+                    {chatroomRequestsLoading ? (
+                      <div style={{ padding: 12, color: "#64748b" }}>
+                        Loading chatroom invitations...
+                      </div>
+                    ) : chatroomRequests.length === 0 ? (
+                      <div style={{ padding: 12, color: "#64748b" }}>
+                        No pending chatroom invitations.
+                      </div>
+                    ) : (
+                      chatroomRequests.map((req: any) => {
+                        const isExpanded = activityExpanded === `chatroom-req-${req.id}`;
+                        return (
+                          <div
+                            key={`chatroom-req-${req.id}`}
+                            style={{
+                              background: "white",
+                              border: "1px solid #f1f5f9",
+                              borderRadius: 16,
+                              padding: 16,
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 12,
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                              <div
+                                style={{
+                                  width: 48,
+                                  height: 48,
+                                  borderRadius: "50%",
+                                  background: "linear-gradient(135deg, #10b981, #059669)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  color: "white",
+                                  fontWeight: 700,
+                                  fontSize: 20,
+                                }}
+                              >
+                                👥
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                                  <span
+                                    style={{
+                                      padding: "2px 8px",
+                                      borderRadius: 999,
+                                      background: "#fef3c7",
+                                      color: "#92400e",
+                                      fontSize: 12,
+                                      fontWeight: 800,
+                                    }}
+                                  >
+                                    PENDING
+                                  </span>
+                                  <span
+                                    style={{
+                                      padding: "2px 8px",
+                                      borderRadius: 999,
+                                      background: "#d1fae5",
+                                      color: "#065f46",
+                                      fontSize: 12,
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    CHATROOM
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: 16, fontWeight: 800 }}>
+                                  {req.chatroom?.name || "Chatroom Invitation"}
+                                </div>
+                                <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+                                  Invited by: {req.added_by?.full_name || req.added_by?.username || "Admin"}
+                                </div>
+                              </div>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  alignItems: "flex-end",
+                                  gap: 8,
+                                }}
+                              >
+                                <div style={{ fontSize: 11, color: "#9ca3af" }}>
+                                  {req.created_at
+                                    ? new Date(req.created_at).toLocaleString()
+                                    : ""}
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    setActivityExpanded(isExpanded ? null : `chatroom-req-${req.id}`);
+                                  }}
+                                  style={{
+                                    padding: "6px 12px",
+                                    borderRadius: 999,
+                                    border: "1px solid #e5e7eb",
+                                    background: "#eef2ff",
+                                    color: "#4f46e5",
+                                    cursor: "pointer",
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {isExpanded ? "Hide Details" : "View Details"}
+                                </button>
+                              </div>
+                            </div>
+                            
+                            {/* Expanded Details */}
+                            {isExpanded && (
+                              <div
+                                style={{
+                                  marginTop: 8,
+                                  padding: 12,
+                                  background: "#f9fafb",
+                                  borderRadius: 12,
+                                  fontSize: 12,
+                                  color: "#374151",
+                                }}
+                              >
+                                <div style={{ fontWeight: 700, marginBottom: 8, color: "#0f172a" }}>
+                                  Invitation Details
+                                </div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                  {req.chatroom?.name && (
+                                    <div>
+                                      <strong>Chatroom:</strong> {req.chatroom.name}
+                                    </div>
+                                  )}
+                                  {req.chatroom?.purpose && (
+                                    <div>
+                                      <strong>Purpose:</strong> {req.chatroom.purpose}
+                                    </div>
+                                  )}
+                                  {req.pet_unique_id && (
+                                    <div>
+                                      <strong>Pet ID:</strong> {req.pet_unique_id}
+                                    </div>
+                                  )}
+                                  {req.role && (
+                                    <div>
+                                      <strong>Your Role:</strong> {req.role.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                                    </div>
+                                  )}
+                                  {req.created_at && (
+                                    <div>
+                                      <strong>Invited On:</strong> {new Date(req.created_at).toLocaleString()}
+                                    </div>
+                                  )}
+                                </div>
+                                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #e5e7eb", display: "flex", gap: 8 }}>
+                                  <button
+                                    onClick={async () => {
+                                      const res = await acceptChatroomAccessRequest(req.id);
+                                      if (res.ok) {
+                                        alert("Chatroom invitation accepted! You can now access it in the Chat section.");
+                                        // Reload chatroom requests
+                                        const refreshed = await fetchChatroomAccessRequests();
+                                        if (refreshed.ok && Array.isArray(refreshed.data)) {
+                                          setChatroomRequests(refreshed.data);
+                                        }
+                                      } else {
+                                        alert(res.error || "Failed to accept invitation");
+                                      }
+                                    }}
+                                    style={{
+                                      flex: 1,
+                                      padding: "8px 16px",
+                                      borderRadius: 999,
+                                      border: "none",
+                                      background: "#10b981",
+                                      color: "white",
+                                      cursor: "pointer",
+                                      fontSize: 12,
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    ✓ Accept
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      if (!confirm("Are you sure you want to reject this chatroom invitation?")) {
+                                        return;
+                                      }
+                                      const res = await rejectChatroomAccessRequest(req.id);
+                                      if (res.ok) {
+                                        alert("Chatroom invitation rejected.");
+                                        // Reload chatroom requests
+                                        const refreshed = await fetchChatroomAccessRequests();
+                                        if (refreshed.ok && Array.isArray(refreshed.data)) {
+                                          setChatroomRequests(refreshed.data);
+                                        }
+                                      } else {
+                                        alert(res.error || "Failed to reject invitation");
+                                      }
+                                    }}
+                                    style={{
+                                      flex: 1,
+                                      padding: "8px 16px",
+                                      borderRadius: 999,
+                                      border: "1px solid #e5e7eb",
+                                      background: "#ffffff",
+                                      color: "#ef4444",
+                                      cursor: "pointer",
+                                      fontSize: 12,
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    ✗ Reject
                                   </button>
                                 </div>
                               </div>

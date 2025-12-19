@@ -13,6 +13,7 @@ import {
   deleteChatConversationUser,
   deleteChatMessageUserForMe,
   deleteChatMessageUserForEveryone,
+  fetchMyChatrooms,
 } from "../services/api";
 
 import emojiIcon from "../assets/chat/emoji.png";
@@ -89,15 +90,16 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
     const load = async () => {
       setLoading(true);
       setError(null);
-      const [convRes, roomRes] = await Promise.all([
+      const [convRes, roomRes, chatroomsRes] = await Promise.all([
         fetchChatConversations(),
         getRooms(),
+        fetchMyChatrooms(),
       ]);
 
-      if (!convRes.ok && !roomRes.ok) {
+      if (!convRes.ok && !roomRes.ok && !chatroomsRes.ok) {
         setError(
           String(
-            convRes.error ?? roomRes.error ?? "Failed to load chats and rooms",
+            convRes.error ?? roomRes.error ?? chatroomsRes.error ?? "Failed to load chats and rooms",
           ),
         );
         setLoading(false);
@@ -113,9 +115,27 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
           setSelectedConversationId(list[0].id);
         }
       }
+      
+      // Merge old rooms and accepted chatrooms
+      const allRooms: Room[] = [];
+      
+      // Add old rooms from getRooms()
       if (roomRes.ok) {
-        setRooms((roomRes.rooms ?? []) as Room[]);
+        allRooms.push(...((roomRes.rooms ?? []) as Room[]));
       }
+      
+      // Add accepted chatrooms from fetchMyChatrooms()
+      if (chatroomsRes.ok && Array.isArray(chatroomsRes.data)) {
+        const chatrooms = chatroomsRes.data.map((chatroom: any) => ({
+          id: chatroom.id,
+          title: chatroom.name || `Chatroom #${chatroom.id}`,
+          created_at: chatroom.created_at,
+          updated_at: chatroom.updated_at,
+        }));
+        allRooms.push(...chatrooms);
+      }
+      
+      setRooms(allRooms);
       setLoading(false);
     };
     load();

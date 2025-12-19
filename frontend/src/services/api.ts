@@ -1404,7 +1404,7 @@ export async function rejectChatroomAccessRequest(requestId: number): Promise<Ap
  * Fetch chatrooms the user has access to (accepted requests only)
  */
 export async function fetchMyChatrooms(): Promise<ApiResult> {
-  const url = `${PETS_BASE}/my-chatrooms/`;
+  const url = `${PETS_BASE}/chatrooms/my-chatrooms/`;
   const resp = await fetchWithAuth(url);
   const data = await parseJSONSafe(resp);
   if (resp.ok) return { ok: true, status: resp.status, data };

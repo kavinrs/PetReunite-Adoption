@@ -20,6 +20,8 @@ import PetDetailsPage from "./pages/PetDetailsPage";
 import LostReportDetail from "./pages/LostReportDetail";
 import FoundReportDetail from "./pages/FoundReportDetail";
 import MyAdoptionRequests from "./pages/MyAdoptionRequests";
+import MyChatroomRequests from "./pages/MyChatroomRequests";
+import MyChatrooms from "./pages/MyChatrooms";
 import Home from "./pages/Home";
 // Chat components removed for now because src/chat files were deleted
 // import ChatRoomView from "./chat/ChatRoomView";
@@ -119,6 +121,22 @@ export default function App() {
         element={
           <PrivateRoute role="user">
             <MyAdoptionRequests />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/user/chatroom-requests"
+        element={
+          <PrivateRoute role="user">
+            <MyChatroomRequests />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/user/my-chatrooms"
+        element={
+          <PrivateRoute role="user">
+            <MyChatrooms />
           </PrivateRoute>
         }
       />

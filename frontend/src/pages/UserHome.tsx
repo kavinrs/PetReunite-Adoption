@@ -19,6 +19,34 @@ import { useViewportStandardization } from "../hooks/useViewportStandardization"
 type Tab = "owner" | "rescuer" | "adopter";
 type UserPageTab = "home" | "activity" | "chat";
 
+// Helper function to get status badge styling
+const getStatusBadge = (status: string) => {
+  const st = (status || "").toLowerCase();
+  switch (st) {
+    case 'pending':
+    case 'requested':
+      return { color: '#f59e0b', bg: '#fef3c7', text: 'Pending Review', icon: '⏳' };
+    case 'approved':
+    case 'accepted':
+    case 'active':
+      return { color: '#10b981', bg: '#d1fae5', text: 'Approved', icon: '✓' };
+    case 'rejected':
+      return { color: '#ef4444', bg: '#fee2e2', text: 'Rejected', icon: '✗' };
+    case 'investigating':
+      return { color: '#3b82f6', bg: '#dbeafe', text: 'Under Investigation', icon: '🔍' };
+    case 'matched':
+      return { color: '#8b5cf6', bg: '#ede9fe', text: 'Matched', icon: '🤝' };
+    case 'resolved':
+      return { color: '#6b7280', bg: '#f3f4f6', text: 'Resolved', icon: '✓' };
+    case 'closed':
+      return { color: '#6b7280', bg: '#f3f4f6', text: 'Closed', icon: '🔒' };
+    case 'read_only':
+      return { color: '#f59e0b', bg: '#fef3c7', text: 'Waiting', icon: '⏸' };
+    default:
+      return { color: '#6b7280', bg: '#f3f4f6', text: status || 'Unknown', icon: '•' };
+  }
+};
+
 export default function UserHome() {
   // Apply viewport standardization to ensure consistent 100% scaling
   useViewportStandardization();
@@ -404,23 +432,15 @@ export default function UserHome() {
     const pushItem = (id: string, title: string, createdAt: string | null, tab: "lost" | "found" | "adoption" | "chat", rowId?: number, status?: string) => {
       items.push({ id, title, from: "Admin", createdAt, tab, rowId, status });
     };
+    // Show ALL requests regardless of status - requests should never disappear
     for (const r of (activity.lost ?? []) as any[]) {
-      const st = (r.status || "").toLowerCase();
-      if (st && st !== "pending") {
-        pushItem(`lost-${r.id}`, "Lost Report", r.updated_at || r.created_at || null, "lost", r.id, r.status);
-      }
+      pushItem(`lost-${r.id}`, "Lost Report", r.updated_at || r.created_at || null, "lost", r.id, r.status);
     }
     for (const r of (activity.found ?? []) as any[]) {
-      const st = (r.status || "").toLowerCase();
-      if (st && st !== "pending") {
-        pushItem(`found-${r.id}`, "Found Report", r.updated_at || r.created_at || null, "found", r.id, r.status);
-      }
+      pushItem(`found-${r.id}`, "Found Report", r.updated_at || r.created_at || null, "found", r.id, r.status);
     }
     for (const a of (activity.adoptions ?? []) as any[]) {
-      const st = (a.status || "").toLowerCase();
-      if (st && st !== "pending") {
-        pushItem(`adoption-${a.id}`, "Adoption Request", a.updated_at || a.created_at || null, "adoption", a.id, a.status);
-      }
+      pushItem(`adoption-${a.id}`, "Adoption Request", a.updated_at || a.created_at || null, "adoption", a.id, a.status);
     }
     // Add chat notifications
     for (const n of (chatNotifications ?? []) as any[]) {
@@ -582,8 +602,18 @@ export default function UserHome() {
       onClick: () => setPageTab("activity"),
     },
     {
-      label: "Chat",
+      label: "Chatroom Requests",
+      icon: "📬",
+      onClick: () => navigate("/user/chatroom-requests"),
+    },
+    {
+      label: "My Chatrooms",
       icon: "💬",
+      onClick: () => navigate("/user/my-chatrooms"),
+    },
+    {
+      label: "Chat",
+      icon: "💭",
       onClick: () => {
         // Stay on the same route and just switch the in-page tab
         setPageTab("chat");
@@ -883,7 +913,30 @@ export default function UserHome() {
                               }}
                             >
                               <div style={{ minWidth: 0 }}>
-                                <div style={{ fontWeight: 700, color: "#0f172a", fontSize: 13 }}>{n.title}{n.status ? ` — ${n.status}` : ""}</div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                                  <div style={{ fontWeight: 700, color: "#0f172a", fontSize: 13 }}>{n.title}</div>
+                                  {n.status && (() => {
+                                    const badge = getStatusBadge(n.status);
+                                    return (
+                                      <span
+                                        style={{
+                                          padding: "2px 6px",
+                                          borderRadius: 999,
+                                          background: badge.bg,
+                                          color: badge.color,
+                                          fontSize: 10,
+                                          fontWeight: 700,
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: 3,
+                                        }}
+                                      >
+                                        <span>{badge.icon}</span>
+                                        <span>{badge.text}</span>
+                                      </span>
+                                    );
+                                  })()}
+                                </div>
                                 <div style={{ fontSize: 12, color: "#64748b" }}>From Admin</div>
                                 <div style={{ fontSize: 11, color: "#9ca3af" }}>{n.createdAt ? new Date(n.createdAt).toLocaleString() : ""}</div>
                               </div>
@@ -1310,26 +1363,23 @@ export default function UserHome() {
                                 LOST
                               </span>
                               {(() => {
-                                const colors: Record<string, { bg: string; text: string; border: string }> = {
-                                  pending: { bg: "#fef3c7", text: "#92400e", border: "#f59e0b" },
-                                  approved: { bg: "#d1fae5", text: "#065f46", border: "#10b981" },
-                                  rejected: { bg: "#fee2e2", text: "#991b1b", border: "#ef4444" },
-                                };
-                                const c = colors[(r.status || "").toLowerCase()] || colors.pending;
+                                const badge = getStatusBadge(r.status);
                                 return (
                                   <span
                                     style={{
                                       padding: "2px 10px",
                                       borderRadius: 999,
-                                      background: c.bg,
-                                      color: c.text,
-                                      border: `1px solid ${c.border}`,
+                                      background: badge.bg,
+                                      color: badge.color,
                                       fontSize: 12,
                                       fontWeight: 700,
-                                      textTransform: "uppercase",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: 4,
                                     }}
                                   >
-                                    {r.status}
+                                    <span>{badge.icon}</span>
+                                    <span>{badge.text}</span>
                                   </span>
                                 );
                               })()}
@@ -1476,7 +1526,27 @@ export default function UserHome() {
                           <div>
                             <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
                               <span style={{ padding: "2px 8px", borderRadius: 999, background: "#dbeafe", color: "#1d4ed8", fontSize: 12, fontWeight: 800 }}>FOUND</span>
-                              <span style={{ padding: "2px 8px", borderRadius: 999, background: "#f1f5f9", color: "#0f172a", fontSize: 12, fontWeight: 700 }}>{r.status}</span>
+                              {(() => {
+                                const badge = getStatusBadge(r.status);
+                                return (
+                                  <span
+                                    style={{
+                                      padding: "2px 10px",
+                                      borderRadius: 999,
+                                      background: badge.bg,
+                                      color: badge.color,
+                                      fontSize: 12,
+                                      fontWeight: 700,
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: 4,
+                                    }}
+                                  >
+                                    <span>{badge.icon}</span>
+                                    <span>{badge.text}</span>
+                                  </span>
+                                );
+                              })()}
                             </div>
                             <div style={{ fontSize: 16, fontWeight: 800 }}>{r.pet_type || r.pet_name || "Pet"}</div>
                           <div style={{ fontSize: 12, color: "#64748b" }}>{r.found_city}{r.state ? ", " + r.state : ""}</div>
@@ -1625,7 +1695,27 @@ export default function UserHome() {
                           <div>
                             <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
                               <span style={{ padding: "2px 8px", borderRadius: 999, background: "#ede9fe", color: "#6d28d9", fontSize: 12, fontWeight: 800 }}>ADOPTION</span>
-                              <span style={{ padding: "2px 8px", borderRadius: 999, background: "#f1f5f9", color: "#0f172a", fontSize: 12, fontWeight: 700 }}>{a.status}</span>
+                              {(() => {
+                                const badge = getStatusBadge(a.status);
+                                return (
+                                  <span
+                                    style={{
+                                      padding: "2px 10px",
+                                      borderRadius: 999,
+                                      background: badge.bg,
+                                      color: badge.color,
+                                      fontSize: 12,
+                                      fontWeight: 700,
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: 4,
+                                    }}
+                                  >
+                                    <span>{badge.icon}</span>
+                                    <span>{badge.text}</span>
+                                  </span>
+                                );
+                              })()}
                             </div>
                             <div style={{ fontSize: 16, fontWeight: 800 }}>{a.pet?.name || "Pet"}</div>
                           <div style={{ fontSize: 12, color: "#64748b" }}>{a.pet?.location_city}{a.pet?.location_state ? ", " + a.pet?.location_state : ""}</div>

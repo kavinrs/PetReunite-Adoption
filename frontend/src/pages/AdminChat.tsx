@@ -57,8 +57,7 @@ export default function AdminChat() {
   } | null>(null);
   
   // Chat room management states
-  const [expandedChatId, setExpandedChatId] = useState<number | null>(null);
-  const [chatRooms, setChatRooms] = useState<Record<number, any[]>>({});
+  const [chatRooms, setChatRooms] = useState<any[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
   const [showRoomPanel, setShowRoomPanel] = useState(false);
   
@@ -542,218 +541,106 @@ export default function AdminChat() {
             }}
           >
             {directChats.map((c: any, idx: number) => {
-              const isExpanded = expandedChatId === c.id;
-              const rooms = chatRooms[c.id] || [];
-              
               return (
-                <div key={c.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  {/* Direct Chat Item */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <button
-                      type="button"
-                      style={{
-                        flex: 1,
-                        display: "grid",
-                        gridTemplateColumns: "40px 1fr auto",
-                        gap: 8,
-                        padding: "8px 10px",
-                        borderRadius: 12,
-                        border: "1px solid #e5e7eb",
-                        background:
-                          selectedConversationId === c.id && !selectedRoomId
-                            ? "#eef2ff"
-                            : "#f9fafb",
-                        cursor: "pointer",
-                        textAlign: "left",
-                      }}
-                      onClick={() => {
-                        setSelectedConversationId(c.id);
-                        setSelectedRoomId(null);
-                        setShowRoomPanel(false);
-                        setCenterView("chat");
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: "50%",
-                          background: "linear-gradient(135deg,#6366f1,#22c1c3)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "white",
-                          fontWeight: 700,
-                          fontSize: 16,
-                        }}
-                      >
-                        {getUserDisplayName(c).charAt(0)}
-                      </div>
-                      <div style={{ minWidth: 0 }}>
-                        <div
-                          style={{
-                            fontSize: 14,
-                            fontWeight: 700,
-                            color: "#0f172a",
-                            marginBottom: 2,
-                          }}
-                        >
-                          {getUserDisplayName(c)}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: 12,
-                            color: "#64748b",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
-                        >
-                          {c.topic || c.last_message_preview || "Conversation"}
-                        </div>
-                      </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "flex-end",
-                          gap: 4,
-                          fontSize: 11,
-                          color: "#9ca3af",
-                        }}
-                      >
-                        <span>
-                          {c.updated_at
-                            ? new Date(c.updated_at).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
-                            : ""}
-                        </span>
-                        {c.unread > 0 && (
-                          <span
-                            style={{
-                              minWidth: 18,
-                              padding: "2px 6px",
-                              borderRadius: 999,
-                              background: "#f97316",
-                              color: "white",
-                              fontSize: 10,
-                              fontWeight: 700,
-                              textAlign: "center",
-                            }}
-                          >
-                            {c.unread}
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                    
-                    {/* Expand/Collapse Button for Chat Rooms */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setExpandedChatId(isExpanded ? null : c.id);
-                      }}
-                      style={{
-                        width: 24,
-                        height: 24,
-                        borderRadius: 6,
-                        border: "1px solid #e5e7eb",
-                        background: "#ffffff",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 12,
-                        color: "#6b7280",
-                        transition: "transform 0.2s",
-                        transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
-                      }}
-                      title="Chat Rooms"
-                    >
-                      ▶
-                    </button>
+                <button
+                  key={c.id}
+                  type="button"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "40px 1fr auto",
+                    gap: 8,
+                    padding: "8px 10px",
+                    borderRadius: 12,
+                    border: "1px solid #e5e7eb",
+                    background:
+                      selectedConversationId === c.id && !selectedRoomId
+                        ? "#eef2ff"
+                        : "#f9fafb",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                  onClick={() => {
+                    setSelectedConversationId(c.id);
+                    setSelectedRoomId(null);
+                    setShowRoomPanel(false);
+                    setCenterView("chat");
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: "50%",
+                      background: "linear-gradient(135deg,#6366f1,#22c1c3)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "white",
+                      fontWeight: 700,
+                      fontSize: 16,
+                    }}
+                  >
+                    {getUserDisplayName(c).charAt(0)}
                   </div>
-                  
-                  {/* Chat Rooms (Expandable) */}
-                  {isExpanded && (
+                  <div style={{ minWidth: 0 }}>
                     <div
                       style={{
-                        paddingLeft: 16,
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 4,
-                        marginTop: 4,
+                        fontSize: 14,
+                        fontWeight: 700,
+                        color: "#0f172a",
+                        marginBottom: 2,
                       }}
                     >
-                      {rooms.length === 0 ? (
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color: "#9ca3af",
-                            padding: "6px 10px",
-                            fontStyle: "italic",
-                          }}
-                        >
-                          No chat rooms yet
-                        </div>
-                      ) : (
-                        rooms.map((room: any) => (
-                          <button
-                            key={room.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedRoomId(room.id);
-                              setSelectedConversationId(c.id);
-                              setShowRoomPanel(true);
-                              setCenterView("chat");
-                            }}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 8,
-                              padding: "6px 10px",
-                              borderRadius: 10,
-                              border: "1px solid #e5e7eb",
-                              background:
-                                selectedRoomId === room.id
-                                  ? "#eef2ff"
-                                  : "#f9fafb",
-                              cursor: "pointer",
-                              textAlign: "left",
-                            }}
-                          >
-                            <span style={{ fontSize: 14 }}>👥</span>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div
-                                style={{
-                                  fontSize: 12,
-                                  fontWeight: 600,
-                                  color: "#0f172a",
-                                  whiteSpace: "nowrap",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                }}
-                              >
-                                {room.name}
-                              </div>
-                              <div
-                                style={{
-                                  fontSize: 10,
-                                  color: "#9ca3af",
-                                }}
-                              >
-                                {room.member_count || 0} members
-                              </div>
-                            </div>
-                          </button>
-                        ))
-                      )}
+                      {getUserDisplayName(c)}
                     </div>
-                  )}
-                </div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "#64748b",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {c.topic || c.last_message_preview || "Conversation"}
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-end",
+                      gap: 4,
+                      fontSize: 11,
+                      color: "#9ca3af",
+                    }}
+                  >
+                    <span>
+                      {c.updated_at
+                        ? new Date(c.updated_at).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : ""}
+                    </span>
+                    {c.unread > 0 && (
+                      <span
+                        style={{
+                          minWidth: 18,
+                          padding: "2px 6px",
+                          borderRadius: 999,
+                          background: "#f97316",
+                          color: "white",
+                          fontSize: 10,
+                          fontWeight: 700,
+                          textAlign: "center",
+                        }}
+                      >
+                        {c.unread}
+                      </span>
+                    )}
+                  </div>
+                </button>
               );
             })}
           </div>
@@ -781,7 +668,6 @@ export default function AdminChat() {
             }}
           >
             <span>Chat Rooms</span>
-            <span style={{ fontSize: 18, cursor: "pointer" }}>+</span>
           </div>
           <div
             style={{
@@ -792,22 +678,68 @@ export default function AdminChat() {
               overflowY: "auto",
             }}
           >
-            {mockRooms.map((r) => (
-              <button
-                key={r.id}
+            {chatRooms.length === 0 ? (
+              <div
                 style={{
-                  borderRadius: 10,
-                  border: "1px solid #e5e7eb",
+                  fontSize: 11,
+                  color: "#9ca3af",
                   padding: "6px 8px",
-                  fontSize: 12,
-                  textAlign: "left",
-                  cursor: "pointer",
-                  background: "#f9fafb",
+                  fontStyle: "italic",
+                  textAlign: "center",
                 }}
               >
-                {r.name}
-              </button>
-            ))}
+                No chat rooms yet
+              </div>
+            ) : (
+              chatRooms.map((room: any) => (
+                <button
+                  key={room.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedRoomId(room.id);
+                    setSelectedConversationId(room.conversation_id);
+                    setShowRoomPanel(true);
+                    setCenterView("chat");
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    borderRadius: 10,
+                    border: "1px solid #e5e7eb",
+                    padding: "8px 10px",
+                    fontSize: 12,
+                    textAlign: "left",
+                    cursor: "pointer",
+                    background: selectedRoomId === room.id ? "#eef2ff" : "#f9fafb",
+                  }}
+                >
+                  <span style={{ fontSize: 14 }}>👥</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: "#0f172a",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {room.name}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        color: "#9ca3af",
+                      }}
+                    >
+                      {room.member_count || 0} members
+                    </div>
+                  </div>
+                </button>
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -1236,12 +1168,10 @@ export default function AdminChat() {
                           conversation_id: activeConversation.id,
                           member_count: 1,
                         };
-                        setChatRooms((prev) => ({
-                          ...prev,
-                          [activeConversation.id]: [...(prev[activeConversation.id] || []), newRoom],
-                        }));
-                        // Auto-expand the chat to show the new room
-                        setExpandedChatId(activeConversation.id);
+                        setChatRooms((prev) => [...prev, newRoom]);
+                        // Auto-select the newly created room
+                        setSelectedRoomId(newRoom.id);
+                        setShowRoomPanel(true);
                       }
                     }}
                     style={{

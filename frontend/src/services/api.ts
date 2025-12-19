@@ -1352,3 +1352,105 @@ export async function markAllNotificationsRead(): Promise<ApiResult> {
   }
   return { ok: true, data: await resp.json() };
 }
+
+
+// ============================================================================
+// CHATROOM ACCESS APPROVAL APIs
+// ============================================================================
+
+/**
+ * Fetch chatroom access requests for the current user (pending invitations)
+ */
+export async function fetchChatroomAccessRequests(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chatroom-access-requests/`;
+  const resp = await fetchWithAuth(url);
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to fetch chatroom requests";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/**
+ * Accept a chatroom access request
+ */
+export async function acceptChatroomAccessRequest(requestId: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chatroom-access-requests/${requestId}/accept/`;
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to accept chatroom request";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/**
+ * Reject a chatroom access request
+ */
+export async function rejectChatroomAccessRequest(requestId: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chatroom-access-requests/${requestId}/reject/`;
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to reject chatroom request";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/**
+ * Fetch chatrooms the user has access to (accepted requests only)
+ */
+export async function fetchMyChatrooms(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/my-chatrooms/`;
+  const resp = await fetchWithAuth(url);
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to fetch chatrooms";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/**
+ * Admin: Invite a user to join a chatroom (creates pending access request)
+ */
+export async function inviteUserToChatroom(
+  chatroomId: number,
+  userId: number,
+  role: string = "requested_user"
+): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chatrooms/${chatroomId}/invite-user/`;
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: JSON.stringify({ user_id: userId, role }),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to invite user";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/**
+ * Admin: Fetch chatroom participants
+ */
+export async function fetchChatroomParticipants(chatroomId: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/chatrooms/${chatroomId}/participants/`;
+  const resp = await fetchWithAuth(url);
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to fetch participants";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/**
+ * Admin: Fetch all access requests for a chatroom
+ */
+export async function fetchChatroomAccessRequestsAdmin(chatroomId: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/chatrooms/${chatroomId}/access-requests/`;
+  const resp = await fetchWithAuth(url);
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to fetch access requests";
+  return { ok: false, status: resp.status, error: message, data };
+}

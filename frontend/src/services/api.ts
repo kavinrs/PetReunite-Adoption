@@ -361,6 +361,15 @@ export async function fetchAdminUsers(): Promise<ApiResult> {
   return { ok: false, status: resp.status, error: message, data };
 }
 
+export async function fetchStaffUsers(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/staff/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to load staff users";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
 export async function fetchAdminUserActivity(userId: number): Promise<ApiResult> {
   const url = `${PETS_BASE}/admin/users/${userId}/activity/`;
   const resp = await fetchWithAuth(url, { method: "GET" });
@@ -1207,6 +1216,15 @@ export async function deleteAdminConversation(id: number): Promise<ApiResult> {
   return { ok: false, status: resp.status, error: message, data };
 }
 
+export async function clearAdminConversationMessages(id: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/chat/conversations/${id}/clear-messages/`;
+  const resp = await fetchWithAuth(url, { method: "DELETE" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to clear messages";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
 export async function deleteChatConversationUser(id: number): Promise<ApiResult> {
   const url = `${PETS_BASE}/chat/conversations/${id}/delete/`;
   const resp = await fetchWithAuth(url, { method: "DELETE" });
@@ -1328,9 +1346,9 @@ export async function fetchNotifications(): Promise<ApiResult> {
   const url = `${PETS_BASE}/notifications/`;
   const resp = await fetchWithAuth(url, { method: "GET" });
   if (!resp.ok) {
-    return { ok: false, error: await resp.text() };
+    return { ok: false, status: resp.status, error: await resp.text() };
   }
-  return { ok: true, data: await resp.json() };
+  return { ok: true, status: resp.status, data: await resp.json() };
 }
 
 /* Mark a notification as read */
@@ -1338,9 +1356,9 @@ export async function markNotificationRead(notificationId: number): Promise<ApiR
   const url = `${PETS_BASE}/notifications/${notificationId}/mark-read/`;
   const resp = await fetchWithAuth(url, { method: "POST" });
   if (!resp.ok) {
-    return { ok: false, error: await resp.text() };
+    return { ok: false, status: resp.status, error: await resp.text() };
   }
-  return { ok: true, data: await resp.json() };
+  return { ok: true, status: resp.status, data: await resp.json() };
 }
 
 /* Mark all notifications as read */
@@ -1348,9 +1366,9 @@ export async function markAllNotificationsRead(): Promise<ApiResult> {
   const url = `${PETS_BASE}/notifications/mark-all-read/`;
   const resp = await fetchWithAuth(url, { method: "POST" });
   if (!resp.ok) {
-    return { ok: false, error: await resp.text() };
+    return { ok: false, status: resp.status, error: await resp.text() };
   }
-  return { ok: true, data: await resp.json() };
+  return { ok: true, status: resp.status, data: await resp.json() };
 }
 
 
@@ -1413,6 +1431,36 @@ export async function fetchMyChatrooms(): Promise<ApiResult> {
 }
 
 /**
+ * Admin: Fetch chatrooms where admin is a participant (for admin chat interface)
+ */
+export async function fetchAdminChatrooms(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/chatrooms/`;
+  const resp = await fetchWithAuth(url);
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to fetch admin chatrooms";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/**
+ * Admin: Create a chatroom for a conversation
+ */
+export async function createAdminChatroom(payload: {
+  conversation_id: number;
+  name: string;
+}): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/chatrooms/create/`;
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to create chatroom";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/**
  * Admin: Invite a user to join a chatroom (creates pending access request)
  */
 export async function inviteUserToChatroom(
@@ -1432,14 +1480,63 @@ export async function inviteUserToChatroom(
 }
 
 /**
- * Admin: Fetch chatroom participants
+ * Admin: Create a chatroom creation invitation (chatroom will be created on user acceptance)
+ */
+export async function createChatroomInvitation(payload: {
+  user_id: number;
+  conversation_id?: number;
+  pet_unique_id: string;
+  pet_kind: string;
+  role?: string;
+}): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chatrooms/create-invitation/`;
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: JSON.stringify({
+      ...payload,
+      request_type: "chatroom_creation_request",
+      role: payload.role || "requested_user",
+    }),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to create chatroom invitation";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/**
+ * Fetch chatroom participants (works for both admin and regular users)
  */
 export async function fetchChatroomParticipants(chatroomId: number): Promise<ApiResult> {
-  const url = `${PETS_BASE}/admin/chatrooms/${chatroomId}/participants/`;
+  const url = `${PETS_BASE}/chatrooms/${chatroomId}/participants/`;
   const resp = await fetchWithAuth(url);
   const data = await parseJSONSafe(resp);
   if (resp.ok) return { ok: true, status: resp.status, data };
   const message = extractErrorMessage(data) ?? "Failed to fetch participants";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/**
+ * Clear all messages in a chatroom (admin only) - keeps chatroom and participants
+ */
+export async function clearChatroomMessages(chatroomId: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chatrooms/${chatroomId}/clear-messages/`;
+  const resp = await fetchWithAuth(url, { method: "DELETE" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to clear messages";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/**
+ * Delete entire chatroom (admin only) - deletes chatroom, messages, and participants
+ */
+export async function deleteChatroom(chatroomId: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chatrooms/${chatroomId}/delete/`;
+  const resp = await fetchWithAuth(url, { method: "DELETE" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to delete chatroom";
   return { ok: false, status: resp.status, error: message, data };
 }
 
@@ -1452,5 +1549,50 @@ export async function fetchChatroomAccessRequestsAdmin(chatroomId: number): Prom
   const data = await parseJSONSafe(resp);
   if (resp.ok) return { ok: true, status: resp.status, data };
   const message = extractErrorMessage(data) ?? "Failed to fetch access requests";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/**
+ * Admin: Fetch invitation requests by conversation (for showing status in admin chat)
+ */
+export async function fetchInvitationsByConversation(conversationId: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chatroom-access-requests/?conversation_id=${conversationId}`;
+  const resp = await fetchWithAuth(url);
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to fetch invitations";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/**
+ * Fetch messages for a specific chatroom
+ */
+export async function fetchChatroomMessages(chatroomId: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chatrooms/${chatroomId}/messages/`;
+  const resp = await fetchWithAuth(url);
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to fetch chatroom messages";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/**
+ * Send a message to a chatroom
+ */
+export async function sendChatroomMessage(
+  chatroomId: number,
+  payload: {
+    text: string;
+    reply_to_message_id?: number;
+  }
+): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chatrooms/${chatroomId}/messages/`;
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to send message";
   return { ok: false, status: resp.status, error: message, data };
 }

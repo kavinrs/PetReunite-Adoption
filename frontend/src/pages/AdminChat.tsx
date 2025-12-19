@@ -10,9 +10,23 @@ import {
   sendChatMessageAdminWithReply,
   updateAdminConversationStatus,
   deleteAdminConversation,
+  clearAdminConversationMessages,
   deleteChatMessageAdminForMe,
   deleteChatMessageAdminForEveryone,
   fetchAdminUsers,
+  fetchStaffUsers,
+  createChatroomInvitation,
+  fetchInvitationsByConversation,
+  fetchAdminChatrooms,
+  createAdminChatroom,
+  fetchChatroomMessages,
+  fetchChatroomParticipants,
+  fetchChatroomAccessRequestsAdmin,
+  sendChatroomMessage,
+  clearChatroomMessages,
+  deleteChatroom,
+  inviteUserToChatroom,
+  getProfile,
   type ApiResult,
 } from "../services/api";
 
@@ -61,11 +75,26 @@ export default function AdminChat() {
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
   const [showRoomPanel, setShowRoomPanel] = useState(false);
   
+  // View type: "conversation" for direct chats, "chatroom" for group chats
+  const [viewType, setViewType] = useState<"conversation" | "chatroom">("conversation");
+  
+  // Chatroom-specific message states (separate from conversation messages)
+  const [chatroomMessages, setChatroomMessages] = useState<any[]>([]);
+  const [chatroomMessageInput, setChatroomMessageInput] = useState("");
+  const [chatroomReplyingTo, setChatroomReplyingTo] = useState<any | null>(null);
+  const [chatroomLoading, setChatroomLoading] = useState(false);
+  
   // Room Members structured state - ROOM-SCOPED (keyed by room ID)
   const [roomMembersData, setRoomMembersData] = useState<Record<number, {
     requestedUser: any | null;
     foundedUser: any | null;
     admins: any[];
+  }>>({});
+  
+  // Invitation requests tracking - keyed by conversation ID
+  const [invitationRequests, setInvitationRequests] = useState<Record<number, {
+    requestedUser?: { user: any; status: string; requestId: number };
+    foundedUser?: { user: any; status: string; requestId: number };
   }>>({});
   
   // Add action states
@@ -74,8 +103,12 @@ export default function AdminChat() {
   const [showAddAdmin, setShowAddAdmin] = useState(false);
   const [foundUserSearch, setFoundUserSearch] = useState("");
   const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [staffUsers, setStaffUsers] = useState<any[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
+  
+  // Current admin user unique ID for message alignment (USR000024 format)
+  const [currentAdminUserId, setCurrentAdminUserId] = useState<string | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -86,10 +119,7 @@ export default function AdminChat() {
   const currentRoomMembers = selectedRoomId ? roomMembersData[selectedRoomId] : null;
   const requestedUser = currentRoomMembers?.requestedUser ?? null;
   const foundedUser = currentRoomMembers?.foundedUser ?? null;
-  const admins = currentRoomMembers?.admins ?? [
-    { id: 'admin1', name: 'Admin 1', role: 'admin' },
-    { id: 'admin2', name: 'Admin 2', role: 'admin' }
-  ];
+  const admins = currentRoomMembers?.admins ?? [];
 
   // Check URL parameters to set initial view
   useEffect(() => {
@@ -101,40 +131,54 @@ export default function AdminChat() {
   }, [location.search]);
 
   // CRITICAL: Room-scoped member rehydration
-  // When a room is selected, initialize its member data if it doesn't exist
+  // When a room is selected, load its participants from backend
   useEffect(() => {
     if (!selectedRoomId) return;
 
-    // Initialize room member data if this room hasn't been configured yet
-    if (!roomMembersData[selectedRoomId]) {
+    // Fetch room participants and access requests from backend
+    const loadRoomMembers = async () => {
+      // Fetch participants (accepted users)
+      const participantsRes = await fetchChatroomParticipants(selectedRoomId);
+      
+      // Fetch access requests (pending invitations)
+      const accessRequestsRes = await fetchChatroomAccessRequestsAdmin(selectedRoomId);
+      
+      const participants = participantsRes.ok && Array.isArray(participantsRes.data) ? participantsRes.data : [];
+      const accessRequests = accessRequestsRes.ok && Array.isArray(accessRequestsRes.data) ? accessRequestsRes.data : [];
+      
+      // Organize participants by role (accepted users)
+      const acceptedRequestedUser = participants.find((p: any) => p.role === 'requested_user');
+      const acceptedFoundedUser = participants.find((p: any) => p.role === 'founded_user');
+      const admins = participants.filter((p: any) => p.role === 'admin');
+      
+      // Find pending invitations
+      const pendingRequestedUser = accessRequests.find((r: any) => r.role === 'requested_user' && r.status === 'pending');
+      const pendingFoundedUser = accessRequests.find((r: any) => r.role === 'founded_user' && r.status === 'pending');
+      
+      // Determine final status for each role
+      const requestedUser = acceptedRequestedUser 
+        ? { ...acceptedRequestedUser.user, status: 'accepted' }
+        : pendingRequestedUser 
+          ? { ...pendingRequestedUser.requested_user, status: 'pending' }
+          : null;
+          
+      const foundedUser = acceptedFoundedUser
+        ? { ...acceptedFoundedUser.user, status: 'accepted' }
+        : pendingFoundedUser
+          ? { ...pendingFoundedUser.requested_user, status: 'pending' }
+          : null;
+      
       setRoomMembersData((prev) => ({
         ...prev,
         [selectedRoomId]: {
-          requestedUser: null,
-          foundedUser: null,
-          admins: [
-            { id: 'admin1', name: 'Admin 1', role: 'admin' },
-            { id: 'admin2', name: 'Admin 2', role: 'admin' }
-          ],
+          requestedUser: requestedUser,
+          foundedUser: foundedUser,
+          admins: admins.map((p: any) => ({ ...p.user, status: 'accepted' })),
         },
       }));
-    }
-
-    // TODO: Fetch room members from backend API
-    // const loadRoomMembers = async () => {
-    //   const res = await fetchRoomMembers(selectedRoomId);
-    //   if (res.ok && res.data) {
-    //     setRoomMembersData((prev) => ({
-    //       ...prev,
-    //       [selectedRoomId]: {
-    //         requestedUser: res.data.requestedUser,
-    //         foundedUser: res.data.foundedUser,
-    //         admins: res.data.admins,
-    //       },
-    //     }));
-    //   }
-    // };
-    // loadRoomMembers();
+    };
+    
+    loadRoomMembers();
 
     // Reset add action panels when switching rooms
     setShowAddUserFromChat(false);
@@ -164,12 +208,48 @@ export default function AdminChat() {
     return () => window.clearInterval(id);
   }, []);
 
+  // Load admin chatrooms (group chats)
+  async function loadChatrooms() {
+    const res: ApiResult = await fetchAdminChatrooms();
+    if (res.ok && Array.isArray(res.data)) {
+      setChatRooms(res.data);
+    }
+  }
+
+  useEffect(() => {
+    loadChatrooms();
+    const id = window.setInterval(() => {
+      loadChatrooms();
+    }, 10000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  // Load current admin user unique ID for message alignment
+  useEffect(() => {
+    async function loadCurrentUser() {
+      const res = await getProfile();
+      console.log("Admin getProfile response:", res);
+      if (res.ok && res.data?.user_unique_id) {
+        console.log("Setting currentAdminUserId to:", res.data.user_unique_id);
+        setCurrentAdminUserId(res.data.user_unique_id);
+      }
+    }
+    loadCurrentUser();
+  }, []);
+
   // Fetch all users when "Add Found Pet User" panel is opened
   useEffect(() => {
     if (showAddFoundUser && allUsers.length === 0) {
       loadAllUsers();
     }
   }, [showAddFoundUser]);
+
+  // Fetch staff users when "Add Admin" panel is opened
+  useEffect(() => {
+    if (showAddAdmin && staffUsers.length === 0) {
+      loadStaffUsers();
+    }
+  }, [showAddAdmin]);
 
   async function loadAllUsers() {
     setUsersLoading(true);
@@ -181,6 +261,13 @@ export default function AdminChat() {
       setUsersError(res.error);
     }
     setUsersLoading(false);
+  }
+
+  async function loadStaffUsers() {
+    const res = await fetchStaffUsers();
+    if (res.ok && Array.isArray(res.data)) {
+      setStaffUsers(res.data);
+    }
   }
 
   // When a request is selected, try to load its pet details using the
@@ -298,7 +385,7 @@ export default function AdminChat() {
 
   // Load messages for the selected direct chat conversation (admin side)
   useEffect(() => {
-    if (!selectedConversationId) {
+    if (!selectedConversationId || viewType !== "conversation") {
       setChatMessages([]);
       return;
     }
@@ -324,6 +411,70 @@ export default function AdminChat() {
       cancelled = true;
       window.clearInterval(id);
     };
+  }, [selectedConversationId, viewType]);
+
+  // Load messages for the selected chatroom (group chat)
+  useEffect(() => {
+    if (!selectedRoomId || viewType !== "chatroom") {
+      setChatroomMessages([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadMessages = async () => {
+      setChatroomLoading(true);
+      const res = await fetchChatroomMessages(selectedRoomId);
+      if (!cancelled) {
+        if (res.ok && Array.isArray(res.data)) {
+          setChatroomMessages(res.data as any[]);
+        }
+      }
+      setChatroomLoading(false);
+    };
+
+    loadMessages();
+    const id = window.setInterval(loadMessages, 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [selectedRoomId, viewType]);
+
+  // Load invitation requests for the selected conversation
+  useEffect(() => {
+    if (!selectedConversationId) {
+      return;
+    }
+
+    const loadInvitations = async () => {
+      const res = await fetchInvitationsByConversation(selectedConversationId);
+      if (res.ok && Array.isArray(res.data)) {
+        const invitations = res.data as any[];
+        const invitationData: any = {};
+        
+        invitations.forEach((inv: any) => {
+          if (inv.role === 'requested_user' || inv.role === 'founded_user') {
+            const key = inv.role === 'requested_user' ? 'requestedUser' : 'foundedUser';
+            invitationData[key] = {
+              user: inv.requested_user,
+              status: inv.status,
+              requestId: inv.id,
+            };
+          }
+        });
+        
+        setInvitationRequests((prev) => ({
+          ...prev,
+          [selectedConversationId]: invitationData,
+        }));
+      }
+    };
+
+    loadInvitations();
+    // Poll for status updates every 5 seconds
+    const id = window.setInterval(loadInvitations, 5000);
+    return () => window.clearInterval(id);
   }, [selectedConversationId]);
 
   const getUserDisplayName = (c: any): string => {
@@ -398,11 +549,16 @@ export default function AdminChat() {
       ? conversations.find((c: any) => c.id === selectedConversationId) || null
       : null;
 
+  const activeChatroom =
+    selectedRoomId != null
+      ? chatRooms.find((r: any) => r.id === selectedRoomId) || null
+      : null;
+
   useEffect(() => {
-    if (!activeConversation) return;
+    if (!activeConversation && !activeChatroom) return;
     // Keep chat pinned to bottom on new messages to avoid "jump to top" annoyance.
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeConversation?.id, chatMessages.length]);
+  }, [activeConversation?.id, activeChatroom?.id, chatMessages.length, chatroomMessages.length]);
 
   useEffect(() => {
     const onDocClick = () => {
@@ -563,6 +719,7 @@ export default function AdminChat() {
                     setSelectedConversationId(c.id);
                     setSelectedRoomId(null);
                     setShowRoomPanel(false);
+                    setViewType("conversation");
                     setCenterView("chat");
                   }}
                 >
@@ -697,8 +854,9 @@ export default function AdminChat() {
                   type="button"
                   onClick={() => {
                     setSelectedRoomId(room.id);
-                    setSelectedConversationId(room.conversation_id);
+                    setSelectedConversationId(null);
                     setShowRoomPanel(true);
+                    setViewType("chatroom");
                     setCenterView("chat");
                   }}
                   style={{
@@ -734,7 +892,7 @@ export default function AdminChat() {
                         color: "#9ca3af",
                       }}
                     >
-                      {room.member_count || 0} members
+                      {room.participant_count || room.member_count || 0} members
                     </div>
                   </div>
                 </button>
@@ -1155,51 +1313,61 @@ export default function AdminChat() {
                     color: "#64748b",
                   }}
                 >
-                  {/* Create Room Button */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const roomName = prompt("Enter chat room name:");
-                      if (roomName && roomName.trim() && activeConversation) {
-                        // TODO: API call to create room
-                        const newRoom = {
-                          id: Date.now(),
-                          name: roomName.trim(),
-                          conversation_id: activeConversation.id,
-                          member_count: 1,
-                        };
-                        setChatRooms((prev) => [...prev, newRoom]);
-                        // Auto-select the newly created room
-                        setSelectedRoomId(newRoom.id);
-                        setShowRoomPanel(true);
-                      }
-                    }}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      padding: "6px 14px",
-                      borderRadius: 999,
-                      border: "2px dashed #6366f1",
-                      background: "#eef2ff",
-                      cursor: "pointer",
-                      fontSize: 13,
-                      color: "#4f46e5",
-                      fontWeight: 700,
-                      transition: "all 0.2s",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = "#dbeafe";
-                      e.currentTarget.style.borderColor = "#4f46e5";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = "#eef2ff";
-                      e.currentTarget.style.borderColor = "#6366f1";
-                    }}
-                  >
-                    <span style={{ fontSize: 16 }}>+</span>
-                    <span>Create Room</span>
-                  </button>
+                  {/* Create Room Button - Only show for direct chats, not chatrooms */}
+                  {viewType === "conversation" && activeConversation && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const roomName = prompt("Enter chat room name:");
+                        if (roomName && roomName.trim() && activeConversation) {
+                          // Call backend API to create chatroom
+                          const res = await createAdminChatroom({
+                            conversation_id: activeConversation.id,
+                            name: roomName.trim(),
+                          });
+                          
+                          if (res.ok && res.data) {
+                            // Add to local state
+                            setChatRooms((prev) => [res.data, ...prev]);
+                            // Auto-select the newly created room
+                            setSelectedRoomId(res.data.id);
+                            setShowRoomPanel(true);
+                            setViewType("chatroom");
+                            setCenterView("chat");
+                            // Show success message
+                            alert(`Chatroom "${roomName.trim()}" created successfully!`);
+                          } else if (res.error) {
+                            alert(`Failed to create chatroom: ${res.error}`);
+                          }
+                        }
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "6px 14px",
+                        borderRadius: 999,
+                        border: "2px dashed #6366f1",
+                        background: "#eef2ff",
+                        cursor: "pointer",
+                        fontSize: 13,
+                        color: "#4f46e5",
+                        fontWeight: 700,
+                        transition: "all 0.2s",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "#dbeafe";
+                        e.currentTarget.style.borderColor = "#4f46e5";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "#eef2ff";
+                        e.currentTarget.style.borderColor = "#6366f1";
+                      }}
+                    >
+                      <span style={{ fontSize: 16 }}>+</span>
+                      <span>Create Room</span>
+                    </button>
+                  )}
                   
                   {(() => {
                     const rawStatus = (activeConversation.status || "").toLowerCase();
@@ -1248,17 +1416,23 @@ export default function AdminChat() {
                       if (
                         !activeConversation ||
                         !window.confirm(
-                          "Delete this entire chat and all its messages?",
+                          "Delete all messages in this chat? The conversation will remain.",
                         )
                       ) {
                         return;
                       }
-                      const res = await deleteAdminConversation(
+                      const res = await clearAdminConversationMessages(
                         activeConversation.id,
                       );
                       if (res.ok) {
-                        setSelectedConversationId(null);
-                        await loadConversations();
+                        alert("All messages deleted successfully. Conversation still exists.");
+                        // Reload messages
+                        const messagesRes = await fetchChatMessagesAdmin(activeConversation.id);
+                        if (messagesRes.ok && Array.isArray(messagesRes.data)) {
+                          setChatMessages(messagesRes.data);
+                        }
+                      } else {
+                        alert(`Failed to delete messages: ${res.error || "Unknown error"}`);
                       }
                     }}
                     style={{
@@ -1294,40 +1468,43 @@ export default function AdminChat() {
                 maxHeight: "calc(78vh - 180px)",
               }}
             >
-              {!activeConversation && (
-                <div
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 13,
-                    color: "#64748b",
-                    textAlign: "center",
-                  }}
-                >
-                  Select a chat on the left to start messaging.
-                </div>
-              )}
+              {/* CONVERSATION MESSAGES (Direct Chat) */}
+              {viewType === "conversation" && (
+                <>
+                  {!activeConversation && (
+                    <div
+                      style={{
+                        flex: 1,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 13,
+                        color: "#64748b",
+                        textAlign: "center",
+                      }}
+                    >
+                      Select a chat on the left to start messaging.
+                    </div>
+                  )}
 
-              {activeConversation && chatMessages.length === 0 && !chatLoading && (
-                <div
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 13,
-                    color: "#64748b",
-                    textAlign: "center",
-                  }}
-                >
-                  No messages yet. Say hello to the user.
-                </div>
-              )}
+                  {activeConversation && chatMessages.length === 0 && !chatLoading && (
+                    <div
+                      style={{
+                        flex: 1,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 13,
+                        color: "#64748b",
+                        textAlign: "center",
+                      }}
+                    >
+                      No messages yet. Say hello to the user.
+                    </div>
+                  )}
 
-              {activeConversation &&
-                chatMessages.map((m: any) => {
+                  {activeConversation &&
+                    chatMessages.map((m: any) => {
                   const userId = activeConversation.user?.id;
                   const isAdmin =
                     !m.is_system && userId && m.sender && m.sender.id !== userId;
@@ -1537,14 +1714,230 @@ export default function AdminChat() {
                     </div>
                   );
                 })}
+                </>
+              )}
+
+              {/* CHATROOM MESSAGES (Group Chat) */}
+              {viewType === "chatroom" && (
+                <>
+                  {!activeChatroom && (
+                    <div
+                      style={{
+                        flex: 1,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 13,
+                        color: "#64748b",
+                        textAlign: "center",
+                      }}
+                    >
+                      Select a chatroom on the left to start messaging.
+                    </div>
+                  )}
+
+                  {activeChatroom && chatroomMessages.length === 0 && !chatroomLoading && (
+                    <div
+                      style={{
+                        flex: 1,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 13,
+                        color: "#64748b",
+                        textAlign: "center",
+                      }}
+                    >
+                      No messages yet in this chatroom.
+                    </div>
+                  )}
+
+                  {activeChatroom &&
+                    chatroomMessages.map((m: any) => {
+                      const isSystem = Boolean(m.is_system);
+                      const text = (m.text || m.content || "") as string;
+                      // Compare using stable user_unique_id (USR000024 format)
+                      const isOwnMessage = m.sender?.user_unique_id === currentAdminUserId;
+                      
+                      // Debug logging
+                      if (!isSystem) {
+                        console.log("Admin chatroom message:", {
+                          text,
+                          senderUniqueId: m.sender?.user_unique_id,
+                          currentAdminUserId,
+                          isOwnMessage,
+                          comparison: `${m.sender?.user_unique_id} === ${currentAdminUserId} = ${m.sender?.user_unique_id === currentAdminUserId}`,
+                          sender: m.sender,
+                          fullMessage: m
+                        });
+                      }
+                      
+                      const senderName = isSystem 
+                        ? "" 
+                        : (m.sender?.full_name || m.sender?.username || "User");
+                      
+                      const messageTime = m.created_at 
+                        ? new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : "";
+                      
+                      return (
+                        <div
+                          key={m.id}
+                          data-own={isOwnMessage ? "true" : "false"}
+                          data-align={isSystem ? "center" : isOwnMessage ? "end" : "start"}
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: isSystem ? "center" : isOwnMessage ? "flex-end" : "flex-start",
+                            marginBottom: 8,
+                            width: "100%",
+                          }}
+                        >
+                          {!isSystem && (
+                            <div
+                              style={{
+                                fontSize: 11,
+                                color: "#64748b",
+                                marginBottom: 4,
+                                paddingLeft: isOwnMessage ? 0 : 8,
+                                paddingRight: isOwnMessage ? 8 : 0,
+                              }}
+                            >
+                              {senderName} {isOwnMessage ? "👈 YOU" : ""}
+                            </div>
+                          )}
+                          
+                          <div
+                            style={{
+                              position: "relative",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 4,
+                            }}
+                          >
+                            <div
+                              style={{
+                                position: "relative",
+                                maxWidth: isSystem ? "80%" : "65%",
+                                minWidth: "fit-content",
+                                padding: isSystem ? "6px 12px" : "10px 14px",
+                                borderRadius: isSystem ? 999 : 18,
+                                fontSize: isSystem ? 12 : 14,
+                                lineHeight: 1.5,
+                                background: isSystem
+                                  ? "#e5e7eb"
+                                  : isOwnMessage
+                                    ? "#6366f1"
+                                    : "#ffffff",
+                                color: isSystem ? "#4b5563" : isOwnMessage ? "#ffffff" : "#111827",
+                                border: isSystem ? "none" : isOwnMessage ? "3px solid #6366f1" : "1px solid #e5e7eb",
+                                boxShadow: isSystem ? "none" : isOwnMessage ? "0 2px 8px rgba(99,102,241,0.25)" : "0 2px 8px rgba(0,0,0,0.08)",
+                                wordBreak: "break-word",
+                                whiteSpace: "normal",
+                                overflowWrap: "break-word",
+                                display: "inline-block",
+                              }}
+                              onMouseEnter={() => {
+                                if (!isSystem) setHoveredMessageId(Number(m.id));
+                              }}
+                              onMouseLeave={() => setHoveredMessageId(null)}
+                            >
+                              {m.reply_to && (
+                                <div
+                                  style={{
+                                    fontSize: 12,
+                                    padding: "6px 8px",
+                                    marginBottom: 6,
+                                    borderRadius: 8,
+                                    background: isOwnMessage
+                                      ? "rgba(255,255,255,0.2)"
+                                      : "rgba(0,0,0,0.05)",
+                                    borderLeft: `3px solid ${isOwnMessage ? "#ffffff" : "#6366f1"}`,
+                                  }}
+                                >
+                                  <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                                    {m.reply_to.sender?.full_name || m.reply_to.sender?.username || "User"}
+                                  </div>
+                                  <div style={{ opacity: 0.8 }}>
+                                    {(m.reply_to.text || m.reply_to.content || "").substring(0, 50)}
+                                    {(m.reply_to.text || m.reply_to.content || "").length > 50 ? "..." : ""}
+                                  </div>
+                                </div>
+                              )}
+                              {text}
+                            </div>
+
+                            {!isSystem && hoveredMessageId === m.id && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMenuForMessageId(m.id);
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setOptionsMenu({
+                                    message: m,
+                                    x: rect.left,
+                                    y: rect.bottom + 4,
+                                    items: [
+                                      {
+                                        label: "Reply",
+                                        onClick: () => {
+                                          setChatroomReplyingTo(m);
+                                          setMenuForMessageId(null);
+                                          setOptionsMenu(null);
+                                        },
+                                      },
+                                    ],
+                                  });
+                                }}
+                                style={{
+                                  width: 22,
+                                  height: 22,
+                                  borderRadius: 999,
+                                  border: "1px solid rgba(0,0,0,0.15)",
+                                  background: "#111827",
+                                  color: "#ffffff",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: 14,
+                                  lineHeight: 1,
+                                }}
+                              >
+                                ⋮
+                              </button>
+                            )}
+                          </div>
+                          
+                          {!isSystem && (
+                            <div
+                              style={{
+                                fontSize: 10,
+                                color: "#9ca3af",
+                                marginTop: 2,
+                                paddingLeft: isOwnMessage ? 0 : 8,
+                                paddingRight: isOwnMessage ? 8 : 0,
+                              }}
+                            >
+                              {messageTime}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </>
+              )}
+
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Bottom admin chat input */}
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                if (!activeConversation || !chatInput.trim()) return;
+            {/* Bottom admin chat input - CONVERSATION */}
+            {viewType === "conversation" && activeConversation && (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!activeConversation || !chatInput.trim()) return;
                 const text = chatInput.trim();
                 setChatInput("");
                 setChatError(null);
@@ -1701,7 +2094,158 @@ export default function AdminChat() {
               >
                 Send
               </button>
-            </form>
+              </form>
+            )}
+
+            {/* Bottom admin chat input - CHATROOM */}
+            {viewType === "chatroom" && activeChatroom && (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  console.log("Chatroom form submitted", { activeChatroom, chatroomMessageInput, selectedRoomId });
+                  
+                  if (!activeChatroom || !chatroomMessageInput.trim() || !selectedRoomId) {
+                    console.log("Validation failed", { activeChatroom: !!activeChatroom, hasInput: !!chatroomMessageInput.trim(), selectedRoomId });
+                    return;
+                  }
+                  
+                  const text = chatroomMessageInput.trim();
+                  setChatroomMessageInput("");
+                  
+                  const payload: any = { text };
+                  if (chatroomReplyingTo) {
+                    payload.reply_to_message_id = chatroomReplyingTo.id;
+                  }
+                  
+                  console.log("Sending chatroom message", { selectedRoomId, payload, currentAdminUserId });
+                  const res = await sendChatroomMessage(selectedRoomId, payload);
+                  console.log("Chatroom message response", res);
+                  if (res.ok && res.data) {
+                    console.log("Message created with sender ID:", res.data.sender?.id, "Expected:", currentAdminUserId);
+                  }
+                  
+                  setChatroomReplyingTo(null);
+                  if (res.ok) {
+                    // Reload messages
+                    const messagesRes = await fetchChatroomMessages(selectedRoomId);
+                    if (messagesRes.ok && Array.isArray(messagesRes.data)) {
+                      setChatroomMessages(messagesRes.data);
+                    }
+                  } else {
+                    console.error("Failed to send chatroom message", res.error);
+                    alert(`Failed to send message: ${res.error || "Unknown error"}`);
+                    // Restore the message input
+                    setChatroomMessageInput(text);
+                  }
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "12px 16px",
+                  borderTop: "1px solid #e5e7eb",
+                  background: "#ffffff",
+                }}
+              >
+                {chatroomReplyingTo && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: "100%",
+                      left: 0,
+                      right: 0,
+                      padding: "8px 16px",
+                      background: "#f3f4f6",
+                      borderTop: "1px solid #e5e7eb",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      fontSize: 12,
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                        Replying to {chatroomReplyingTo.sender?.full_name || chatroomReplyingTo.sender?.username || "User"}
+                      </div>
+                      <div style={{ color: "#64748b" }}>
+                        {(chatroomReplyingTo.text || chatroomReplyingTo.content || "").substring(0, 50)}
+                        {(chatroomReplyingTo.text || chatroomReplyingTo.content || "").length > 50 ? "..." : ""}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setChatroomReplyingTo(null)}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        cursor: "pointer",
+                        fontSize: 16,
+                        lineHeight: 1,
+                        color: "#0f172a",
+                      }}
+                      aria-label="Cancel reply"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+                
+                <button
+                  type="button"
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    cursor: "pointer",
+                    padding: "6px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#6b7280",
+                    fontSize: 20,
+                    lineHeight: 1,
+                  }}
+                  aria-label="Emoji"
+                >
+                  😊
+                </button>
+                
+                <input
+                  value={chatroomMessageInput}
+                  onChange={(e) => setChatroomMessageInput(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      e.currentTarget.form?.requestSubmit();
+                    }
+                  }}
+                  placeholder="Type a message here..."
+                  style={{
+                    flex: chatroomReplyingTo ? 2 : 1,
+                    border: "none",
+                    outline: "none",
+                    fontSize: 13,
+                    color: "#111827",
+                    background: "#ffffff",
+                  }}
+                />
+                <button
+                  type="submit"
+                  style={{
+                    border: "none",
+                    borderRadius: 999,
+                    padding: "6px 14px",
+                    background: "#4f46e5",
+                    color: "#ffffff",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: activeChatroom ? "pointer" : "not-allowed",
+                    opacity: activeChatroom ? 1 : 0.5,
+                  }}
+                >
+                  Send
+                </button>
+              </form>
+            )}
 
             {contextMenu && (
               <div
@@ -1826,8 +2370,78 @@ export default function AdminChat() {
             >
               Room Members
             </div>
-            <div style={{ fontSize: 12, color: "#64748b" }}>
-              Manage who can access this room
+            <div style={{ 
+              fontSize: 12, 
+              color: "#64748b",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
+              <span>Manage who can access this room</span>
+              {selectedRoomId && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      if (!selectedRoomId) {
+                        console.error("No room selected");
+                        return;
+                      }
+                      
+                      const currentRoom = chatRooms.find((r: any) => r.id === selectedRoomId);
+                      const roomName = currentRoom?.name || "this chatroom";
+                      
+                      console.log("Attempting to delete chatroom:", selectedRoomId, roomName);
+                      
+                      if (!window.confirm(`Are you sure you want to DELETE "${roomName}"? This will permanently delete the chatroom, all messages, and all participants. This action cannot be undone.`)) {
+                        console.log("Delete cancelled by user");
+                        return;
+                      }
+                      
+                      console.log("Calling deleteChatroom API...");
+                      const res = await deleteChatroom(selectedRoomId);
+                      console.log("Delete response:", res);
+                      
+                      if (res.ok) {
+                        alert(`Chatroom "${roomName}" deleted successfully.`);
+                        // Clear selection and reload chatrooms
+                        setSelectedRoomId(null);
+                        setChatroomMessages([]);
+                        setRoomMembersData((prev) => {
+                          const newData = { ...prev };
+                          delete newData[selectedRoomId];
+                          return newData;
+                        });
+                        // Reload chatrooms list
+                        console.log("Reloading chatrooms list...");
+                        const chatroomsRes = await fetchAdminChatrooms();
+                        console.log("Chatrooms reload response:", chatroomsRes);
+                        if (chatroomsRes.ok && Array.isArray(chatroomsRes.data)) {
+                          setChatRooms(chatroomsRes.data);
+                        }
+                      } else {
+                        console.error("Delete failed:", res.error, res);
+                        alert(`Failed to delete chatroom: ${res.error || "Unknown error"}`);
+                      }
+                    } catch (error) {
+                      console.error("Exception during delete:", error);
+                      alert(`Error deleting chatroom: ${error}`);
+                    }
+                  }}
+                  style={{
+                    border: "1px solid #dc2626",
+                    background: "#ffffff",
+                    color: "#dc2626",
+                    cursor: "pointer",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    padding: "6px 12px",
+                    borderRadius: 6,
+                  }}
+                >
+                  Delete Room
+                </button>
+              )}
             </div>
           </div>
           
@@ -1853,78 +2467,95 @@ export default function AdminChat() {
               >
                 Requested User
               </div>
-              {requestedUser ? (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: 10,
-                    borderRadius: 12,
-                    background: "#ffffff",
-                    border: "1px solid #e5e7eb",
-                  }}
-                >
+              {(() => {
+                // Check if we have a requested user (from chatroom or conversation)
+                const user = requestedUser || (selectedConversationId ? invitationRequests[selectedConversationId]?.requestedUser?.user : null);
+                const status = requestedUser?.status || (selectedConversationId ? invitationRequests[selectedConversationId]?.requestedUser?.status : null);
+                
+                if (user) {
+                  const statusColors = {
+                    pending: { bg: "#fef3c7", text: "#92400e", label: "Pending" },
+                    accepted: { bg: "#d1fae5", text: "#065f46", label: "Accepted" },
+                    rejected: { bg: "#fee2e2", text: "#991b1b", label: "Rejected" },
+                  };
+                  const statusStyle = statusColors[status as keyof typeof statusColors] || statusColors.pending;
+                  
+                  return (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: 10,
+                        borderRadius: 12,
+                        background: "#ffffff",
+                        border: "1px solid #e5e7eb",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: "50%",
+                          background: "linear-gradient(135deg,#10b981,#059669)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "white",
+                          fontWeight: 700,
+                          fontSize: 14,
+                        }}
+                      >
+                        {(user.full_name || user.username || "U").charAt(0)}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: "#0f172a",
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {user.full_name || user.username || "Unknown"}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 10,
+                            padding: "2px 6px",
+                            borderRadius: 999,
+                            background: statusStyle.bg,
+                            color: statusStyle.text,
+                            fontWeight: 600,
+                            display: "inline-block",
+                            marginTop: 2,
+                          }}
+                        >
+                          {statusStyle.label}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                
+                return (
                   <div
                     style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: "50%",
-                      background: "linear-gradient(135deg,#10b981,#059669)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "white",
-                      fontWeight: 700,
-                      fontSize: 14,
+                      fontSize: 11,
+                      color: "#9ca3af",
+                      fontStyle: "italic",
+                      padding: "8px 10px",
+                      background: "#f9fafb",
+                      borderRadius: 8,
+                      border: "1px dashed #e5e7eb",
                     }}
                   >
-                    {(requestedUser.name || requestedUser.username || "U").charAt(0)}
+                    No user added yet
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: "#0f172a",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {requestedUser.name || requestedUser.username || "Unknown"}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 10,
-                        padding: "2px 6px",
-                        borderRadius: 999,
-                        background: "#d1fae5",
-                        color: "#065f46",
-                        fontWeight: 600,
-                        display: "inline-block",
-                        marginTop: 2,
-                      }}
-                    >
-                      Requested User
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: "#9ca3af",
-                    fontStyle: "italic",
-                    padding: "8px 10px",
-                    background: "#f9fafb",
-                    borderRadius: 8,
-                    border: "1px dashed #e5e7eb",
-                  }}
-                >
-                  No user added yet
-                </div>
-              )}
+                );
+              })()}
             </div>
 
             {/* 2️⃣ FOUNDED USER SECTION */}
@@ -1941,78 +2572,95 @@ export default function AdminChat() {
               >
                 Founded User
               </div>
-              {foundedUser ? (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: 10,
-                    borderRadius: 12,
-                    background: "#ffffff",
-                    border: "1px solid #e5e7eb",
-                  }}
-                >
+              {(() => {
+                // Check if we have a founded user (from chatroom or conversation)
+                const user = foundedUser || (selectedConversationId ? invitationRequests[selectedConversationId]?.foundedUser?.user : null);
+                const status = foundedUser?.status || (selectedConversationId ? invitationRequests[selectedConversationId]?.foundedUser?.status : null);
+                
+                if (user) {
+                  const statusColors = {
+                    pending: { bg: "#fef3c7", text: "#92400e", label: "Pending" },
+                    accepted: { bg: "#d1fae5", text: "#065f46", label: "Accepted" },
+                    rejected: { bg: "#fee2e2", text: "#991b1b", label: "Rejected" },
+                  };
+                  const statusStyle = statusColors[status as keyof typeof statusColors] || statusColors.pending;
+                  
+                  return (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: 10,
+                        borderRadius: 12,
+                        background: "#ffffff",
+                        border: "1px solid #e5e7eb",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: "50%",
+                          background: "linear-gradient(135deg,#f59e0b,#d97706)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "white",
+                          fontWeight: 700,
+                          fontSize: 14,
+                        }}
+                      >
+                        {(user.full_name || user.username || "U").charAt(0)}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: "#0f172a",
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {user.full_name || user.username || "Unknown"}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 10,
+                            padding: "2px 6px",
+                            borderRadius: 999,
+                            background: statusStyle.bg,
+                            color: statusStyle.text,
+                            fontWeight: 600,
+                            display: "inline-block",
+                            marginTop: 2,
+                          }}
+                        >
+                          {statusStyle.label}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                
+                return (
                   <div
                     style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: "50%",
-                      background: "linear-gradient(135deg,#f59e0b,#d97706)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "white",
-                      fontWeight: 700,
-                      fontSize: 14,
+                      fontSize: 11,
+                      color: "#9ca3af",
+                      fontStyle: "italic",
+                      padding: "8px 10px",
+                      background: "#f9fafb",
+                      borderRadius: 8,
+                      border: "1px dashed #e5e7eb",
                     }}
                   >
-                    {(foundedUser.name || foundedUser.username || "U").charAt(0)}
+                    No user added yet
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: "#0f172a",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {foundedUser.name || foundedUser.username || "Unknown"}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 10,
-                        padding: "2px 6px",
-                        borderRadius: 999,
-                        background: "#fef3c7",
-                        color: "#92400e",
-                        fontWeight: 600,
-                        display: "inline-block",
-                        marginTop: 2,
-                      }}
-                    >
-                      Founded User
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: "#9ca3af",
-                    fontStyle: "italic",
-                    padding: "8px 10px",
-                    background: "#f9fafb",
-                    borderRadius: 8,
-                    border: "1px dashed #e5e7eb",
-                  }}
-                >
-                  No user added yet
-                </div>
-              )}
+                );
+              })()}
             </div>
 
             {/* 3️⃣ ADMINS SECTION */}
@@ -2057,7 +2705,7 @@ export default function AdminChat() {
                         fontSize: 14,
                       }}
                     >
-                      {(admin.name || "A").charAt(0)}
+                      {(admin.full_name || admin.username || admin.name || "A").charAt(0)}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div
@@ -2070,7 +2718,7 @@ export default function AdminChat() {
                           textOverflow: "ellipsis",
                         }}
                       >
-                        {admin.name}
+                        {admin.full_name || admin.username || admin.name || "Admin"}
                       </div>
                       <div
                         style={{
@@ -2109,7 +2757,7 @@ export default function AdminChat() {
               <button
                 type="button"
                 onClick={() => setShowAddUserFromChat(!showAddUserFromChat)}
-                disabled={requestedUser !== null}
+                disabled={selectedConversationId ? !!invitationRequests[selectedConversationId]?.requestedUser : false}
                 style={{
                   width: "100%",
                   display: "flex",
@@ -2118,12 +2766,12 @@ export default function AdminChat() {
                   padding: "8px 12px",
                   borderRadius: 10,
                   border: "1px solid #e5e7eb",
-                  background: requestedUser ? "#f3f4f6" : "#ffffff",
-                  cursor: requestedUser ? "not-allowed" : "pointer",
+                  background: (selectedConversationId && invitationRequests[selectedConversationId]?.requestedUser) ? "#f3f4f6" : "#ffffff",
+                  cursor: (selectedConversationId && invitationRequests[selectedConversationId]?.requestedUser) ? "not-allowed" : "pointer",
                   fontSize: 12,
                   fontWeight: 600,
-                  color: requestedUser ? "#9ca3af" : "#0f172a",
-                  opacity: requestedUser ? 0.6 : 1,
+                  color: (selectedConversationId && invitationRequests[selectedConversationId]?.requestedUser) ? "#9ca3af" : "#0f172a",
+                  opacity: (selectedConversationId && invitationRequests[selectedConversationId]?.requestedUser) ? 0.6 : 1,
                 }}
               >
                 <span>➕</span>
@@ -2131,7 +2779,7 @@ export default function AdminChat() {
               </button>
               
               {/* Show user with (+) button when clicked */}
-              {showAddUserFromChat && !requestedUser && activeConversation && (
+              {showAddUserFromChat && selectedConversationId && !invitationRequests[selectedConversationId]?.requestedUser && activeConversation && (
                 <div
                   style={{
                     marginTop: 8,
@@ -2168,22 +2816,85 @@ export default function AdminChat() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => {
-                        if (!selectedRoomId) return;
+                      onClick={async () => {
+                        if (!activeConversation) return;
                         
-                        // Update room-scoped member data
-                        setRoomMembersData((prev) => ({
-                          ...prev,
-                          [selectedRoomId]: {
-                            ...prev[selectedRoomId],
-                            requestedUser: {
-                              id: activeConversation.user?.id || activeConversation.id,
-                              name: getUserDisplayName(activeConversation),
-                              username: activeConversation.user?.username || "",
-                            },
-                          },
-                        }));
-                        setShowAddUserFromChat(false);
+                        const userId = activeConversation.user?.id || activeConversation.user_id;
+                        
+                        if (!userId) {
+                          alert("User ID not found");
+                          return;
+                        }
+                        
+                        // If we're in a chatroom context, invite to existing chatroom
+                        if (selectedRoomId) {
+                          const res = await inviteUserToChatroom(selectedRoomId, userId, 'requested_user');
+                          
+                          if (res.ok) {
+                            alert(`Invitation sent to ${getUserDisplayName(activeConversation)}! They will receive a notification.`);
+                            setShowAddUserFromChat(false);
+                            
+                            // Reload participants
+                            const participantsRes = await fetchChatroomParticipants(selectedRoomId);
+                            if (participantsRes.ok && Array.isArray(participantsRes.data)) {
+                              const participants = participantsRes.data;
+                              const requestedUser = participants.find((p: any) => p.role === 'requested_user');
+                              const foundedUser = participants.find((p: any) => p.role === 'founded_user');
+                              const admins = participants.filter((p: any) => p.role === 'admin');
+                              
+                              setRoomMembersData((prev) => ({
+                                ...prev,
+                                [selectedRoomId]: {
+                                  requestedUser: requestedUser || null,
+                                  foundedUser: foundedUser || null,
+                                  admins: admins,
+                                },
+                              }));
+                            }
+                          } else {
+                            alert(res.error || "Failed to send invitation");
+                          }
+                        } else {
+                          // No chatroom context - create chatroom creation request
+                          const petUniqueId = activeConversation.pet_unique_id;
+                          const petKind = activeConversation.pet_kind;
+                          const conversationId = activeConversation.id;
+                          
+                          if (!petUniqueId || !petKind) {
+                            alert("Pet information not found. Please ensure this conversation has pet context.");
+                            return;
+                          }
+                          
+                          const res = await createChatroomInvitation({
+                            user_id: userId,
+                            pet_unique_id: petUniqueId,
+                            pet_kind: petKind,
+                            conversation_id: conversationId,
+                          });
+                          
+                          if (res.ok) {
+                            setInvitationRequests((prev) => ({
+                              ...prev,
+                              [conversationId]: {
+                                ...prev[conversationId],
+                                requestedUser: {
+                                  user: activeConversation.user || { 
+                                    id: userId, 
+                                    username: getUserDisplayName(activeConversation),
+                                    full_name: getUserDisplayName(activeConversation)
+                                  },
+                                  status: 'pending',
+                                  requestId: res.data?.id || 0,
+                                },
+                              },
+                            }));
+                            
+                            alert(`Chatroom invitation sent to ${getUserDisplayName(activeConversation)}! They will receive a notification.`);
+                            setShowAddUserFromChat(false);
+                          } else {
+                            alert(res.error || "Failed to send chatroom invitation");
+                          }
+                        }
                       }}
                       style={{
                         width: 28,
@@ -2199,7 +2910,7 @@ export default function AdminChat() {
                         alignItems: "center",
                         justifyContent: "center",
                       }}
-                      title="Add to Requested User"
+                      title="Send Chatroom Invitation"
                     >
                       +
                     </button>
@@ -2213,7 +2924,7 @@ export default function AdminChat() {
               <button
                 type="button"
                 onClick={() => setShowAddFoundUser(!showAddFoundUser)}
-                disabled={foundedUser !== null}
+                disabled={selectedConversationId ? !!invitationRequests[selectedConversationId]?.foundedUser : false}
                 style={{
                   width: "100%",
                   display: "flex",
@@ -2222,12 +2933,12 @@ export default function AdminChat() {
                   padding: "8px 12px",
                   borderRadius: 10,
                   border: "1px solid #e5e7eb",
-                  background: foundedUser ? "#f3f4f6" : "#ffffff",
-                  cursor: foundedUser ? "not-allowed" : "pointer",
+                  background: (selectedConversationId && invitationRequests[selectedConversationId]?.foundedUser) ? "#f3f4f6" : "#ffffff",
+                  cursor: (selectedConversationId && invitationRequests[selectedConversationId]?.foundedUser) ? "not-allowed" : "pointer",
                   fontSize: 12,
                   fontWeight: 600,
-                  color: foundedUser ? "#9ca3af" : "#0f172a",
-                  opacity: foundedUser ? 0.6 : 1,
+                  color: (selectedConversationId && invitationRequests[selectedConversationId]?.foundedUser) ? "#9ca3af" : "#0f172a",
+                  opacity: (selectedConversationId && invitationRequests[selectedConversationId]?.foundedUser) ? 0.6 : 1,
                 }}
               >
                 <span>➕</span>
@@ -2307,17 +3018,19 @@ export default function AdminChat() {
                       {(() => {
                         // Filter users based on search and exclusions
                         const searchLower = foundUserSearch.toLowerCase();
+                        const currentInvitations = selectedConversationId ? invitationRequests[selectedConversationId] : null;
                         const filteredUsers = allUsers.filter((user) => {
-                          // Exclude if already added as Requested User
-                          if (requestedUser && user.id === requestedUser.id) {
+                          const actualUserId = user.user_id || user.id;
+                          // Exclude if already has invitation as Requested User
+                          if (currentInvitations?.requestedUser && actualUserId === currentInvitations.requestedUser.user.id) {
                             return false;
                           }
-                          // Exclude if already added as Founded User
-                          if (foundedUser && user.id === foundedUser.id) {
+                          // Exclude if already has invitation as Founded User
+                          if (currentInvitations?.foundedUser && actualUserId === currentInvitations.foundedUser.user.id) {
                             return false;
                           }
                           // Exclude if already in Admins
-                          if (admins.some((admin) => admin.id === user.id)) {
+                          if (admins.some((admin) => admin.id === actualUserId)) {
                             return false;
                           }
                           // Filter by search term (name, username, email)
@@ -2400,24 +3113,87 @@ export default function AdminChat() {
                               </div>
                               <button
                                 type="button"
-                                onClick={() => {
-                                  if (!selectedRoomId) return;
+                                onClick={async () => {
+                                  // Use user_id (actual User model ID) instead of id (UserProfile ID)
+                                  const actualUserId = user.user_id || user.id;
                                   
-                                  // Update room-scoped member data
-                                  setRoomMembersData((prev) => ({
-                                    ...prev,
-                                    [selectedRoomId]: {
-                                      ...prev[selectedRoomId],
-                                      foundedUser: {
-                                        id: user.id,
-                                        name: displayName,
-                                        username: user.username || "",
-                                        email: displayEmail,
+                                  // If we're in a chatroom context, invite to existing chatroom
+                                  if (selectedRoomId) {
+                                    const res = await inviteUserToChatroom(selectedRoomId, actualUserId, 'founded_user');
+                                    
+                                    if (res.ok) {
+                                      alert(`Invitation sent to ${displayName}! They will receive a notification.`);
+                                      setShowAddFoundUser(false);
+                                      
+                                      // Reload participants
+                                      const participantsRes = await fetchChatroomParticipants(selectedRoomId);
+                                      if (participantsRes.ok && Array.isArray(participantsRes.data)) {
+                                        const participants = participantsRes.data;
+                                        const requestedUser = participants.find((p: any) => p.role === 'requested_user');
+                                        const foundedUser = participants.find((p: any) => p.role === 'founded_user');
+                                        const admins = participants.filter((p: any) => p.role === 'admin');
+                                        
+                                        setRoomMembersData((prev) => ({
+                                          ...prev,
+                                          [selectedRoomId]: {
+                                            requestedUser: requestedUser || null,
+                                            foundedUser: foundedUser || null,
+                                            admins: admins,
+                                          },
+                                        }));
+                                      }
+                                    } else {
+                                      alert(res.error || "Failed to send invitation");
+                                    }
+                                  } else {
+                                    // No chatroom context - create chatroom creation request
+                                    if (!activeConversation) {
+                                      alert("No active conversation selected");
+                                      return;
+                                    }
+                                    
+                                    const petUniqueId = activeConversation.pet_unique_id;
+                                    const petKind = activeConversation.pet_kind;
+                                    const conversationId = activeConversation.id;
+                                    
+                                    if (!petUniqueId || !petKind) {
+                                      alert("Pet information not found. Please ensure this conversation has pet context.");
+                                      return;
+                                    }
+                                    
+                                    const res = await createChatroomInvitation({
+                                      user_id: actualUserId,
+                                      pet_unique_id: petUniqueId,
+                                      pet_kind: petKind,
+                                      conversation_id: conversationId,
+                                      role: "founded_user",
+                                    });
+                                    
+                                    if (res.ok) {
+                                      setInvitationRequests((prev) => ({
+                                        ...prev,
+                                        [conversationId]: {
+                                          ...prev[conversationId],
+                                          foundedUser: {
+                                            user: {
+                                              id: actualUserId,
+                                              username: user.username || displayName,
+                                              full_name: displayName,
+                                            email: displayEmail,
+                                          },
+                                          status: 'pending',
+                                          requestId: res.data?.id || 0,
+                                        },
                                       },
-                                    },
-                                  }));
-                                  setShowAddFoundUser(false);
-                                  setFoundUserSearch("");
+                                    }));
+                                    
+                                    alert(`Chatroom invitation sent to ${displayName}! They will receive a notification.`);
+                                    setShowAddFoundUser(false);
+                                    setFoundUserSearch("");
+                                    } else {
+                                      alert(res.error || "Failed to send chatroom invitation");
+                                    }
+                                  }
                                 }}
                                 style={{
                                   width: 24,
@@ -2434,7 +3210,7 @@ export default function AdminChat() {
                                   justifyContent: "center",
                                   flexShrink: 0,
                                 }}
-                                title="Add to Founded User"
+                                title="Send Chatroom Invitation"
                               >
                                 +
                               </button>
@@ -2473,7 +3249,7 @@ export default function AdminChat() {
               </button>
               
               {/* Show available admins when clicked */}
-              {showAddAdmin && (
+              {showAddAdmin && selectedRoomId && (
                 <div
                   style={{
                     marginTop: 8,
@@ -2484,80 +3260,98 @@ export default function AdminChat() {
                   }}
                 >
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {[
-                      { id: 'admin1', name: 'Admin 1' },
-                      { id: 'admin2', name: 'Admin 2' }
-                    ]
-                      .filter((admin) => !admins.find((a) => a.id === admin.id))
-                      .map((admin) => (
-                        <div
-                          key={admin.id}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: 8,
-                            padding: "6px 8px",
-                            borderRadius: 8,
-                            background: "#ffffff",
-                            border: "1px solid #e5e7eb",
-                          }}
-                        >
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div
-                              style={{
-                                fontSize: 11,
-                                fontWeight: 600,
-                                color: "#0f172a",
-                                whiteSpace: "nowrap",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                              }}
-                            >
-                              {admin.name}
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (!selectedRoomId) return;
-                              
-                              const currentAdmins = roomMembersData[selectedRoomId]?.admins || [];
-                              if (!currentAdmins.find((a) => a.id === admin.id)) {
-                                // Update room-scoped member data
-                                setRoomMembersData((prev) => ({
-                                  ...prev,
-                                  [selectedRoomId]: {
-                                    ...prev[selectedRoomId],
-                                    admins: [
-                                      ...currentAdmins,
-                                      { ...admin, role: 'admin' }
-                                    ],
-                                  },
-                                }));
-                              }
-                            }}
+                    {staffUsers.length === 0 ? (
+                      <div style={{ fontSize: 11, color: "#6b7280", textAlign: "center", padding: 8 }}>
+                        Loading staff users...
+                      </div>
+                    ) : (
+                      staffUsers
+                        .filter((staff) => !admins.find((a) => a.user?.id === staff.id))
+                        .map((staff) => (
+                          <div
+                            key={staff.id}
                             style={{
-                              width: 24,
-                              height: 24,
-                              borderRadius: "50%",
-                              border: "none",
-                              background: "#6366f1",
-                              color: "white",
-                              cursor: "pointer",
-                              fontSize: 14,
-                              fontWeight: 700,
                               display: "flex",
                               alignItems: "center",
-                              justifyContent: "center",
+                              justifyContent: "space-between",
+                              gap: 8,
+                              padding: "6px 8px",
+                              borderRadius: 8,
+                              background: "#ffffff",
+                              border: "1px solid #e5e7eb",
                             }}
-                            title="Add to Admins"
                           >
-                            +
-                          </button>
-                        </div>
-                      ))}
-                    {admins.length >= 2 && (
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  color: "#0f172a",
+                                  whiteSpace: "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                }}
+                              >
+                                {staff.full_name || staff.username}
+                              </div>
+                              <div style={{ fontSize: 10, color: "#6b7280" }}>
+                                {staff.email}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!selectedRoomId) return;
+                                
+                                // Call API to invite user to chatroom
+                                const res = await inviteUserToChatroom(selectedRoomId, staff.id, 'admin');
+                                
+                                if (res.ok) {
+                                  alert(`Invitation sent to ${staff.full_name || staff.username}!`);
+                                  // Reload participants to show the new admin
+                                  const participantsRes = await fetchChatroomParticipants(selectedRoomId);
+                                  if (participantsRes.ok && Array.isArray(participantsRes.data)) {
+                                    const participants = participantsRes.data;
+                                    const requestedUser = participants.find((p: any) => p.role === 'requested_user');
+                                    const foundedUser = participants.find((p: any) => p.role === 'founded_user');
+                                    const admins = participants.filter((p: any) => p.role === 'admin');
+                                    
+                                    setRoomMembersData((prev) => ({
+                                      ...prev,
+                                      [selectedRoomId]: {
+                                        requestedUser: requestedUser || null,
+                                        foundedUser: foundedUser || null,
+                                        admins: admins,
+                                      },
+                                    }));
+                                  }
+                                  setShowAddAdmin(false);
+                                } else {
+                                  alert(res.error || "Failed to invite admin");
+                                }
+                              }}
+                              style={{
+                                width: 24,
+                                height: 24,
+                                borderRadius: "50%",
+                                border: "none",
+                                background: "#6366f1",
+                                color: "white",
+                                cursor: "pointer",
+                                fontSize: 14,
+                                fontWeight: 700,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                              title="Invite as Admin"
+                            >
+                              +
+                            </button>
+                          </div>
+                        ))
+                    )}
+                    {staffUsers.length > 0 && staffUsers.filter((staff) => !admins.find((a) => a.user?.id === staff.id)).length === 0 && (
                       <div
                         style={{
                           fontSize: 10,
@@ -2567,7 +3361,7 @@ export default function AdminChat() {
                           fontStyle: "italic",
                         }}
                       >
-                        All admins added
+                        All staff users already added
                       </div>
                     )}
                   </div>

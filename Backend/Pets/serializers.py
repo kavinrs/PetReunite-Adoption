@@ -21,16 +21,23 @@ User = get_user_model()
 
 class UserSummarySerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
+    user_unique_id = serializers.SerializerMethodField()
     
     class Meta:
         model = User
-        fields = ("id", "username", "email", "full_name")
+        fields = ("id", "username", "email", "full_name", "is_staff", "user_unique_id")
     
     def get_full_name(self, obj):
         """Get full name from user profile if it exists"""
         if hasattr(obj, 'profile') and obj.profile:
             return obj.profile.full_name or obj.username
         return obj.username
+    
+    def get_user_unique_id(self, obj):
+        """Get stable user_unique_id from profile"""
+        if hasattr(obj, 'profile') and obj.profile:
+            return obj.profile.user_unique_id
+        return None
 
 
 class FoundPetReportSerializer(serializers.ModelSerializer):
@@ -582,9 +589,10 @@ class ChatroomAccessRequestSerializer(serializers.ModelSerializer):
     """Serializer for Chatroom Access Request"""
     requested_user = UserSummarySerializer(read_only=True)
     added_by = UserSummarySerializer(read_only=True)
-    chatroom_name = serializers.CharField(source='chatroom.name', read_only=True)
+    chatroom_name = serializers.SerializerMethodField()
     pet_name = serializers.SerializerMethodField()
     pet_type = serializers.SerializerMethodField()
+    pet_breed = serializers.SerializerMethodField()
     pet_image = serializers.SerializerMethodField()
     
     class Meta:
@@ -598,6 +606,7 @@ class ChatroomAccessRequestSerializer(serializers.ModelSerializer):
             'pet_kind',
             'pet_name',
             'pet_type',
+            'pet_breed',
             'pet_image',
             'requested_user',
             'added_by',
@@ -608,6 +617,16 @@ class ChatroomAccessRequestSerializer(serializers.ModelSerializer):
             'responded_at',
         ]
         read_only_fields = ['id', 'created_at', 'responded_at']
+    
+    def get_chatroom_name(self, obj):
+        """Get chatroom name or generate one for creation requests"""
+        if obj.chatroom:
+            return obj.chatroom.name
+        # For creation requests, generate a preview name
+        if obj.request_type == 'chatroom_creation_request':
+            pet_name = self.get_pet_name(obj)
+            return f"{pet_name} - {obj.pet_kind.capitalize() if obj.pet_kind else 'Pet'} Case"
+        return None
     
     def get_pet_name(self, obj):
         """Get pet name from LostPetReport or FoundPetReport"""
@@ -652,6 +671,27 @@ class ChatroomAccessRequestSerializer(serializers.ModelSerializer):
                     pass
         return "Unknown"
     
+    def get_pet_breed(self, obj):
+        """Get pet breed"""
+        if obj.pet:
+            return getattr(obj.pet, 'breed', '')
+        if obj.pet_unique_id:
+            if obj.pet_kind == 'lost':
+                from .models import LostPetReport
+                try:
+                    pet = LostPetReport.objects.get(pet_unique_id=obj.pet_unique_id)
+                    return pet.breed or ''
+                except LostPetReport.DoesNotExist:
+                    pass
+            elif obj.pet_kind == 'found':
+                from .models import FoundPetReport
+                try:
+                    pet = FoundPetReport.objects.get(pet_unique_id=obj.pet_unique_id)
+                    return pet.breed or ''
+                except FoundPetReport.DoesNotExist:
+                    pass
+        return ''
+    
     def get_pet_image(self, obj):
         """Get pet image URL"""
         request = self.context.get('request')
@@ -683,6 +723,16 @@ class ChatroomAccessRequestSerializer(serializers.ModelSerializer):
         return None
 
 
+class ChatroomParticipantSerializer(serializers.ModelSerializer):
+    """Serializer for Chatroom Participant"""
+    user = UserSummarySerializer(read_only=True)
+    
+    class Meta:
+        model = ChatroomParticipant
+        fields = ['id', 'user', 'role', 'joined_at', 'is_active']
+        read_only_fields = ['id', 'joined_at']
+
+
 class ChatroomMessageSerializer(serializers.ModelSerializer):
     """Serializer for Chatroom Message"""
     sender = UserSummarySerializer(read_only=True)
@@ -702,7 +752,7 @@ class ChatroomMessageSerializer(serializers.ModelSerializer):
             'is_system',
             'created_at',
         ]
-        read_only_fields = ['id', 'created_at']
+        read_only_fields = ['id', 'chatroom', 'sender', 'created_at', 'is_deleted', 'is_system']
     
     def get_reply_to(self, obj):
         if not obj.reply_to:

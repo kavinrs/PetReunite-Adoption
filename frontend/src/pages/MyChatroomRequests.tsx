@@ -7,19 +7,15 @@ import {
 
 interface ChatroomAccessRequest {
   id: number;
-  chatroom: {
-    id: number;
-    name: string;
-    purpose: string;
-  };
-  pet: {
-    id: number;
-    pet_name?: string;
-    pet_type: string;
-    photo_url?: string;
-  };
+  chatroom: number | null;
+  chatroom_name: string | null;
+  pet: number | null;
   pet_unique_id: string;
   pet_kind: string;
+  pet_name: string;
+  pet_type: string;
+  pet_breed: string;
+  pet_image: string | null;
   requested_user: {
     id: number;
     username: string;
@@ -34,6 +30,7 @@ interface ChatroomAccessRequest {
   request_type: string;
   status: string;
   created_at: string;
+  responded_at: string | null;
 }
 
 export default function MyChatroomRequests() {
@@ -51,7 +48,8 @@ export default function MyChatroomRequests() {
     setError(null);
     const res = await fetchChatroomAccessRequests();
     if (res.ok && Array.isArray(res.data)) {
-      setRequests(res.data);
+      // Only show pending requests (hide accepted/rejected)
+      setRequests(res.data.filter((req: any) => req.status === 'pending'));
     } else {
       setError(res.error || "Failed to load requests");
     }
@@ -62,9 +60,10 @@ export default function MyChatroomRequests() {
     setProcessingId(requestId);
     const res = await acceptChatroomAccessRequest(requestId);
     if (res.ok) {
-      // Remove from list or reload
+      // Remove from list after accepting
       setRequests((prev) => prev.filter((r) => r.id !== requestId));
-      alert("Chatroom access accepted! You can now view it in My Chats.");
+      // Show success message
+      alert("Chatroom invitation accepted! The chatroom has been created and you can now access it in Chat Rooms.");
     } else {
       alert(res.error || "Failed to accept request");
     }
@@ -78,7 +77,7 @@ export default function MyChatroomRequests() {
     setProcessingId(requestId);
     const res = await rejectChatroomAccessRequest(requestId);
     if (res.ok) {
-      // Remove from list
+      // Remove from list after rejecting
       setRequests((prev) => prev.filter((r) => r.id !== requestId));
       alert("Chatroom invitation rejected.");
     } else {
@@ -142,115 +141,106 @@ export default function MyChatroomRequests() {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {requests.map((request) => (
-          <div
-            key={request.id}
-            style={{
-              borderRadius: 12,
-              border: "1px solid #e5e7eb",
-              background: "#ffffff",
-              padding: 16,
-              boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-            }}
-          >
-            <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-              {/* Pet Photo */}
-              <div
-                style={{
-                  width: 80,
-                  height: 80,
-                  borderRadius: 8,
-                  background: request.pet?.photo_url
-                    ? `url(${request.pet.photo_url}) center/cover`
-                    : "linear-gradient(135deg, #6366f1, #22c1c3)",
-                  flexShrink: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "white",
-                  fontSize: 32,
-                  fontWeight: 700,
-                }}
-              >
-                {!request.pet?.photo_url && "🐾"}
-              </div>
+        {requests.map((request) => {
+          return (
+            <div
+              key={request.id}
+              style={{
+                borderRadius: 12,
+                border: "1px solid #e5e7eb",
+                background: "#ffffff",
+                padding: 16,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+              }}
+            >
+              <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+                {/* Pet Photo */}
+                <div
+                  style={{
+                    width: 80,
+                    height: 80,
+                    borderRadius: 8,
+                    background: request.pet_image
+                      ? `url(${request.pet_image}) center/cover`
+                      : "linear-gradient(135deg, #6366f1, #22c1c3)",
+                    flexShrink: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "white",
+                    fontSize: 32,
+                    fontWeight: 700,
+                  }}
+                >
+                  {!request.pet_image && "🐾"}
+                </div>
 
-              {/* Request Details */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <div>
+                {/* Request Details */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ marginBottom: 8 }}>
                     <div style={{ fontSize: 18, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>
-                      {request.chatroom.name}
+                      {request.chatroom_name || `${request.pet_name} - ${request.pet_kind} Case`}
                     </div>
                     <div style={{ fontSize: 14, color: "#64748b", marginBottom: 8 }}>
-                      {request.pet?.pet_name || request.pet?.pet_type || "Pet"} •{" "}
-                      {request.chatroom.purpose || "Chat"}
+                      {request.pet_name} • {request.pet_type}
+                      {request.pet_breed && ` • ${request.pet_breed}`}
                     </div>
                   </div>
-                  <span
-                    style={{
-                      padding: "4px 12px",
-                      borderRadius: 999,
-                      background: "#fef3c7",
-                      color: "#92400e",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      height: "fit-content",
-                    }}
-                  >
-                    Pending
-                  </span>
-                </div>
 
-                <div style={{ fontSize: 13, color: "#64748b", marginBottom: 12 }}>
-                  <strong>Request Type:</strong> Chatroom Access Request
-                  <br />
-                  <strong>Invited by:</strong> {request.added_by.full_name || request.added_by.username} (Admin)
-                  <br />
-                  <strong>Pet ID:</strong> {request.pet_unique_id}
-                </div>
+                  <div style={{ fontSize: 13, color: "#64748b", marginBottom: 12 }}>
+                    <strong>Context:</strong> Chat room creation request from Admin
+                    <br />
+                    <strong>Requested by:</strong> {request.added_by.full_name || request.added_by.username}
+                    <br />
+                    <strong>Pet ID:</strong> {request.pet_unique_id}
+                    <br />
+                    <strong>Request Type:</strong> {request.request_type === "chatroom_creation_request" ? "Chatroom Creation Request" : "Chatroom Join Request"}
+                  </div>
 
-                {/* Action Buttons */}
-                <div style={{ display: "flex", gap: 12 }}>
-                  <button
-                    onClick={() => handleAccept(request.id)}
-                    disabled={processingId === request.id}
-                    style={{
-                      padding: "8px 20px",
-                      borderRadius: 8,
-                      border: "none",
-                      background: "#10b981",
-                      color: "white",
-                      fontSize: 14,
-                      fontWeight: 600,
-                      cursor: processingId === request.id ? "not-allowed" : "pointer",
-                      opacity: processingId === request.id ? 0.6 : 1,
-                    }}
-                  >
-                    {processingId === request.id ? "Processing..." : "✓ Accept"}
-                  </button>
-                  <button
-                    onClick={() => handleReject(request.id)}
-                    disabled={processingId === request.id}
-                    style={{
-                      padding: "8px 20px",
-                      borderRadius: 8,
-                      border: "1px solid #e5e7eb",
-                      background: "#ffffff",
-                      color: "#ef4444",
-                      fontSize: 14,
-                      fontWeight: 600,
-                      cursor: processingId === request.id ? "not-allowed" : "pointer",
-                      opacity: processingId === request.id ? 0.6 : 1,
-                    }}
-                  >
-                    {processingId === request.id ? "Processing..." : "✗ Reject"}
-                  </button>
+                  {/* Action Buttons */}
+                  {(
+                    <div style={{ display: "flex", gap: 12 }}>
+                      <button
+                        onClick={() => handleAccept(request.id)}
+                        disabled={processingId === request.id}
+                        style={{
+                          padding: "8px 20px",
+                          borderRadius: 8,
+                          border: "none",
+                          background: "#10b981",
+                          color: "white",
+                          fontSize: 14,
+                          fontWeight: 600,
+                          cursor: processingId === request.id ? "not-allowed" : "pointer",
+                          opacity: processingId === request.id ? 0.6 : 1,
+                        }}
+                      >
+                        {processingId === request.id ? "Processing..." : "✓ Accept"}
+                      </button>
+                      <button
+                        onClick={() => handleReject(request.id)}
+                        disabled={processingId === request.id}
+                        style={{
+                          padding: "8px 20px",
+                          borderRadius: 8,
+                          border: "1px solid #e5e7eb",
+                          background: "#ffffff",
+                          color: "#ef4444",
+                          fontSize: 14,
+                          fontWeight: 600,
+                          cursor: processingId === request.id ? "not-allowed" : "pointer",
+                          opacity: processingId === request.id ? 0.6 : 1,
+                        }}
+                      >
+                        {processingId === request.id ? "Processing..." : "✗ Reject"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

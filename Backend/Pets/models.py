@@ -466,10 +466,18 @@ class ChatroomAccessRequest(models.Model):
         ('rejected', 'Rejected'),
     ]
     
+    REQUEST_TYPE_CHOICES = [
+        ('chatroom_join_request', 'Chatroom Join Request'),
+        ('chatroom_creation_request', 'Chatroom Creation Request'),
+    ]
+    
     chatroom = models.ForeignKey(
         Chatroom,
         on_delete=models.CASCADE,
-        related_name='access_requests'
+        related_name='access_requests',
+        null=True,
+        blank=True,
+        help_text="Chatroom (null if chatroom not yet created)"
     )
     pet = models.ForeignKey(
         'LostPetReport',
@@ -507,7 +515,17 @@ class ChatroomAccessRequest(models.Model):
     )
     request_type = models.CharField(
         max_length=100,
-        default='chatroom_join_request'
+        choices=REQUEST_TYPE_CHOICES,
+        default='chatroom_join_request',
+        help_text="Type of request: join existing or create new chatroom"
+    )
+    conversation = models.ForeignKey(
+        'Conversation',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='chatroom_access_requests',
+        help_text="Related conversation for chatroom creation"
     )
     status = models.CharField(
         max_length=20,
@@ -518,11 +536,12 @@ class ChatroomAccessRequest(models.Model):
     responded_at = models.DateTimeField(null=True, blank=True)
     
     class Meta:
-        unique_together = ['chatroom', 'requested_user']
         ordering = ['-created_at']
     
     def __str__(self):
-        return f"Access request for {self.requested_user.username} to {self.chatroom.name} ({self.status})"
+        if self.chatroom:
+            return f"Access request for {self.requested_user.username} to {self.chatroom.name} ({self.status})"
+        return f"Chatroom creation request for {self.requested_user.username} ({self.status})"
 
 
 class ChatroomMessage(models.Model):

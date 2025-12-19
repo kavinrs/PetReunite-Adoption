@@ -14,6 +14,8 @@ import {
   deleteChatMessageUserForMe,
   deleteChatMessageUserForEveryone,
   fetchMyChatrooms,
+  fetchChatroomMessages,
+  sendChatroomMessage,
 } from "../services/api";
 
 import emojiIcon from "../assets/chat/emoji.png";
@@ -52,6 +54,12 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
   const [tab, setTab] = useState<TabKey>("admin");
   const [myChatTab, setMyChatTab] = useState<MyChatTabKey>("active");
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [chatrooms, setChatrooms] = useState<any[]>([]);
+  const [selectedChatroomId, setSelectedChatroomId] = useState<number | null>(null);
+  const [chatroomMessages, setChatroomMessages] = useState<any[]>([]);
+  const [chatroomMessagesLoading, setChatroomMessagesLoading] = useState(false);
+  const [chatroomMessageInput, setChatroomMessageInput] = useState("");
+  const [chatroomReplyingTo, setChatroomReplyingTo] = useState<any | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +76,7 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [messageError, setMessageError] = useState<string | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<any | null>(null);
   const [hoveredMessageId, setHoveredMessageId] = useState<number | null>(null);
   const [menuForMessageId, setMenuForMessageId] = useState<number | null>(null);
@@ -116,26 +124,19 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
         }
       }
       
-      // Merge old rooms and accepted chatrooms
-      const allRooms: Room[] = [];
-      
-      // Add old rooms from getRooms()
+      // Store old rooms separately
       if (roomRes.ok) {
-        allRooms.push(...((roomRes.rooms ?? []) as Room[]));
+        setRooms((roomRes.rooms ?? []) as Room[]);
       }
       
-      // Add accepted chatrooms from fetchMyChatrooms()
+      // Store chatrooms separately
       if (chatroomsRes.ok && Array.isArray(chatroomsRes.data)) {
-        const chatrooms = chatroomsRes.data.map((chatroom: any) => ({
-          id: chatroom.id,
-          title: chatroom.name || `Chatroom #${chatroom.id}`,
-          created_at: chatroom.created_at,
-          updated_at: chatroom.updated_at,
-        }));
-        allRooms.push(...chatrooms);
+        setChatrooms(chatroomsRes.data);
+        // Auto-select first chatroom if none selected
+        if (!selectedChatroomId && chatroomsRes.data.length > 0) {
+          setSelectedChatroomId(chatroomsRes.data[0].id);
+        }
       }
-      
-      setRooms(allRooms);
       setLoading(false);
     };
     load();
@@ -145,8 +146,10 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
   useEffect(() => {
     async function loadProfile() {
       const res = await getProfile();
-      if (res.ok && res.data?.id) {
-        setCurrentUserId(res.data.id);
+      console.log("User getProfile response:", res);
+      if (res.ok && res.data?.user_unique_id) {
+        console.log("Setting currentUserId to:", res.data.user_unique_id);
+        setCurrentUserId(res.data.user_unique_id);
       }
     }
     loadProfile();
@@ -178,6 +181,32 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
       window.clearInterval(id);
     };
   }, [selectedConversationId]);
+
+  // Load messages for the selected chatroom and poll periodically
+  useEffect(() => {
+    if (!selectedChatroomId || tab !== "rooms") {
+      setChatroomMessages([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadChatroomMessages = async () => {
+      setChatroomMessagesLoading(true);
+      const res = await fetchChatroomMessages(selectedChatroomId);
+      if (!cancelled && res.ok && Array.isArray(res.data)) {
+        setChatroomMessages(res.data);
+      }
+      setChatroomMessagesLoading(false);
+    };
+
+    loadChatroomMessages();
+    const id = window.setInterval(loadChatroomMessages, 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [selectedChatroomId, tab]);
 
   useEffect(() => {
     if (!selectedConversationId) return;
@@ -1332,72 +1361,632 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
         </div>
       )}
 
-      {/* Rooms tab */}
-      {!loading && !error && tab === "rooms" && rooms.length === 0 && (
+      {/* Rooms tab - Chatroom Interface with Left-Right Split */}
+      {!loading && !error && tab === "rooms" && (
         <div
           style={{
-            padding: "32px 8px",
-            textAlign: "center",
-            fontSize: 14,
-            color: "#64748b",
-          }}
-        >
-          <div style={{ fontSize: 32, marginBottom: 8 }}>📂</div>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>
-            No case rooms yet
-          </div>
-          <div>
-            Admins can open a dedicated room if they need you and another
-            user to coordinate directly.
-          </div>
-        </div>
-      )}
-
-      {!loading && !error && tab === "rooms" && rooms.length > 0 && (
-        <ul
-          style={{
-            listStyle: "none",
-            padding: 0,
-            margin: 0,
+            marginTop: 4,
             display: "flex",
-            flexDirection: "column",
-            gap: 8,
+            gap: 12,
+            height: "600px",
+            borderRadius: 14,
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            overflow: "hidden",
           }}
         >
-          {rooms.map((r) => (
-            <li key={r.id}>
-              <Link
-                to={`/user/chat/rooms/${r.id}`}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "10px 12px",
-                  borderRadius: 10,
-                  textDecoration: "none",
-                  background: "#f8fafc",
-                  color: "#0f172a",
-                  border: "1px solid rgba(148,163,184,0.6)",
-                  fontSize: 14,
-                }}
-              >
-                <div>
-                  <div style={{ fontWeight: 600 }}>{r.title}</div>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: "#64748b",
-                      marginTop: 2,
-                    }}
-                  >
-                    Opened at {new Date(r.created_at).toLocaleString()}
+          {/* Left Sidebar - Chatroom List */}
+          <div
+            style={{
+              width: "300px",
+              borderRight: "1px solid #e2e8f0",
+              background: "#f8fafc",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                padding: "12px 16px",
+                borderBottom: "1px solid #e2e8f0",
+                background: "#ffffff",
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: 16, color: "#0f172a" }}>
+                Recent Admin Chats
+              </div>
+            </div>
+
+            <div
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                padding: 8,
+              }}
+            >
+              {chatrooms.length === 0 ? (
+                <div
+                  style={{
+                    padding: "32px 8px",
+                    textAlign: "center",
+                    fontSize: 13,
+                    color: "#64748b",
+                  }}
+                >
+                  <div style={{ fontSize: 32, marginBottom: 8 }}>📂</div>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                    No chatrooms yet
+                  </div>
+                  <div style={{ fontSize: 12 }}>
+                    Accept an invitation from admin to join a chatroom.
                   </div>
                 </div>
-                <span style={{ fontSize: 16 }}>›</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+              ) : (
+                chatrooms.map((chatroom: any) => (
+                  <div
+                    key={chatroom.id}
+                    onClick={() => setSelectedChatroomId(chatroom.id)}
+                    style={{
+                      padding: "12px",
+                      borderRadius: 10,
+                      background: selectedChatroomId === chatroom.id ? "#dbeafe" : "#ffffff",
+                      border: `1px solid ${selectedChatroomId === chatroom.id ? "#3b82f6" : "#e5e7eb"}`,
+                      cursor: "pointer",
+                      marginBottom: 8,
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: 14, color: "#0f172a", marginBottom: 4 }}>
+                      {chatroom.name}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#64748b" }}>
+                      Pet ID: {chatroom.pet_unique_id}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>
+                      {new Date(chatroom.created_at).toLocaleDateString()}
+                    </div>
+                    {selectedChatroomId === chatroom.id && (
+                      <div
+                        style={{
+                          marginTop: 6,
+                          padding: "2px 8px",
+                          borderRadius: 999,
+                          background: "#22c55e",
+                          color: "white",
+                          fontSize: 10,
+                          fontWeight: 600,
+                          display: "inline-block",
+                        }}
+                      >
+                        Active
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Right Panel - Chat Interface */}
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              background: "#ffffff",
+            }}
+          >
+            {!selectedChatroomId || chatrooms.length === 0 ? (
+              <div
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexDirection: "column",
+                  gap: 16,
+                  color: "#64748b",
+                }}
+              >
+                <div style={{ fontSize: 48 }}>💬</div>
+                <div style={{ fontSize: 18, fontWeight: 600 }}>
+                  Select a chatroom to start messaging
+                </div>
+                <div style={{ fontSize: 14 }}>
+                  Choose a chatroom from the left to view messages
+                </div>
+              </div>
+            ) : (() => {
+              const selectedChatroom = chatrooms.find((c: any) => c.id === selectedChatroomId);
+              if (!selectedChatroom) return null;
+
+              return (
+                <>
+                  {/* Chat Header */}
+                  <div
+                    style={{
+                      padding: "12px 20px",
+                      borderBottom: "1px solid #e2e8f0",
+                      background: "#f8fafc",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 16, color: "#0f172a" }}>
+                        {selectedChatroom.name}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                        Pet: {selectedChatroom.pet_unique_id}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        padding: "4px 12px",
+                        borderRadius: 999,
+                        background: "#d1fae5",
+                        color: "#065f46",
+                        fontSize: 12,
+                        fontWeight: 600,
+                      }}
+                    >
+                      Active
+                    </div>
+                  </div>
+
+                  {/* Messages Area */}
+                  <div
+                    style={{
+                      flex: 1,
+                      overflowY: "auto",
+                      padding: 20,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 12,
+                      background: "#fafafa",
+                    }}
+                  >
+                    {chatroomMessagesLoading && (
+                      <div style={{ textAlign: "center", color: "#64748b", fontSize: 13 }}>
+                        Loading messages...
+                      </div>
+                    )}
+
+                    {!chatroomMessagesLoading && chatroomMessages.length === 0 && (
+                      <div
+                        style={{
+                          textAlign: "center",
+                          color: "#9ca3af",
+                          fontSize: 13,
+                          fontStyle: "italic",
+                          marginTop: 40,
+                        }}
+                      >
+                        No messages yet. Start the conversation!
+                      </div>
+                    )}
+
+                    {chatroomMessages.map((msg: any) => {
+                      // System messages: center-aligned pill with icon
+                      if (msg.is_system) {
+                        let icon = "🔔";
+                        const text = msg.text || "";
+                        const lower = text.toLowerCase();
+                        const color = lower.includes("active") || lower.includes("joined") || lower.includes("accepted")
+                          ? "#16a34a"
+                          : lower.includes("close") || lower.includes("closed") || lower.includes("rejected")
+                            ? "#dc2626"
+                            : "#4b5563";
+                        if (lower.includes("joined") || lower.includes("accepted")) {
+                          icon = "👤";
+                        } else if (lower.includes("closed") || lower.includes("rejected")) {
+                          icon = "🔒";
+                        }
+                        return (
+                          <div
+                            key={msg.id}
+                            style={{
+                              display: "flex",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <div
+                              style={{
+                                maxWidth: "80%",
+                                padding: "4px 10px",
+                                borderRadius: 999,
+                                fontSize: 11,
+                                background: "#e5e7eb",
+                                color,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 6,
+                              }}
+                            >
+                              <span>{icon}</span>
+                              <span>{text}</span>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      if (msg.is_deleted) {
+                        return null;
+                      }
+
+                      const senderName = msg.sender?.full_name || msg.sender?.username || "User";
+                      // Compare using stable user_unique_id (USR000024 format)
+                      const isMe = msg.sender?.user_unique_id === currentUserId;
+
+                      // Debug logging
+                      console.log("User chatroom message:", {
+                        text: msg.text,
+                        senderUniqueId: msg.sender?.user_unique_id,
+                        currentUserId,
+                        isMe,
+                        comparison: `${msg.sender?.user_unique_id} === ${currentUserId} = ${msg.sender?.user_unique_id === currentUserId}`,
+                        sender: msg.sender
+                      });
+
+                      return (
+                        <div
+                          key={msg.id}
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: isMe ? "flex-end" : "flex-start",
+                            paddingRight: isMe ? 32 : 0,
+                          }}
+                        >
+                          {/* Sender Name on Top */}
+                          <div
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: "#64748b",
+                              marginBottom: 4,
+                              paddingLeft: isMe ? 0 : 12,
+                              paddingRight: isMe ? 12 : 0,
+                            }}
+                          >
+                            {senderName}
+                          </div>
+
+                          <div
+                            style={{
+                              position: "relative",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 4,
+                            }}
+                          >
+                            <div
+                              style={{
+                                position: "relative",
+                                maxWidth: "70%",
+                                padding: "10px 14px",
+                                borderRadius: 18,
+                                fontSize: 14,
+                                lineHeight: 1.5,
+                                background: isMe ? "#6366f1" : "#ffffff",
+                                color: isMe ? "#ffffff" : "#111827",
+                                border: isMe ? "none" : "1px solid #e5e7eb",
+                                boxShadow: isMe ? "0 2px 8px rgba(99,102,241,0.25)" : "0 2px 8px rgba(0,0,0,0.08)",
+                                wordBreak: "break-word",
+                                display: "block",
+                              }}
+                              onMouseEnter={() => setHoveredMessageId(msg.id)}
+                              onMouseLeave={() => setHoveredMessageId(null)}
+                              onContextMenu={(e) => {
+                                e.preventDefault();
+                                setContextMenu({
+                                  messageId: msg.id,
+                                  x: e.clientX,
+                                  y: e.clientY,
+                                });
+                              }}
+                            >
+                            {/* Reply Preview */}
+                            {msg.reply_to && (
+                              <div
+                                style={{
+                                  marginBottom: 6,
+                                  padding: "6px 8px",
+                                  borderRadius: 12,
+                                  background: isMe ? "rgba(255,255,255,0.18)" : "#f3f4f6",
+                                  borderLeft: `3px solid ${isMe ? "#ffffff" : "#0ea5e9"}`,
+                                  fontSize: 11,
+                                  opacity: 0.95,
+                                }}
+                              >
+                                <div style={{ fontWeight: 700, marginBottom: 2 }}>
+                                  {msg.reply_to.sender?.username || "Reply"}
+                                </div>
+                                <div
+                                  style={{
+                                    whiteSpace: "nowrap",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                  }}
+                                >
+                                  {msg.reply_to.text || ""}
+                                </div>
+                              </div>
+                            )}
+
+                              {/* Message Text */}
+                              <div style={{ 
+                                wordBreak: "break-word",
+                                whiteSpace: "pre-wrap",
+                                display: "block"
+                              }}>
+                                {msg.text}
+                              </div>
+                            </div>
+
+                            {/* Three-dot Menu - Closer to message */}
+                            {hoveredMessageId === msg.id && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMenuForMessageId((prev) =>
+                                    prev === msg.id ? null : msg.id,
+                                  );
+                                  setContextMenu(null);
+                                  const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                                  const items: { label: string; onClick: () => void }[] = [
+                                    {
+                                      label: "Reply",
+                                      onClick: () => {
+                                        setChatroomReplyingTo(msg);
+                                        setMenuForMessageId(null);
+                                        setOptionsMenu(null);
+                                      },
+                                    },
+                                  ];
+                                  setOptionsMenu({
+                                    message: msg,
+                                    x: rect.right,
+                                    y: rect.bottom,
+                                    items,
+                                  });
+                                }}
+                                style={{
+                                  width: 22,
+                                  height: 22,
+                                  borderRadius: "50%",
+                                  border: "1px solid rgba(0,0,0,0.1)",
+                                  background: "#111827",
+                                  color: "#ffffff",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: 14,
+                                  lineHeight: 1,
+                                  flexShrink: 0,
+                                }}
+                              >
+                                ⋮
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Timestamp */}
+                          <div
+                            style={{
+                              fontSize: 10,
+                              color: "#9ca3af",
+                              marginTop: 2,
+                              paddingLeft: isMe ? 0 : 12,
+                              paddingRight: isMe ? 12 : 0,
+                            }}
+                          >
+                            {new Date(msg.created_at).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    <div ref={messagesEndRef} />
+
+                    {/* Options Menu Dropdown */}
+                    {optionsMenu && (
+                      <div
+                        style={{
+                          position: "fixed",
+                          top: optionsMenu.y,
+                          left: optionsMenu.x,
+                          background: "#ffffff",
+                          border: "1px solid #e5e7eb",
+                          borderRadius: 8,
+                          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                          zIndex: 1000,
+                          minWidth: 150,
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {optionsMenu.items.map((item, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              item.onClick();
+                              setOptionsMenu(null);
+                            }}
+                            style={{
+                              width: "100%",
+                              padding: "10px 16px",
+                              border: "none",
+                              background: "transparent",
+                              textAlign: "left",
+                              cursor: "pointer",
+                              fontSize: 13,
+                              color: "#0f172a",
+                              borderBottom: idx < optionsMenu.items.length - 1 ? "1px solid #f1f5f9" : "none",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = "#f9fafb";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = "transparent";
+                            }}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Message Input */}
+                  <div
+                    style={{
+                      padding: 16,
+                      borderTop: "1px solid #e2e8f0",
+                      background: "#ffffff",
+                    }}
+                  >
+                    {/* Reply Preview */}
+                    {chatroomReplyingTo && (
+                      <div
+                        style={{
+                          marginBottom: 8,
+                          padding: "8px 12px",
+                          borderRadius: 8,
+                          background: "#f9fafb",
+                          border: "1px solid #e5e7eb",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 600 }}>
+                            Replying to {chatroomReplyingTo.sender?.username || "User"}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: "#0f172a",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
+                            {chatroomReplyingTo.text}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setChatroomReplyingTo(null)}
+                          style={{
+                            padding: "4px 8px",
+                            borderRadius: 6,
+                            border: "none",
+                            background: "transparent",
+                            color: "#ef4444",
+                            cursor: "pointer",
+                            fontSize: 16,
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Input Box */}
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <div style={{ fontSize: 20, cursor: "pointer" }}>😊</div>
+                      <input
+                        type="text"
+                        placeholder="Type a message"
+                        value={chatroomMessageInput}
+                        onChange={(e) => setChatroomMessageInput(e.target.value)}
+                        onKeyPress={async (e) => {
+                          if (e.key === "Enter" && !e.shiftKey && chatroomMessageInput.trim()) {
+                            e.preventDefault();
+                            console.log("User sending chatroom message", { selectedChatroomId, text: chatroomMessageInput });
+                            const res = await sendChatroomMessage(selectedChatroomId, {
+                              text: chatroomMessageInput,
+                              reply_to_message_id: chatroomReplyingTo?.id,
+                            });
+                            console.log("User chatroom message response", res);
+                            if (res.ok) {
+                              setChatroomMessageInput("");
+                              setChatroomReplyingTo(null);
+                              // Reload messages
+                              const messagesRes = await fetchChatroomMessages(selectedChatroomId);
+                              if (messagesRes.ok && Array.isArray(messagesRes.data)) {
+                                setChatroomMessages(messagesRes.data);
+                              }
+                            } else {
+                              console.error("Failed to send message", res.error);
+                              alert(`Failed to send message: ${res.error || "Unknown error"}`);
+                            }
+                          }
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: "10px 14px",
+                          borderRadius: 999,
+                          border: "1px solid #e5e7eb",
+                          fontSize: 14,
+                          outline: "none",
+                          background: "#f9fafb",
+                          color: "#111827",
+                        }}
+                      />
+                      <div style={{ fontSize: 20, cursor: "pointer" }}>📎</div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!chatroomMessageInput.trim()) return;
+                          console.log("User clicking send button", { selectedChatroomId, text: chatroomMessageInput });
+                          const res = await sendChatroomMessage(selectedChatroomId, {
+                            text: chatroomMessageInput,
+                            reply_to_message_id: chatroomReplyingTo?.id,
+                          });
+                          console.log("User chatroom message response", res);
+                          if (res.ok) {
+                            setChatroomMessageInput("");
+                            setChatroomReplyingTo(null);
+                            // Reload messages
+                            const messagesRes = await fetchChatroomMessages(selectedChatroomId);
+                            if (messagesRes.ok && Array.isArray(messagesRes.data)) {
+                              setChatroomMessages(messagesRes.data);
+                            }
+                          } else {
+                            console.error("Failed to send message", res.error);
+                            alert(`Failed to send message: ${res.error || "Unknown error"}`);
+                          }
+                        }}
+                        disabled={!chatroomMessageInput.trim()}
+                        style={{
+                          padding: "8px 12px",
+                          borderRadius: 8,
+                          border: "none",
+                          background: chatroomMessageInput.trim() ? "#3b82f6" : "#e5e7eb",
+                          color: "white",
+                          fontSize: 20,
+                          cursor: chatroomMessageInput.trim() ? "pointer" : "not-allowed",
+                        }}
+                      >
+                        ✈️
+                      </button>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
       )}
 
       {contextMenu && (

@@ -847,6 +847,25 @@ class AdminConversationDeleteView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+class AdminConversationClearMessagesView(APIView):
+    """Admin clears all messages in a conversation (keeps conversation)."""
+
+    permission_classes = [IsAdminOrStaff]
+
+    def delete(self, request, pk):
+        convo = get_object_or_404(Conversation, pk=pk)
+        # Delete all messages in the conversation
+        deleted_count = ChatMessage.objects.filter(conversation=convo).delete()[0]
+        return Response(
+            {
+                "message": f"Deleted {deleted_count} messages from conversation",
+                "conversation_id": pk,
+                "deleted_count": deleted_count
+            },
+            status=status.HTTP_200_OK
+        )
+
+
 class UserConversationDeleteView(APIView):
     """User deletes their own conversation."""
 
@@ -1119,30 +1138,60 @@ class NotificationMarkAllReadView(APIView):
         return Response({'status': 'all notifications marked as read'}, status=status.HTTP_200_OK)
 
 
+class AdminStaffListView(APIView):
+    """List all staff/admin users for adding to chatrooms"""
+    permission_classes = [IsAdminOrStaff]
+    
+    def get(self, request):
+        from Users.models import UserProfile
+        
+        # Get all staff users (admins)
+        staff_users = User.objects.filter(
+            is_active=True,
+            is_staff=True
+        ).select_related('profile').order_by('username')
+        
+        data = []
+        for user in staff_users:
+            try:
+                profile = user.profile
+                user_unique_id = profile.user_unique_id
+                full_name = profile.full_name
+            except:
+                user_unique_id = None
+                full_name = user.username
+            
+            data.append({
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'full_name': full_name,
+                'user_unique_id': user_unique_id,
+                'is_superuser': user.is_superuser,
+            })
+        
+        return Response(data, status=status.HTTP_200_OK)
+
 
 # ============================================================================
 # CHATROOM ACCESS APPROVAL VIEWS
 # ============================================================================
 
 class ChatroomInviteUserView(APIView):
-    """Admin invites a user to join a chatroom (creates access request)"""
+    """Admin invites a user to join a chatroom or creates a chatroom creation request"""
     permission_classes = [IsAdminOrStaff]
     
-    def post(self, request, chatroom_id):
-        from .models import Chatroom, ChatroomAccessRequest, Notification
+    def post(self, request, chatroom_id=None):
+        from .models import Chatroom, ChatroomAccessRequest, Notification, Conversation, LostPetReport, FoundPetReport
         from .serializers import ChatroomAccessRequestSerializer
         from django.utils import timezone
         
-        try:
-            chatroom = Chatroom.objects.get(id=chatroom_id)
-        except Chatroom.DoesNotExist:
-            return Response(
-                {"error": "Chatroom not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
         user_id = request.data.get('user_id')
         role = request.data.get('role', 'requested_user')
+        request_type = request.data.get('request_type', 'chatroom_join_request')
+        conversation_id = request.data.get('conversation_id')
+        pet_unique_id = request.data.get('pet_unique_id')
+        pet_kind = request.data.get('pet_kind')
         
         if not user_id:
             return Response(
@@ -1155,6 +1204,91 @@ class ChatroomInviteUserView(APIView):
         except User.DoesNotExist:
             return Response(
                 {"error": "User not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Handle chatroom creation request (no chatroom exists yet)
+        if request_type == 'chatroom_creation_request':
+            # Get conversation if provided
+            conversation = None
+            if conversation_id:
+                try:
+                    conversation = Conversation.objects.get(id=conversation_id)
+                except Conversation.DoesNotExist:
+                    pass
+            
+            # Get pet details
+            pet = None
+            if pet_unique_id and pet_kind:
+                if pet_kind == 'lost':
+                    try:
+                        pet = LostPetReport.objects.get(pet_unique_id=pet_unique_id)
+                    except LostPetReport.DoesNotExist:
+                        pass
+                elif pet_kind == 'found':
+                    try:
+                        pet = FoundPetReport.objects.get(pet_unique_id=pet_unique_id)
+                    except FoundPetReport.DoesNotExist:
+                        pass
+            
+            # Check for existing pending request for this user + pet
+            existing_request = ChatroomAccessRequest.objects.filter(
+                requested_user=invited_user,
+                pet_unique_id=pet_unique_id,
+                request_type='chatroom_creation_request',
+                status='pending'
+            ).first()
+            
+            if existing_request:
+                return Response(
+                    {"error": "User already has a pending chatroom creation request for this pet"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Create chatroom creation request (no chatroom yet)
+            access_request = ChatroomAccessRequest.objects.create(
+                chatroom=None,  # Will be created on acceptance
+                pet=pet if pet_kind == 'lost' else None,
+                pet_unique_id=pet_unique_id,
+                pet_kind=pet_kind,
+                requested_user=invited_user,
+                added_by=request.user,
+                conversation=conversation,
+                role=role,
+                request_type='chatroom_creation_request',
+                status='pending'
+            )
+            
+            # Get admin name for notification
+            admin_name = request.user.username
+            if hasattr(request.user, 'profile') and request.user.profile:
+                admin_name = request.user.profile.full_name or request.user.username
+            
+            # Create notification for the invited user
+            Notification.objects.create(
+                recipient=invited_user,
+                notification_type='chatroom_invitation',
+                title=admin_name,
+                message='Chat room creation request from Admin',
+                from_user=request.user,
+                chatroom_access_request=access_request
+            )
+            
+            serializer = ChatroomAccessRequestSerializer(access_request, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        # Handle existing chatroom join request
+        if not chatroom_id:
+            return Response(
+                {"error": "chatroom_id is required for join requests"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            chatroom = Chatroom.objects.get(id=chatroom_id)
+        except Chatroom.DoesNotExist:
+            return Response(
+                {"error": "Chatroom not found"},
                 status=status.HTTP_404_NOT_FOUND
             )
         
@@ -1178,7 +1312,7 @@ class ChatroomInviteUserView(APIView):
             # If rejected, allow creating a new request
             existing_request.delete()
         
-        # Create access request
+        # Create access request for existing chatroom
         access_request = ChatroomAccessRequest.objects.create(
             chatroom=chatroom,
             pet_id=chatroom.pet_id,
@@ -1187,15 +1321,21 @@ class ChatroomInviteUserView(APIView):
             requested_user=invited_user,
             added_by=request.user,
             role=role,
+            request_type='chatroom_join_request',
             status='pending'
         )
+        
+        # Get admin name for notification
+        admin_name = request.user.username
+        if hasattr(request.user, 'profile') and request.user.profile:
+            admin_name = request.user.profile.full_name or request.user.username
         
         # Create notification for the invited user
         Notification.objects.create(
             recipient=invited_user,
             notification_type='chatroom_invitation',
-            title='Chatroom Invitation',
-            message=f'Admin has invited you to join a chat regarding your pet request.',
+            title=admin_name,
+            message='Chat room creation request from Admin',
             from_user=request.user,
             chatroom_access_request=access_request
         )
@@ -1205,16 +1345,29 @@ class ChatroomInviteUserView(APIView):
 
 
 class ChatroomAccessRequestListView(generics.ListAPIView):
-    """List chatroom access requests for the current user"""
+    """List chatroom access requests for the current user (all statuses for activity history)
+    
+    Supports filtering by conversation_id for admin to check invitation status
+    """
     serializer_class = ChatroomAccessRequestSerializer
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         from .models import ChatroomAccessRequest
+        
+        # Check if filtering by conversation_id (for admin)
+        conversation_id = self.request.query_params.get('conversation_id')
+        
+        if conversation_id and (self.request.user.is_staff or self.request.user.is_superuser):
+            # Admin can fetch invitations by conversation
+            return ChatroomAccessRequest.objects.filter(
+                conversation_id=conversation_id
+            ).select_related('chatroom', 'requested_user', 'added_by', 'pet').order_by('-created_at')
+        
+        # Return all requests for current user (pending, accepted, rejected) for activity history
         return ChatroomAccessRequest.objects.filter(
-            requested_user=self.request.user,
-            status='pending'
-        ).select_related('chatroom', 'requested_user', 'added_by', 'pet')
+            requested_user=self.request.user
+        ).select_related('chatroom', 'requested_user', 'added_by', 'pet').order_by('-created_at')
 
 
 class ChatroomAccessRequestAcceptView(APIView):
@@ -1222,7 +1375,15 @@ class ChatroomAccessRequestAcceptView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def post(self, request, request_id):
-        from .models import ChatroomAccessRequest, ChatroomParticipant, ChatroomMessage, Notification
+        from .models import (
+            ChatroomAccessRequest, 
+            ChatroomParticipant, 
+            ChatroomMessage, 
+            Notification,
+            Chatroom,
+            LostPetReport,
+            FoundPetReport
+        )
         from .serializers import ChatroomAccessRequestSerializer
         from django.utils import timezone
         
@@ -1238,6 +1399,91 @@ class ChatroomAccessRequestAcceptView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
+        # Handle chatroom creation request
+        if access_request.request_type == 'chatroom_creation_request':
+            # Get pet details for chatroom name
+            pet_name = "Pet"
+            pet_type = ""
+            if access_request.pet_unique_id and access_request.pet_kind:
+                if access_request.pet_kind == 'lost':
+                    try:
+                        pet = LostPetReport.objects.get(pet_unique_id=access_request.pet_unique_id)
+                        pet_name = pet.pet_name or pet.pet_type
+                        pet_type = pet.pet_type
+                    except LostPetReport.DoesNotExist:
+                        pass
+                elif access_request.pet_kind == 'found':
+                    try:
+                        pet = FoundPetReport.objects.get(pet_unique_id=access_request.pet_unique_id)
+                        pet_name = pet.pet_type
+                        pet_type = pet.pet_type
+                    except FoundPetReport.DoesNotExist:
+                        pass
+            
+            # Create chatroom name
+            chatroom_name = f"{pet_name} - {access_request.pet_kind.capitalize()} Case"
+            
+            # Create the chatroom
+            chatroom = Chatroom.objects.create(
+                name=chatroom_name,
+                conversation=access_request.conversation,
+                pet_unique_id=access_request.pet_unique_id,
+                pet_kind=access_request.pet_kind,
+                purpose=f"{access_request.pet_kind.capitalize()} Pet Case",
+                created_by=access_request.added_by,
+                is_active=True
+            )
+            
+            # Update access request with the new chatroom
+            access_request.chatroom = chatroom
+            access_request.status = 'accepted'
+            access_request.responded_at = timezone.now()
+            access_request.save()
+            
+            # Add user as participant
+            ChatroomParticipant.objects.create(
+                chatroom=chatroom,
+                user=request.user,
+                role=access_request.role,
+                is_active=True
+            )
+            
+            # Add admin as participant
+            ChatroomParticipant.objects.create(
+                chatroom=chatroom,
+                user=access_request.added_by,
+                role='admin',
+                is_active=True
+            )
+            
+            # Create system message in chatroom
+            ChatroomMessage.objects.create(
+                chatroom=chatroom,
+                sender=request.user,
+                text=f"{request.user.username} accepted the chatroom invitation.",
+                is_system=True
+            )
+            
+            # Notify admin
+            Notification.objects.create(
+                recipient=access_request.added_by,
+                notification_type='chatroom_request_accepted',
+                title='Chatroom Request Accepted',
+                message=f'{request.user.username} accepted your chatroom invitation.',
+                from_user=request.user,
+                chatroom_access_request=access_request
+            )
+            
+            serializer = ChatroomAccessRequestSerializer(access_request, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        # Handle existing chatroom join request
+        if not access_request.chatroom:
+            return Response(
+                {"error": "Chatroom not found for this request"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         # Update request status
         access_request.status = 'accepted'
         access_request.responded_at = timezone.now()
@@ -1247,7 +1493,7 @@ class ChatroomAccessRequestAcceptView(APIView):
         ChatroomParticipant.objects.get_or_create(
             chatroom=access_request.chatroom,
             user=request.user,
-            defaults={'role': access_request.role}
+            defaults={'role': access_request.role, 'is_active': True}
         )
         
         # Create system message in chatroom
@@ -1331,6 +1577,83 @@ class MyChatroomsView(generics.ListAPIView):
         ).select_related('created_by', 'conversation')
 
 
+class AdminChatroomsView(generics.ListAPIView):
+    """List chatrooms where admin is a participant (for admin chat interface)"""
+    serializer_class = ChatroomSerializer
+    permission_classes = [IsAdminOrStaff]
+    
+    def get_queryset(self):
+        from .models import Chatroom, ChatroomParticipant
+        # Get chatrooms where current admin is an active participant
+        chatroom_ids = ChatroomParticipant.objects.filter(
+            user=self.request.user,
+            is_active=True
+        ).values_list('chatroom_id', flat=True)
+        
+        return Chatroom.objects.filter(
+            id__in=chatroom_ids,
+            is_active=True
+        ).select_related('created_by', 'conversation').order_by('-updated_at')
+
+
+class AdminCreateChatroomView(APIView):
+    """Admin creates a chatroom for a conversation"""
+    permission_classes = [IsAdminOrStaff]
+    
+    def post(self, request):
+        from .models import Chatroom, ChatroomParticipant, Conversation, ChatroomMessage
+        from .serializers import ChatroomSerializer
+        
+        conversation_id = request.data.get('conversation_id')
+        name = request.data.get('name')
+        
+        if not conversation_id or not name:
+            return Response(
+                {"error": "conversation_id and name are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            conversation = Conversation.objects.get(id=conversation_id)
+        except Conversation.DoesNotExist:
+            return Response(
+                {"error": "Conversation not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Create chatroom
+        chatroom = Chatroom.objects.create(
+            name=name.strip(),
+            conversation=conversation,
+            pet_unique_id=conversation.pet_unique_id,
+            pet_kind=conversation.pet_kind,
+            purpose="Admin Created Chatroom",
+            created_by=request.user,
+            is_active=True
+        )
+        
+        # Add admin as participant
+        ChatroomParticipant.objects.create(
+            chatroom=chatroom,
+            user=request.user,
+            role='admin',
+            is_active=True
+        )
+        
+        # Don't automatically add conversation user - admin will invite them explicitly
+        
+        # Create system message
+        ChatroomMessage.objects.create(
+            chatroom=chatroom,
+            sender=request.user,
+            text=f"Chatroom '{name}' created by {request.user.username}.",
+            is_system=True
+        )
+        
+        serializer = ChatroomSerializer(chatroom)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
 class AdminChatroomParticipantsView(generics.ListAPIView):
     """Admin view of chatroom participants with their status"""
     serializer_class = ChatroomParticipantSerializer
@@ -1355,3 +1678,147 @@ class AdminChatroomAccessRequestsView(generics.ListAPIView):
         return ChatroomAccessRequest.objects.filter(
             chatroom_id=chatroom_id
         ).select_related('chatroom', 'requested_user', 'added_by', 'pet')
+
+
+
+class ChatroomParticipantsView(generics.ListAPIView):
+    """List participants in a chatroom"""
+    serializer_class = ChatroomParticipantSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        from .models import ChatroomParticipant
+        chatroom_id = self.kwargs.get('chatroom_id')
+        
+        # Verify user is a participant or admin
+        is_participant = ChatroomParticipant.objects.filter(
+            chatroom_id=chatroom_id,
+            user=self.request.user,
+            is_active=True
+        ).exists()
+        
+        is_admin = self.request.user.is_staff
+        
+        if not (is_participant or is_admin):
+            return ChatroomParticipant.objects.none()
+        
+        return ChatroomParticipant.objects.filter(
+            chatroom_id=chatroom_id,
+            is_active=True
+        ).select_related('user', 'user__profile').order_by('role', 'joined_at')
+
+
+class ClearChatroomMessagesView(APIView):
+    """Clear all messages in a chatroom (admin only)"""
+    permission_classes = [permissions.IsAuthenticated, IsAdminOrStaff]
+    
+    def delete(self, request, chatroom_id):
+        from .models import Chatroom, ChatroomMessage
+        
+        try:
+            chatroom = Chatroom.objects.get(id=chatroom_id)
+            
+            # Delete all messages in the chatroom (keep chatroom and participants)
+            deleted_count = ChatroomMessage.objects.filter(chatroom=chatroom).delete()[0]
+            
+            return Response(
+                {
+                    "message": f"Deleted {deleted_count} messages from chatroom '{chatroom.name}'",
+                    "chatroom_id": chatroom_id,
+                    "deleted_count": deleted_count
+                },
+                status=status.HTTP_200_OK
+            )
+        except Chatroom.DoesNotExist:
+            return Response(
+                {"error": "Chatroom not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class DeleteChatroomView(APIView):
+    """Delete entire chatroom including messages and participants (admin only)"""
+    permission_classes = [permissions.IsAuthenticated, IsAdminOrStaff]
+    
+    def delete(self, request, chatroom_id):
+        from .models import Chatroom
+        
+        try:
+            chatroom = Chatroom.objects.get(id=chatroom_id)
+            chatroom_name = chatroom.name
+            
+            # Delete the chatroom (cascade will delete messages and participants)
+            chatroom.delete()
+            
+            return Response(
+                {
+                    "message": f"Chatroom '{chatroom_name}' deleted successfully",
+                    "chatroom_id": chatroom_id
+                },
+                status=status.HTTP_200_OK
+            )
+        except Chatroom.DoesNotExist:
+            return Response(
+                {"error": "Chatroom not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class ChatroomMessageListCreateView(generics.ListCreateAPIView):
+    """List and create messages in a chatroom"""
+    serializer_class = ChatroomMessageSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        from .models import ChatroomMessage, ChatroomParticipant
+        chatroom_id = self.kwargs.get('chatroom_id')
+        
+        # Verify user is a participant in this chatroom
+        is_participant = ChatroomParticipant.objects.filter(
+            chatroom_id=chatroom_id,
+            user=self.request.user,
+            is_active=True
+        ).exists()
+        
+        if not is_participant:
+            return ChatroomMessage.objects.none()
+        
+        return ChatroomMessage.objects.filter(
+            chatroom_id=chatroom_id
+        ).select_related('sender', 'reply_to__sender').order_by('created_at')
+    
+    def perform_create(self, serializer):
+        from .models import Chatroom, ChatroomParticipant
+        chatroom_id = self.kwargs.get('chatroom_id')
+        
+        # Verify chatroom exists
+        try:
+            chatroom = Chatroom.objects.get(id=chatroom_id)
+        except Chatroom.DoesNotExist:
+            raise permissions.PermissionDenied("Chatroom not found")
+        
+        # Verify user is a participant
+        is_participant = ChatroomParticipant.objects.filter(
+            chatroom=chatroom,
+            user=self.request.user,
+            is_active=True
+        ).exists()
+        
+        if not is_participant:
+            raise permissions.PermissionDenied("You are not a participant in this chatroom")
+        
+        # Get reply_to message if provided
+        reply_to_id = self.request.data.get('reply_to_message_id')
+        reply_to = None
+        if reply_to_id:
+            from .models import ChatroomMessage
+            try:
+                reply_to = ChatroomMessage.objects.get(id=reply_to_id, chatroom=chatroom)
+            except ChatroomMessage.DoesNotExist:
+                pass
+        
+        serializer.save(
+            chatroom=chatroom,
+            sender=self.request.user,
+            reply_to=reply_to
+        )

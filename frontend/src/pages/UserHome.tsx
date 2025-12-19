@@ -238,9 +238,12 @@ export default function UserHome() {
       const res = await fetchNotifications();
       if (!mounted) return;
       if (res.ok) {
-        // Filter for chat-related notifications
+        // Filter for chat-related notifications (including chatroom invitations)
         const chatNotifs = (res.data ?? []).filter((n: any) => 
-          n.notification_type && n.notification_type.startsWith('chat_')
+          n.notification_type && (
+            n.notification_type.startsWith('chat_') || 
+            n.notification_type.startsWith('chatroom_')
+          )
         );
         setChatNotifications(chatNotifs);
       }
@@ -471,6 +474,12 @@ export default function UserHome() {
         title = "Chat Room Created";
       } else if (n.notification_type === "chat_status_changed") {
         title = "Chat Status Changed";
+      } else if (n.notification_type === "chatroom_invitation") {
+        title = n.title || "Chatroom Invitation";
+      } else if (n.notification_type === "chatroom_request_accepted") {
+        title = "Chatroom Request Accepted";
+      } else if (n.notification_type === "chatroom_request_rejected") {
+        title = "Chatroom Request Rejected";
       }
       pushItem(`chat-notif-${n.id}`, title, n.created_at || null, "chat");
     }
@@ -515,6 +524,14 @@ export default function UserHome() {
 
     // Handle chat notifications differently
     if (item.tab === "chat") {
+      // Check if this is a chatroom invitation notification
+      const notif = chatNotifications.find((n: any) => `chat-notif-${n.id}` === item.id);
+      if (notif && notif.notification_type === "chatroom_invitation") {
+        // Navigate to My Activity → Chatroom Invitations section
+        setPageTab("activity");
+        return;
+      }
+      // For other chat notifications, go to chat tab
       setPageTab("chat");
       return;
     }
@@ -1957,12 +1974,12 @@ export default function UserHome() {
                       <div style={{ padding: 12, color: "#64748b" }}>
                         Loading chatroom invitations...
                       </div>
-                    ) : chatroomRequests.length === 0 ? (
+                    ) : chatroomRequests.filter((req: any) => req.status === 'pending').length === 0 ? (
                       <div style={{ padding: 12, color: "#64748b" }}>
                         No pending chatroom invitations.
                       </div>
                     ) : (
-                      chatroomRequests.map((req: any) => {
+                      chatroomRequests.filter((req: any) => req.status === 'pending').map((req: any) => {
                         const isExpanded = activityExpanded === `chatroom-req-${req.id}`;
                         return (
                           <div

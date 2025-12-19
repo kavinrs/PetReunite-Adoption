@@ -5,6 +5,7 @@ from .views import (
     AdminConversationAcceptView,
     AdminConversationCloseView,
     AdminConversationDeleteView,
+    AdminConversationClearMessagesView,
     AdminConversationListView,
     AdminConversationStatusUpdateView,
     AdminFoundPetDetailView,
@@ -14,6 +15,7 @@ from .views import (
     AdminReportSummaryView,
     AdminUpdateAdoptionRequestView,
     AdminUserListView,
+    AdminStaffListView,
     AdminUserActivityView,
     AdminChatMessageDeleteForEveryoneView,
     AdminChatMessageDeleteForMeView,
@@ -48,7 +50,13 @@ from .views import (
     ChatroomAccessRequestListView,
     ChatroomAccessRequestAcceptView,
     ChatroomAccessRequestRejectView,
+    ChatroomMessageListCreateView,
+    ChatroomParticipantsView,
+    ClearChatroomMessagesView,
+    DeleteChatroomView,
     MyChatroomsView,
+    AdminChatroomsView,
+    AdminCreateChatroomView,
     AdminChatroomParticipantsView,
     AdminChatroomAccessRequestsView,
 )
@@ -74,6 +82,7 @@ urlpatterns = [
     # Admin dashboard endpoints
     path("admin/summary/", AdminReportSummaryView.as_view(), name="admin-report-summary"),
     path("admin/users/", AdminUserListView.as_view(), name="admin-user-list"),
+    path("admin/staff/", AdminStaffListView.as_view(), name="admin-staff-list"),
     path(
         "admin/users/<int:user_id>/activity/",
         AdminUserActivityView.as_view(),
@@ -195,6 +204,11 @@ urlpatterns = [
         name="chat-conversation-delete",
     ),
     path(
+        "admin/chat/conversations/<int:pk>/clear-messages/",
+        AdminConversationClearMessagesView.as_view(),
+        name="chat-conversation-clear-messages",
+    ),
+    path(
         "chat/conversations/<int:pk>/delete/",
         UserConversationDeleteView.as_view(),
         name="chat-conversation-user-delete",
@@ -242,6 +256,11 @@ urlpatterns = [
         name="chatroom-invite-user",
     ),
     path(
+        "chatrooms/create-invitation/",
+        ChatroomInviteUserView.as_view(),
+        name="chatroom-create-invitation",
+    ),
+    path(
         "chatroom-access-requests/",
         ChatroomAccessRequestListView.as_view(),
         name="chatroom-access-requests-list",
@@ -262,6 +281,16 @@ urlpatterns = [
         name="my-chatrooms",
     ),
     path(
+        "admin/chatrooms/",
+        AdminChatroomsView.as_view(),
+        name="admin-chatrooms",
+    ),
+    path(
+        "admin/chatrooms/create/",
+        AdminCreateChatroomView.as_view(),
+        name="admin-create-chatroom",
+    ),
+    path(
         "admin/chatrooms/<int:chatroom_id>/participants/",
         AdminChatroomParticipantsView.as_view(),
         name="admin-chatroom-participants",
@@ -270,5 +299,25 @@ urlpatterns = [
         "admin/chatrooms/<int:chatroom_id>/access-requests/",
         AdminChatroomAccessRequestsView.as_view(),
         name="admin-chatroom-access-requests",
+    ),
+    path(
+        "chatrooms/<int:chatroom_id>/messages/",
+        ChatroomMessageListCreateView.as_view(),
+        name="chatroom-messages",
+    ),
+    path(
+        "chatrooms/<int:chatroom_id>/participants/",
+        ChatroomParticipantsView.as_view(),
+        name="chatroom-participants",
+    ),
+    path(
+        "chatrooms/<int:chatroom_id>/clear-messages/",
+        ClearChatroomMessagesView.as_view(),
+        name="clear-chatroom-messages",
+    ),
+    path(
+        "chatrooms/<int:chatroom_id>/delete/",
+        DeleteChatroomView.as_view(),
+        name="delete-chatroom",
     ),
 ]

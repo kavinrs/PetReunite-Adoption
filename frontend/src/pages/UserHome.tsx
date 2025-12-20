@@ -15,6 +15,7 @@ import {
   acceptChatroomAccessRequest,
   rejectChatroomAccessRequest,
 } from "../services/api";
+import Toast from "../components/Toast";
 import RoomsPage from "../chat/RoomsPage";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
@@ -84,6 +85,12 @@ export default function UserHome() {
   const [userNotificationOpen, setUserNotificationOpen] = useState(false);
   const [dismissedUserNotifications, setDismissedUserNotifications] = useState<string[]>([]);
   const [chatNotifications, setChatNotifications] = useState<any[]>([]);
+  const [toast, setToast] = useState<{
+    isVisible: boolean;
+    type: "success" | "error";
+    title: string;
+    message: string;
+  } | null>(null);
 
   // Function to get sample pet images
   const getSamplePetImage = (petType: string, index: number): string => {
@@ -216,12 +223,8 @@ export default function UserHome() {
       const res = await fetchChatConversations();
       if (!mounted) return;
       if (res.ok) {
-        // Filter for pending/requested conversations
-        const pending = (res.data as any[]).filter((c: any) => {
-          const status = (c.status || "").toLowerCase();
-          return status === "pending" || status === "requested";
-        });
-        setChatRequests(pending);
+        // Show ALL conversations (pending, active, closed) for persistent history
+        setChatRequests(res.data as any[]);
       }
       setChatRequestsLoading(false);
     }
@@ -656,6 +659,15 @@ export default function UserHome() {
         padding: "0",
       }}
     >
+      {toast && (
+        <Toast
+          type={toast.type}
+          title={toast.title}
+          message={toast.message}
+          isVisible={toast.isVisible}
+          onClose={() => setToast(null)}
+        />
+      )}
       <div
         style={{
           display: "flex",
@@ -1654,7 +1666,12 @@ export default function UserHome() {
                                     const refreshed = await fetchMyActivity();
                                     if (refreshed.ok) setActivity(refreshed.data);
                                   } else {
-                                    alert(res.error || "Failed to update report");
+                                    setToast({
+                                      isVisible: true,
+                                      type: "error",
+                                      title: "Error",
+                                      message: res.error || "Failed to update report"
+                                    });
                                   }
                                 } finally {
                                   setUpdatingReportId(null);
@@ -1769,7 +1786,7 @@ export default function UserHome() {
                       </div>
                     ) : chatRequests.length === 0 ? (
                       <div style={{ padding: 12, color: "#64748b" }}>
-                        No pending chat requests.
+                        No chat requests yet.
                       </div>
                     ) : (
                       chatRequests.map((req: any) => {
@@ -1806,18 +1823,34 @@ export default function UserHome() {
                               </div>
                               <div style={{ flex: 1 }}>
                                 <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-                                  <span
-                                    style={{
-                                      padding: "2px 8px",
-                                      borderRadius: 999,
-                                      background: "#fef3c7",
-                                      color: "#92400e",
-                                      fontSize: 12,
-                                      fontWeight: 800,
-                                    }}
-                                  >
-                                    PENDING
-                                  </span>
+                                  {/* Dynamic status badge based on actual conversation status */}
+                                  {(() => {
+                                    const status = (req.status || 'requested').toLowerCase();
+                                    let badgeStyle = { bg: '#fef3c7', color: '#92400e', text: 'PENDING' };
+                                    
+                                    if (status === 'active' || status === 'pending_user') {
+                                      badgeStyle = { bg: '#d1fae5', color: '#065f46', text: 'ACCEPTED' };
+                                    } else if (status === 'closed') {
+                                      badgeStyle = { bg: '#fee2e2', color: '#991b1b', text: 'REJECTED' };
+                                    } else if (status === 'read_only') {
+                                      badgeStyle = { bg: '#fef3c7', color: '#92400e', text: 'WAITING' };
+                                    }
+                                    
+                                    return (
+                                      <span
+                                        style={{
+                                          padding: "2px 8px",
+                                          borderRadius: 999,
+                                          background: badgeStyle.bg,
+                                          color: badgeStyle.color,
+                                          fontSize: 12,
+                                          fontWeight: 800,
+                                        }}
+                                      >
+                                        {badgeStyle.text}
+                                      </span>
+                                    );
+                                  })()}
                                   {req.pet_kind && (
                                     <span
                                       style={{
@@ -1837,7 +1870,18 @@ export default function UserHome() {
                                   Chat Request - {req.pet_name || req.pet_unique_id || `Pet #${req.pet_id}`}
                                 </div>
                                 <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
-                                  {req.topic || "Waiting for admin approval"}
+                                  {(() => {
+                                    const status = (req.status || 'requested').toLowerCase();
+                                    if (status === 'active' || status === 'pending_user') {
+                                      return req.topic || "Chat request accepted - go to Chat tab to message";
+                                    } else if (status === 'closed') {
+                                      return "This chat request was rejected by admin";
+                                    } else if (status === 'read_only') {
+                                      return "Waiting for admin response";
+                                    } else {
+                                      return req.topic || "Waiting for admin approval";
+                                    }
+                                  })()}
                                 </div>
                               </div>
                               <div
@@ -2125,14 +2169,24 @@ export default function UserHome() {
                                     onClick={async () => {
                                       const res = await acceptChatroomAccessRequest(req.id);
                                       if (res.ok) {
-                                        alert("Chatroom invitation accepted! You can now access it in the Chat section.");
+                                        setToast({
+                                          isVisible: true,
+                                          type: "success",
+                                          title: "Success",
+                                          message: "Chatroom invitation accepted! You can now access it in the Chat section."
+                                        });
                                         // Reload chatroom requests
                                         const refreshed = await fetchChatroomAccessRequests();
                                         if (refreshed.ok && Array.isArray(refreshed.data)) {
                                           setChatroomRequests(refreshed.data);
                                         }
                                       } else {
-                                        alert(res.error || "Failed to accept invitation");
+                                        setToast({
+                                          isVisible: true,
+                                          type: "error",
+                                          title: "Error",
+                                          message: res.error || "Failed to accept invitation"
+                                        });
                                       }
                                     }}
                                     style={{
@@ -2156,14 +2210,24 @@ export default function UserHome() {
                                       }
                                       const res = await rejectChatroomAccessRequest(req.id);
                                       if (res.ok) {
-                                        alert("Chatroom invitation rejected.");
+                                        setToast({
+                                          isVisible: true,
+                                          type: "success",
+                                          title: "Success",
+                                          message: "Chatroom invitation rejected."
+                                        });
                                         // Reload chatroom requests
                                         const refreshed = await fetchChatroomAccessRequests();
                                         if (refreshed.ok && Array.isArray(refreshed.data)) {
                                           setChatroomRequests(refreshed.data);
                                         }
                                       } else {
-                                        alert(res.error || "Failed to reject invitation");
+                                        setToast({
+                                          isVisible: true,
+                                          type: "error",
+                                          title: "Error",
+                                          message: res.error || "Failed to reject invitation"
+                                        });
                                       }
                                     }}
                                     style={{

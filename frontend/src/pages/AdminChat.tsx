@@ -7,6 +7,7 @@ import {
   fetchAdminLostReports,
   fetchAdminFoundReports,
   fetchChatMessagesAdmin,
+  sendChatMessageAdmin,
   sendChatMessageAdminWithReply,
   updateAdminConversationStatus,
   deleteAdminConversation,
@@ -26,9 +27,14 @@ import {
   clearChatroomMessages,
   deleteChatroom,
   inviteUserToChatroom,
+  deleteChatroomMessageForMe,
+  deleteChatroomMessageForEveryone,
   getProfile,
   type ApiResult,
 } from "../services/api";
+
+import { MessageAttachmentDisplay } from "../components/ChatAttachment";
+import Toast from "../components/Toast";
 
 const mockRooms = [
   { id: 1, name: "Lost Pets - Chennai" },
@@ -40,6 +46,12 @@ export default function AdminChat() {
   const [conversations, setConversations] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{
+    isVisible: boolean;
+    type: "success" | "error";
+    title: string;
+    message: string;
+  } | null>(null);
   const [centerView, setCenterView] = useState<"chat" | "requests">("chat");
   const [selectedRequest, setSelectedRequest] = useState<any | null>(null);
   const [selectedPet, setSelectedPet] = useState<any | null>(null);
@@ -53,6 +65,8 @@ export default function AdminChat() {
     useState<number | null>(null);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState("");
+  const [conversationSelectedFile, setConversationSelectedFile] = useState<File | null>(null);
+  const conversationFileInputRef = useRef<HTMLInputElement | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<any | null>(null);
@@ -82,6 +96,8 @@ export default function AdminChat() {
   const [chatroomMessages, setChatroomMessages] = useState<any[]>([]);
   const [chatroomMessageInput, setChatroomMessageInput] = useState("");
   const [chatroomReplyingTo, setChatroomReplyingTo] = useState<any | null>(null);
+  const [chatroomSelectedFile, setChatroomSelectedFile] = useState<File | null>(null);
+  const chatroomFileInputRef = useRef<HTMLInputElement | null>(null);
   const [chatroomLoading, setChatroomLoading] = useState(false);
   
   // Room Members structured state - ROOM-SCOPED (keyed by room ID)
@@ -149,11 +165,12 @@ export default function AdminChat() {
       // Organize participants by role (accepted users)
       const acceptedRequestedUser = participants.find((p: any) => p.role === 'requested_user');
       const acceptedFoundedUser = participants.find((p: any) => p.role === 'founded_user');
-      const admins = participants.filter((p: any) => p.role === 'admin');
+      const acceptedAdmins = participants.filter((p: any) => p.role === 'admin');
       
       // Find pending invitations
       const pendingRequestedUser = accessRequests.find((r: any) => r.role === 'requested_user' && r.status === 'pending');
       const pendingFoundedUser = accessRequests.find((r: any) => r.role === 'founded_user' && r.status === 'pending');
+      const pendingAdmins = accessRequests.filter((r: any) => r.role === 'admin' && r.status === 'pending');
       
       // Determine final status for each role
       const requestedUser = acceptedRequestedUser 
@@ -168,12 +185,18 @@ export default function AdminChat() {
           ? { ...pendingFoundedUser.requested_user, status: 'pending' }
           : null;
       
+      // Combine accepted and pending admins
+      const allAdmins = [
+        ...acceptedAdmins.map((p: any) => ({ ...p.user, status: 'accepted' })),
+        ...pendingAdmins.map((r: any) => ({ ...r.requested_user, status: 'pending' }))
+      ];
+      
       setRoomMembersData((prev) => ({
         ...prev,
         [selectedRoomId]: {
           requestedUser: requestedUser,
           foundedUser: foundedUser,
-          admins: admins.map((p: any) => ({ ...p.user, status: 'accepted' })),
+          admins: allAdmins,
         },
       }));
     };
@@ -583,6 +606,15 @@ export default function AdminChat() {
         position: "relative",
       }}
     >
+      {toast && (
+        <Toast
+          type={toast.type}
+          title={toast.title}
+          message={toast.message}
+          isVisible={toast.isVisible}
+          onClose={() => setToast(null)}
+        />
+      )}
       {/* Left column: header + requests + direct chats + rooms */}
       <div
         style={{
@@ -1335,9 +1367,19 @@ export default function AdminChat() {
                             setViewType("chatroom");
                             setCenterView("chat");
                             // Show success message
-                            alert(`Chatroom "${roomName.trim()}" created successfully!`);
+                            setToast({
+                              isVisible: true,
+                              type: "success",
+                              title: "Success",
+                              message: `Chatroom "${roomName.trim()}" created successfully!`
+                            });
                           } else if (res.error) {
-                            alert(`Failed to create chatroom: ${res.error}`);
+                            setToast({
+                              isVisible: true,
+                              type: "error",
+                              title: "Error",
+                              message: `Failed to create chatroom: ${res.error}`
+                            });
                           }
                         }
                       }}
@@ -1425,14 +1467,24 @@ export default function AdminChat() {
                         activeConversation.id,
                       );
                       if (res.ok) {
-                        alert("All messages deleted successfully. Conversation still exists.");
+                        setToast({
+                          isVisible: true,
+                          type: "success",
+                          title: "Success",
+                          message: "All messages deleted successfully. Conversation still exists."
+                        });
                         // Reload messages
                         const messagesRes = await fetchChatMessagesAdmin(activeConversation.id);
                         if (messagesRes.ok && Array.isArray(messagesRes.data)) {
                           setChatMessages(messagesRes.data);
                         }
                       } else {
-                        alert(`Failed to delete messages: ${res.error || "Unknown error"}`);
+                        setToast({
+                          isVisible: true,
+                          type: "error",
+                          title: "Error",
+                          message: `Failed to delete messages: ${res.error || "Unknown error"}`
+                        });
                       }
                     }}
                     style={{
@@ -1450,14 +1502,121 @@ export default function AdminChat() {
               )}
             </div>
 
+            {/* Chatroom Header - Above messages */}
+            {viewType === "chatroom" && activeChatroom && (
+              <>
+                {console.log("Rendering chatroom header:", { viewType, activeChatroom, selectedRoomId })}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "16px 20px",
+                    borderBottom: "2px solid #e5e7eb",
+                    background: "#ffffff",
+                    borderRadius: "12px 12px 0 0",
+                    marginBottom: 0,
+                    zIndex: 10,
+                  }}
+                >
+                <div>
+                  <div
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 700,
+                      color: "#0f172a",
+                    }}
+                  >
+                    {activeChatroom.name}
+                  </div>
+                  <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>
+                    Pet: {activeChatroom.pet_unique_id || activeChatroom.conversation?.pet_unique_id || "N/A"}
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div
+                    style={{
+                      padding: "6px 14px",
+                      borderRadius: 999,
+                      background: "#d1fae5",
+                      color: "#065f46",
+                      fontSize: 13,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Active
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!selectedRoomId) return;
+                      const roomName = activeChatroom?.name || "this chatroom";
+                      
+                      if (!window.confirm(`Are you sure you want to delete "${roomName}"? This will permanently delete the chatroom, all messages, and all participants. This action cannot be undone.`)) return;
+                      
+                      try {
+                        const res = await deleteChatroom(selectedRoomId);
+                        if (res.ok) {
+                          setToast({
+                            isVisible: true,
+                            type: "success",
+                            title: "Success",
+                            message: "Chatroom deleted successfully"
+                          });
+                          setSelectedRoomId(null);
+                          setShowRoomPanel(false);
+                          // Reload chatrooms list
+                          const roomsRes = await fetchAdminChatrooms();
+                          if (roomsRes.ok && Array.isArray(roomsRes.data)) {
+                            setChatRooms(roomsRes.data);
+                          }
+                        } else {
+                          setToast({
+                            isVisible: true,
+                            type: "error",
+                            title: "Error",
+                            message: `Failed to delete chatroom: ${res.error}`
+                          });
+                        }
+                      } catch (err) {
+                        console.error("Error deleting chatroom:", err);
+                        setToast({
+                          isVisible: true,
+                          type: "error",
+                          title: "Error",
+                          message: "An error occurred while deleting the chatroom"
+                        });
+                      }
+                    }}
+                    style={{
+                      padding: "8px 16px",
+                      borderRadius: 8,
+                      background: "#fee2e2",
+                      color: "#991b1b",
+                      border: "2px solid #fecaca",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    🗑️ Delete Room
+                  </button>
+                </div>
+              </div>
+              </>
+            )}
+
             {/* Messages list */}
             <div
               style={{
                 flex: 1,
-                borderRadius: 16,
+                borderRadius: viewType === "chatroom" && activeChatroom ? "0 0 0 0" : "16px 16px 0 0",
                 background: "#ffffff",
                 padding: 16,
-                marginBottom: 12,
+                marginBottom: 0,
                 overflowY: "auto",
                 overflowX: "hidden",
                 display: "flex",
@@ -1465,7 +1624,7 @@ export default function AdminChat() {
                 gap: 8,
                 scrollBehavior: "smooth",
                 minHeight: 0,
-                maxHeight: "calc(78vh - 180px)",
+                maxHeight: "calc(78vh - 80px)",
               }}
             >
               {/* CONVERSATION MESSAGES (Direct Chat) */}
@@ -1607,6 +1766,18 @@ export default function AdminChat() {
                           </div>
                         )}
                         {m.text ?? ""}
+                        
+                        {/* Attachment Display */}
+                        {m.attachment_url && (
+                          <div style={{ marginTop: m.text ? 8 : 0 }}>
+                            <MessageAttachmentDisplay
+                              attachmentUrl={m.attachment_url}
+                              attachmentType={m.attachment_type}
+                              attachmentName={m.attachment_name}
+                              attachmentSize={m.attachment_size}
+                            />
+                          </div>
+                        )}
 
                         {!isSystem && hoveredMessageId === Number(m.id) && (
                           <button
@@ -1755,6 +1926,12 @@ export default function AdminChat() {
                   {activeChatroom &&
                     chatroomMessages.map((m: any) => {
                       const isSystem = Boolean(m.is_system);
+                      
+                      // Filter out deleted messages (same as direct chat)
+                      if (m.is_deleted_for_me || m.text === null) {
+                        return null;
+                      }
+                      
                       const text = (m.text || m.content || "") as string;
                       // Compare using stable user_unique_id (USR000024 format)
                       const isOwnMessage = m.sender?.user_unique_id === currentAdminUserId;
@@ -1776,6 +1953,33 @@ export default function AdminChat() {
                         ? "" 
                         : (m.sender?.full_name || m.sender?.username || "User");
                       
+                      // Determine sender role for color coding
+                      const isAdmin = m.sender?.is_staff === true;
+                      
+                      // Generate unique color for each user based on their ID
+                      const getUserColor = (userId: number, isAdmin: boolean) => {
+                        if (isAdmin) return "#f59e0b"; // amber-500 for admins
+                        
+                        // Array of professional, distinct colors for users
+                        const userColors = [
+                          "#6366f1", // indigo-500
+                          "#8b5cf6", // violet-500
+                          "#ec4899", // pink-500
+                          "#14b8a6", // teal-500
+                          "#f97316", // orange-500
+                          "#06b6d4", // cyan-500
+                          "#84cc16", // lime-500
+                          "#a855f7", // purple-500
+                          "#10b981", // emerald-500
+                          "#f43f5e", // rose-500
+                        ];
+                        
+                        // Use user ID to consistently assign a color
+                        return userColors[userId % userColors.length];
+                      };
+                      
+                      const senderNameColor = getUserColor(m.sender?.id || 0, isAdmin);
+                      
                       const messageTime = m.created_at 
                         ? new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                         : "";
@@ -1791,29 +1995,32 @@ export default function AdminChat() {
                             alignItems: isSystem ? "center" : isOwnMessage ? "flex-end" : "flex-start",
                             marginBottom: 8,
                             width: "100%",
+                            paddingRight: isOwnMessage && !isSystem ? 32 : 0,
                           }}
                         >
                           {!isSystem && (
                             <div
                               style={{
                                 fontSize: 11,
-                                color: "#64748b",
+                                fontWeight: 600,
+                                color: senderNameColor,
                                 marginBottom: 4,
                                 paddingLeft: isOwnMessage ? 0 : 8,
                                 paddingRight: isOwnMessage ? 8 : 0,
                               }}
                             >
-                              {senderName} {isOwnMessage ? "👈 YOU" : ""}
+                              {senderName} {isAdmin ? "👑" : ""} {isOwnMessage ? "👈 YOU" : ""}
                             </div>
                           )}
                           
                           <div
                             style={{
                               position: "relative",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 4,
                             }}
+                            onMouseEnter={() => {
+                              if (!isSystem) setHoveredMessageId(Number(m.id));
+                            }}
+                            onMouseLeave={() => setHoveredMessageId(null)}
                           >
                             <div
                               style={{
@@ -1837,10 +2044,6 @@ export default function AdminChat() {
                                 overflowWrap: "break-word",
                                 display: "inline-block",
                               }}
-                              onMouseEnter={() => {
-                                if (!isSystem) setHoveredMessageId(Number(m.id));
-                              }}
-                              onMouseLeave={() => setHoveredMessageId(null)}
                             >
                               {m.reply_to && (
                                 <div
@@ -1865,6 +2068,18 @@ export default function AdminChat() {
                                 </div>
                               )}
                               {text}
+                              
+                              {/* Attachment Display */}
+                              {m.attachment_url && (
+                                <div style={{ marginTop: text ? 8 : 0 }}>
+                                  <MessageAttachmentDisplay
+                                    attachmentUrl={m.attachment_url}
+                                    attachmentType={m.attachment_type}
+                                    attachmentName={m.attachment_name}
+                                    attachmentSize={m.attachment_size}
+                                  />
+                                </div>
+                              )}
                             </div>
 
                             {!isSystem && hoveredMessageId === m.id && (
@@ -1874,23 +2089,88 @@ export default function AdminChat() {
                                   e.stopPropagation();
                                   setMenuForMessageId(m.id);
                                   const rect = e.currentTarget.getBoundingClientRect();
+                                  
+                                  const items = [
+                                    {
+                                      label: "Reply",
+                                      onClick: () => {
+                                        setChatroomReplyingTo(m);
+                                        setMenuForMessageId(null);
+                                        setOptionsMenu(null);
+                                      },
+                                    },
+                                    {
+                                      label: "Delete for me",
+                                      onClick: async () => {
+                                        setMenuForMessageId(null);
+                                        setOptionsMenu(null);
+                                        if (!selectedRoomId) return;
+                                        console.log("Deleting message for me:", { chatroomId: selectedRoomId, messageId: m.id });
+                                        // Call API to delete message for current user only
+                                        const res = await deleteChatroomMessageForMe(selectedRoomId, Number(m.id));
+                                        console.log("Delete for me response:", res);
+                                        if (res.ok) {
+                                          // Reload messages
+                                          const messagesRes = await fetchChatroomMessages(selectedRoomId);
+                                          if (messagesRes.ok && Array.isArray(messagesRes.data)) {
+                                            setChatroomMessages(messagesRes.data);
+                                          }
+                                        } else {
+                                          console.error("Failed to delete message for me:", res.error);
+                                          setToast({
+                                            isVisible: true,
+                                            type: "error",
+                                            title: "Error",
+                                            message: `Failed to delete message: ${res.error}`
+                                          });
+                                        }
+                                      },
+                                    },
+                                  ];
+                                  
+                                  // Only show "Delete for everyone" for own messages
+                                  if (isOwnMessage) {
+                                    items.push({
+                                      label: "Delete for everyone",
+                                      onClick: async () => {
+                                        setMenuForMessageId(null);
+                                        setOptionsMenu(null);
+                                        if (!selectedRoomId) return;
+                                        if (!window.confirm("Delete this message for everyone?")) return;
+                                        console.log("Deleting message for everyone:", { chatroomId: selectedRoomId, messageId: m.id });
+                                        // Call API to delete message for everyone
+                                        const res = await deleteChatroomMessageForEveryone(selectedRoomId, Number(m.id));
+                                        console.log("Delete for everyone response:", res);
+                                        if (res.ok) {
+                                          // Reload messages
+                                          const messagesRes = await fetchChatroomMessages(selectedRoomId);
+                                          if (messagesRes.ok && Array.isArray(messagesRes.data)) {
+                                            setChatroomMessages(messagesRes.data);
+                                          }
+                                        } else {
+                                          console.error("Failed to delete message for everyone:", res.error);
+                                          setToast({
+                                            isVisible: true,
+                                            type: "error",
+                                            title: "Error",
+                                            message: `Failed to delete message: ${res.error}`
+                                          });
+                                        }
+                                      },
+                                    });
+                                  }
+                                  
                                   setOptionsMenu({
                                     message: m,
                                     x: rect.left,
                                     y: rect.bottom + 4,
-                                    items: [
-                                      {
-                                        label: "Reply",
-                                        onClick: () => {
-                                          setChatroomReplyingTo(m);
-                                          setMenuForMessageId(null);
-                                          setOptionsMenu(null);
-                                        },
-                                      },
-                                    ],
+                                    items: items,
                                   });
                                 }}
                                 style={{
+                                  position: "absolute",
+                                  top: 6,
+                                  right: -28,
                                   width: 22,
                                   height: 22,
                                   borderRadius: 999,
@@ -1904,6 +2184,7 @@ export default function AdminChat() {
                                   fontSize: 14,
                                   lineHeight: 1,
                                 }}
+                                aria-label="Message options"
                               >
                                 ⋮
                               </button>
@@ -1937,53 +2218,59 @@ export default function AdminChat() {
               <form
                 onSubmit={async (e) => {
                   e.preventDefault();
-                  if (!activeConversation || !chatInput.trim()) return;
+                  
+                  // Validate: must have text OR attachment
+                  const hasText = chatInput.trim().length > 0;
+                  const hasAttachment = conversationSelectedFile !== null;
+                  
+                  if (!activeConversation || (!hasText && !hasAttachment)) {
+                    if (!hasText && !hasAttachment) {
+                      setChatError("Please enter a message or select a file");
+                    }
+                    return;
+                  }
+                  
                 const text = chatInput.trim();
+                const file = conversationSelectedFile;
                 setChatInput("");
+                setConversationSelectedFile(null);
                 setChatError(null);
-                const res = await sendChatMessageAdminWithReply(
+                const res = await sendChatMessageAdmin(
                   activeConversation.id,
-                  text,
-                  replyingTo?.id ? Number(replyingTo.id) : undefined,
+                  {
+                    text: text || undefined,
+                    attachment: file || undefined,
+                    reply_to_message_id: replyingTo?.id ? Number(replyingTo.id) : undefined,
+                  }
                 );
                 setReplyingTo(null);
                 if (res.ok) {
-                  setChatMessages((prev) => [
-                    ...prev,
-                    {
-                      id: res.data?.id ?? `local-${Date.now()}`,
-                      text,
-                      is_system: false,
-                      reply_to: replyingTo
-                        ? {
-                            id: replyingTo.id,
-                            text: replyingTo.text ?? "",
-                            sender: replyingTo.sender ?? null,
-                          }
-                        : null,
-                      sender: activeConversation.admin || null,
-                    },
-                  ]);
+                  // Reload messages to get the new message with attachment
+                  const messagesRes = await fetchChatMessagesAdmin(activeConversation.id);
+                  if (messagesRes.ok && Array.isArray(messagesRes.data)) {
+                    setChatMessages(messagesRes.data);
+                  }
                 } else if (res.error) {
                   setChatError(res.error);
+                  setChatInput(text);
+                  setConversationSelectedFile(file);
                 }
               }}
               style={{
                 display: "flex",
-                alignItems: "center",
-                gap: 10,
+                flexDirection: "column",
+                gap: 8,
                 background: "#ffffff",
-                borderRadius: 999,
-                padding: "6px 12px",
+                borderRadius: 12,
+                padding: "12px",
                 border: "1px solid #e5e7eb",
               }}
             >
               {replyingTo && (
                 <div
                   style={{
-                    flex: 1,
-                    borderRadius: 12,
-                    padding: "6px 10px",
+                    borderRadius: 8,
+                    padding: "8px 12px",
                     background: "#f1f5f9",
                     border: "1px solid #e2e8f0",
                     display: "flex",
@@ -2018,7 +2305,7 @@ export default function AdminChat() {
                       cursor: "pointer",
                       fontSize: 16,
                       lineHeight: 1,
-                      color: "#0f172a",
+                      color: "#ef4444",
                     }}
                     aria-label="Cancel reply"
                   >
@@ -2027,73 +2314,113 @@ export default function AdminChat() {
                 </div>
               )}
               
-              {/* Gallery/File Upload Button */}
+              {/* File Preview */}
+              {conversationSelectedFile && (
+                <div
+                  style={{
+                    borderRadius: 8,
+                    padding: "8px 12px",
+                    background: "#f3f4f6",
+                    border: "1px solid #e5e7eb",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "#0f172a" }}>
+                      📎 {conversationSelectedFile.name}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#6b7280" }}>
+                      {(conversationSelectedFile.size / 1024).toFixed(1)} KB
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setConversationSelectedFile(null)}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      cursor: "pointer",
+                      fontSize: 16,
+                      lineHeight: 1,
+                      color: "#ef4444",
+                    }}
+                    aria-label="Remove file"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              
+              {/* Hidden File Input */}
               <input
-                ref={fileInputRef}
+                ref={conversationFileInputRef}
                 type="file"
-                accept="image/*,video/*,.pdf,.doc,.docx"
-                multiple
+                accept="image/*,video/*,.pdf,.doc,.docx,.zip,.rar,.tar,.gz"
                 style={{ display: "none" }}
                 onChange={(e) => {
-                  const files = e.target.files;
-                  if (files && files.length > 0) {
-                    // Handle file upload here
-                    console.log("Selected files:", files);
-                    // TODO: Implement file upload logic
-                    alert(`Selected ${files.length} file(s). File upload feature coming soon!`);
+                  const file = e.target.files?.[0] || null;
+                  setConversationSelectedFile(file);
+                  if (e.target) {
+                    e.target.value = "";
                   }
                 }}
               />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                style={{
-                  border: "none",
-                  background: "transparent",
-                  cursor: "pointer",
-                  padding: "6px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#6b7280",
-                  fontSize: 20,
-                  lineHeight: 1,
-                }}
-                aria-label="Attach file"
-                title="Attach image or file"
-              >
-                📎
-              </button>
               
-              <input
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Type a message here..."
-                style={{
-                  flex: replyingTo ? 2 : 1,
-                  border: "none",
-                  outline: "none",
-                  fontSize: 13,
-                  color: "#111827",
-                  background: "#ffffff",
-                }}
-              />
-              <button
-                type="submit"
-                style={{
-                  border: "none",
-                  borderRadius: 999,
-                  padding: "6px 14px",
-                  background: "#4f46e5",
-                  color: "#ffffff",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: activeConversation ? "pointer" : "not-allowed",
-                  opacity: activeConversation ? 1 : 0.5,
-                }}
-              >
-                Send
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => conversationFileInputRef.current?.click()}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    cursor: "pointer",
+                    padding: "6px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#6b7280",
+                    fontSize: 20,
+                    lineHeight: 1,
+                  }}
+                  aria-label="Attach file"
+                  title="Attach image, video, or document"
+                >
+                  📎
+                </button>
+                
+                <input
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Type a message here..."
+                  style={{
+                    flex: 1,
+                    border: "none",
+                    outline: "none",
+                    fontSize: 13,
+                    color: "#111827",
+                    background: "#ffffff",
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={!chatInput.trim() && !conversationSelectedFile}
+                  style={{
+                    border: "none",
+                    borderRadius: 999,
+                    padding: "6px 14px",
+                    background: (chatInput.trim() || conversationSelectedFile) ? "#4f46e5" : "#e5e7eb",
+                    color: "#ffffff",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: (chatInput.trim() || conversationSelectedFile) ? "pointer" : "not-allowed",
+                    opacity: (chatInput.trim() || conversationSelectedFile) ? 1 : 0.5,
+                  }}
+                >
+                  Send
+                </button>
+              </div>
               </form>
             )}
 
@@ -2102,17 +2429,22 @@ export default function AdminChat() {
               <form
                 onSubmit={async (e) => {
                   e.preventDefault();
-                  console.log("Chatroom form submitted", { activeChatroom, chatroomMessageInput, selectedRoomId });
+                  console.log("Chatroom form submitted", { activeChatroom, chatroomMessageInput, selectedRoomId, hasFile: !!chatroomSelectedFile });
                   
-                  if (!activeChatroom || !chatroomMessageInput.trim() || !selectedRoomId) {
-                    console.log("Validation failed", { activeChatroom: !!activeChatroom, hasInput: !!chatroomMessageInput.trim(), selectedRoomId });
+                  if (!activeChatroom || (!chatroomMessageInput.trim() && !chatroomSelectedFile) || !selectedRoomId) {
+                    console.log("Validation failed", { activeChatroom: !!activeChatroom, hasInput: !!chatroomMessageInput.trim(), hasFile: !!chatroomSelectedFile, selectedRoomId });
                     return;
                   }
                   
                   const text = chatroomMessageInput.trim();
                   setChatroomMessageInput("");
+                  const file = chatroomSelectedFile;
+                  setChatroomSelectedFile(null);
                   
-                  const payload: any = { text };
+                  const payload: any = {
+                    text: text || undefined,
+                    attachment: file || undefined,
+                  };
                   if (chatroomReplyingTo) {
                     payload.reply_to_message_id = chatroomReplyingTo.id;
                   }
@@ -2133,30 +2465,35 @@ export default function AdminChat() {
                     }
                   } else {
                     console.error("Failed to send chatroom message", res.error);
-                    alert(`Failed to send message: ${res.error || "Unknown error"}`);
+                    setToast({
+                      isVisible: true,
+                      type: "error",
+                      title: "Error",
+                      message: `Failed to send message: ${res.error || "Unknown error"}`
+                    });
                     // Restore the message input
                     setChatroomMessageInput(text);
+                    setChatroomSelectedFile(file);
                   }
                 }}
                 style={{
                   display: "flex",
-                  alignItems: "center",
-                  gap: 10,
+                  flexDirection: "column",
+                  gap: 8,
                   padding: "12px 16px",
                   borderTop: "1px solid #e5e7eb",
                   background: "#ffffff",
+                  borderRadius: "0 0 16px 16px",
+                  marginTop: "auto",
                 }}
               >
                 {chatroomReplyingTo && (
                   <div
                     style={{
-                      position: "absolute",
-                      bottom: "100%",
-                      left: 0,
-                      right: 0,
-                      padding: "8px 16px",
+                      padding: "8px 12px",
                       background: "#f3f4f6",
-                      borderTop: "1px solid #e5e7eb",
+                      borderRadius: 8,
+                      border: "1px solid #e5e7eb",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
@@ -2181,7 +2518,7 @@ export default function AdminChat() {
                         cursor: "pointer",
                         fontSize: 16,
                         lineHeight: 1,
-                        color: "#0f172a",
+                        color: "#ef4444",
                       }}
                       aria-label="Cancel reply"
                     >
@@ -2190,60 +2527,140 @@ export default function AdminChat() {
                   </div>
                 )}
                 
-                <button
-                  type="button"
-                  style={{
-                    border: "none",
-                    background: "transparent",
-                    cursor: "pointer",
-                    padding: "6px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#6b7280",
-                    fontSize: 20,
-                    lineHeight: 1,
-                  }}
-                  aria-label="Emoji"
-                >
-                  😊
-                </button>
+                {/* File Preview */}
+                {chatroomSelectedFile && (
+                  <div
+                    style={{
+                      padding: "8px 12px",
+                      background: "#f3f4f6",
+                      borderRadius: 8,
+                      border: "1px solid #e5e7eb",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      fontSize: 12,
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                        📎 {chatroomSelectedFile.name}
+                      </div>
+                      <div style={{ color: "#64748b", fontSize: 11 }}>
+                        {(chatroomSelectedFile.size / 1024).toFixed(1)} KB
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setChatroomSelectedFile(null)}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        cursor: "pointer",
+                        fontSize: 16,
+                        lineHeight: 1,
+                        color: "#ef4444",
+                      }}
+                      aria-label="Remove file"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
                 
+                {/* Hidden File Input */}
                 <input
-                  value={chatroomMessageInput}
-                  onChange={(e) => setChatroomMessageInput(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      e.currentTarget.form?.requestSubmit();
+                  ref={chatroomFileInputRef}
+                  type="file"
+                  accept="image/*,video/*,.pdf,.doc,.docx,.zip,.rar,.tar,.gz"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setChatroomSelectedFile(file);
+                    if (e.target) {
+                      e.target.value = "";
                     }
                   }}
-                  placeholder="Type a message here..."
-                  style={{
-                    flex: chatroomReplyingTo ? 2 : 1,
-                    border: "none",
-                    outline: "none",
-                    fontSize: 13,
-                    color: "#111827",
-                    background: "#ffffff",
-                  }}
                 />
-                <button
-                  type="submit"
-                  style={{
-                    border: "none",
-                    borderRadius: 999,
-                    padding: "6px 14px",
-                    background: "#4f46e5",
-                    color: "#ffffff",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: activeChatroom ? "pointer" : "not-allowed",
-                    opacity: activeChatroom ? 1 : 0.5,
-                  }}
-                >
-                  Send
-                </button>
+                
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <button
+                    type="button"
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      cursor: "pointer",
+                      padding: "6px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#6b7280",
+                      fontSize: 20,
+                      lineHeight: 1,
+                    }}
+                    aria-label="Emoji"
+                  >
+                    😊
+                  </button>
+                  
+                  <input
+                    value={chatroomMessageInput}
+                    onChange={(e) => setChatroomMessageInput(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        e.currentTarget.form?.requestSubmit();
+                      }
+                    }}
+                    placeholder="Type a message here..."
+                    style={{
+                      flex: 1,
+                      border: "none",
+                      outline: "none",
+                      fontSize: 13,
+                      color: "#111827",
+                      background: "#ffffff",
+                    }}
+                  />
+                  
+                  <button
+                    type="button"
+                    onClick={() => chatroomFileInputRef.current?.click()}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      cursor: "pointer",
+                      padding: "6px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#6b7280",
+                      fontSize: 20,
+                      lineHeight: 1,
+                    }}
+                    aria-label="Attach file"
+                    title="Attach image, video, or document"
+                  >
+                    📎
+                  </button>
+                  
+                  <button
+                    type="submit"
+                    disabled={!chatroomMessageInput.trim() && !chatroomSelectedFile}
+                    style={{
+                      border: "none",
+                      borderRadius: 999,
+                      padding: "6px 14px",
+                      background: (chatroomMessageInput.trim() || chatroomSelectedFile) ? "#4f46e5" : "#e5e7eb",
+                      color: "#ffffff",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: (chatroomMessageInput.trim() || chatroomSelectedFile) ? "pointer" : "not-allowed",
+                      opacity: (chatroomMessageInput.trim() || chatroomSelectedFile) ? 1 : 0.5,
+                    }}
+                  >
+                    Send
+                  </button>
+                </div>
               </form>
             )}
 
@@ -2403,7 +2820,12 @@ export default function AdminChat() {
                       console.log("Delete response:", res);
                       
                       if (res.ok) {
-                        alert(`Chatroom "${roomName}" deleted successfully.`);
+                        setToast({
+                          isVisible: true,
+                          type: "success",
+                          title: "Success",
+                          message: `Chatroom "${roomName}" deleted successfully.`
+                        });
                         // Clear selection and reload chatrooms
                         setSelectedRoomId(null);
                         setChatroomMessages([]);
@@ -2421,11 +2843,21 @@ export default function AdminChat() {
                         }
                       } else {
                         console.error("Delete failed:", res.error, res);
-                        alert(`Failed to delete chatroom: ${res.error || "Unknown error"}`);
+                        setToast({
+                          isVisible: true,
+                          type: "error",
+                          title: "Error",
+                          message: `Failed to delete chatroom: ${res.error || "Unknown error"}`
+                        });
                       }
                     } catch (error) {
                       console.error("Exception during delete:", error);
-                      alert(`Error deleting chatroom: ${error}`);
+                      setToast({
+                        isVisible: true,
+                        type: "error",
+                        title: "Error",
+                        message: `Error deleting chatroom: ${error}`
+                      });
                     }
                   }}
                   style={{
@@ -2678,65 +3110,73 @@ export default function AdminChat() {
                 Admins
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {admins.map((admin) => (
-                  <div
-                    key={admin.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      padding: 10,
-                      borderRadius: 12,
-                      background: "#ffffff",
-                      border: "1px solid #e5e7eb",
-                    }}
-                  >
+                {admins.map((admin) => {
+                  const statusColors = {
+                    pending: { bg: "#fef3c7", text: "#92400e", label: "Pending" },
+                    accepted: { bg: "#dbeafe", text: "#1e40af", label: "Admin" },
+                  };
+                  const statusStyle = statusColors[admin.status as keyof typeof statusColors] || statusColors.accepted;
+                  
+                  return (
                     <div
+                      key={admin.id}
                       style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: "50%",
-                        background: "linear-gradient(135deg,#6366f1,#4f46e5)",
                         display: "flex",
                         alignItems: "center",
-                        justifyContent: "center",
-                        color: "white",
-                        fontWeight: 700,
-                        fontSize: 14,
+                        gap: 10,
+                        padding: 10,
+                        borderRadius: 12,
+                        background: "#ffffff",
+                        border: "1px solid #e5e7eb",
                       }}
                     >
-                      {(admin.full_name || admin.username || admin.name || "A").charAt(0)}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
                       <div
                         style={{
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color: "#0f172a",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
+                          width: 36,
+                          height: 36,
+                          borderRadius: "50%",
+                          background: "linear-gradient(135deg,#6366f1,#4f46e5)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "white",
+                          fontWeight: 700,
+                          fontSize: 14,
                         }}
                       >
-                        {admin.full_name || admin.username || admin.name || "Admin"}
+                        {(admin.full_name || admin.username || admin.name || "A").charAt(0)}
                       </div>
-                      <div
-                        style={{
-                          fontSize: 10,
-                          padding: "2px 6px",
-                          borderRadius: 999,
-                          background: "#dbeafe",
-                          color: "#1e40af",
-                          fontWeight: 600,
-                          display: "inline-block",
-                          marginTop: 2,
-                        }}
-                      >
-                        Admin
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: "#0f172a",
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {admin.full_name || admin.username || admin.name || "Admin"}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 10,
+                            padding: "2px 6px",
+                            borderRadius: 999,
+                            background: statusStyle.bg,
+                            color: statusStyle.text,
+                            fontWeight: 600,
+                            display: "inline-block",
+                            marginTop: 2,
+                          }}
+                        >
+                          {statusStyle.label}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -2779,7 +3219,7 @@ export default function AdminChat() {
               </button>
               
               {/* Show user with (+) button when clicked */}
-              {showAddUserFromChat && selectedConversationId && !invitationRequests[selectedConversationId]?.requestedUser && activeConversation && (
+              {showAddUserFromChat && selectedConversationId && activeConversation && (
                 <div
                   style={{
                     marginTop: 8,
@@ -2822,7 +3262,12 @@ export default function AdminChat() {
                         const userId = activeConversation.user?.id || activeConversation.user_id;
                         
                         if (!userId) {
-                          alert("User ID not found");
+                          setToast({
+                            isVisible: true,
+                            type: "error",
+                            title: "Error",
+                            message: "User ID not found"
+                          });
                           return;
                         }
                         
@@ -2831,28 +3276,60 @@ export default function AdminChat() {
                           const res = await inviteUserToChatroom(selectedRoomId, userId, 'requested_user');
                           
                           if (res.ok) {
-                            alert(`Invitation sent to ${getUserDisplayName(activeConversation)}! They will receive a notification.`);
+                            setToast({
+                              isVisible: true,
+                              type: "success",
+                              title: "Invitation Sent",
+                              message: `Invitation sent to ${getUserDisplayName(activeConversation)}! They will receive a notification.`
+                            });
                             setShowAddUserFromChat(false);
                             
-                            // Reload participants
+                            // Reload participants AND access requests
                             const participantsRes = await fetchChatroomParticipants(selectedRoomId);
+                            const accessRequestsRes = await fetchChatroomAccessRequestsAdmin(selectedRoomId);
+                            
                             if (participantsRes.ok && Array.isArray(participantsRes.data)) {
                               const participants = participantsRes.data;
-                              const requestedUser = participants.find((p: any) => p.role === 'requested_user');
-                              const foundedUser = participants.find((p: any) => p.role === 'founded_user');
+                              const accessRequests = accessRequestsRes.ok && Array.isArray(accessRequestsRes.data) ? accessRequestsRes.data : [];
+                              
+                              // Get active participants
+                              const acceptedRequestedUser = participants.find((p: any) => p.role === 'requested_user');
+                              const acceptedFoundedUser = participants.find((p: any) => p.role === 'founded_user');
                               const admins = participants.filter((p: any) => p.role === 'admin');
+                              
+                              // Get pending access requests
+                              const pendingRequestedUser = accessRequests.find((r: any) => r.role === 'requested_user' && r.status === 'pending');
+                              const pendingFoundedUser = accessRequests.find((r: any) => r.role === 'founded_user' && r.status === 'pending');
+                              
+                              // Transform data to match display format
+                              const requestedUser = acceptedRequestedUser 
+                                ? { ...acceptedRequestedUser.user, status: 'accepted' }
+                                : pendingRequestedUser 
+                                  ? { ...pendingRequestedUser.requested_user, status: 'pending' }
+                                  : null;
+                                  
+                              const foundedUser = acceptedFoundedUser
+                                ? { ...acceptedFoundedUser.user, status: 'accepted' }
+                                : pendingFoundedUser
+                                  ? { ...pendingFoundedUser.requested_user, status: 'pending' }
+                                  : null;
                               
                               setRoomMembersData((prev) => ({
                                 ...prev,
                                 [selectedRoomId]: {
-                                  requestedUser: requestedUser || null,
-                                  foundedUser: foundedUser || null,
+                                  requestedUser: requestedUser,
+                                  foundedUser: foundedUser,
                                   admins: admins,
                                 },
                               }));
                             }
                           } else {
-                            alert(res.error || "Failed to send invitation");
+                            setToast({
+                              isVisible: true,
+                              type: "error",
+                              title: "Error",
+                              message: res.error || "Failed to send invitation"
+                            });
                           }
                         } else {
                           // No chatroom context - create chatroom creation request
@@ -2861,7 +3338,12 @@ export default function AdminChat() {
                           const conversationId = activeConversation.id;
                           
                           if (!petUniqueId || !petKind) {
-                            alert("Pet information not found. Please ensure this conversation has pet context.");
+                            setToast({
+                              isVisible: true,
+                              type: "error",
+                              title: "Error",
+                              message: "Pet information not found. Please ensure this conversation has pet context."
+                            });
                             return;
                           }
                           
@@ -2889,10 +3371,20 @@ export default function AdminChat() {
                               },
                             }));
                             
-                            alert(`Chatroom invitation sent to ${getUserDisplayName(activeConversation)}! They will receive a notification.`);
+                            setToast({
+                              isVisible: true,
+                              type: "success",
+                              title: "Invitation Sent",
+                              message: `Chatroom invitation sent to ${getUserDisplayName(activeConversation)}! They will receive a notification.`
+                            });
                             setShowAddUserFromChat(false);
                           } else {
-                            alert(res.error || "Failed to send chatroom invitation");
+                            setToast({
+                              isVisible: true,
+                              type: "error",
+                              title: "Error",
+                              message: res.error || "Failed to send chatroom invitation"
+                            });
                           }
                         }
                       }}
@@ -2946,7 +3438,7 @@ export default function AdminChat() {
               </button>
               
               {/* Show search panel when clicked */}
-              {showAddFoundUser && !foundedUser && (
+              {showAddFoundUser && (
                 <div
                   style={{
                     marginTop: 8,
@@ -3122,33 +3614,70 @@ export default function AdminChat() {
                                     const res = await inviteUserToChatroom(selectedRoomId, actualUserId, 'founded_user');
                                     
                                     if (res.ok) {
-                                      alert(`Invitation sent to ${displayName}! They will receive a notification.`);
+                                      setToast({
+                                        isVisible: true,
+                                        type: "success",
+                                        title: "Invitation Sent",
+                                        message: `Invitation sent to ${displayName}! They will receive a notification.`
+                                      });
                                       setShowAddFoundUser(false);
                                       
-                                      // Reload participants
+                                      // Reload participants AND access requests
                                       const participantsRes = await fetchChatroomParticipants(selectedRoomId);
+                                      const accessRequestsRes = await fetchChatroomAccessRequestsAdmin(selectedRoomId);
+                                      
                                       if (participantsRes.ok && Array.isArray(participantsRes.data)) {
                                         const participants = participantsRes.data;
-                                        const requestedUser = participants.find((p: any) => p.role === 'requested_user');
-                                        const foundedUser = participants.find((p: any) => p.role === 'founded_user');
+                                        const accessRequests = accessRequestsRes.ok && Array.isArray(accessRequestsRes.data) ? accessRequestsRes.data : [];
+                                        
+                                        // Get active participants
+                                        const acceptedRequestedUser = participants.find((p: any) => p.role === 'requested_user');
+                                        const acceptedFoundedUser = participants.find((p: any) => p.role === 'founded_user');
                                         const admins = participants.filter((p: any) => p.role === 'admin');
+                                        
+                                        // Get pending access requests
+                                        const pendingRequestedUser = accessRequests.find((r: any) => r.role === 'requested_user' && r.status === 'pending');
+                                        const pendingFoundedUser = accessRequests.find((r: any) => r.role === 'founded_user' && r.status === 'pending');
+                                        
+                                        // Transform data to match display format
+                                        const requestedUser = acceptedRequestedUser 
+                                          ? { ...acceptedRequestedUser.user, status: 'accepted' }
+                                          : pendingRequestedUser 
+                                            ? { ...pendingRequestedUser.requested_user, status: 'pending' }
+                                            : null;
+                                            
+                                        const foundedUser = acceptedFoundedUser
+                                          ? { ...acceptedFoundedUser.user, status: 'accepted' }
+                                          : pendingFoundedUser
+                                            ? { ...pendingFoundedUser.requested_user, status: 'pending' }
+                                            : null;
                                         
                                         setRoomMembersData((prev) => ({
                                           ...prev,
                                           [selectedRoomId]: {
-                                            requestedUser: requestedUser || null,
-                                            foundedUser: foundedUser || null,
+                                            requestedUser: requestedUser,
+                                            foundedUser: foundedUser,
                                             admins: admins,
                                           },
                                         }));
                                       }
                                     } else {
-                                      alert(res.error || "Failed to send invitation");
+                                      setToast({
+                                        isVisible: true,
+                                        type: "error",
+                                        title: "Error",
+                                        message: res.error || "Failed to send invitation"
+                                      });
                                     }
                                   } else {
                                     // No chatroom context - create chatroom creation request
                                     if (!activeConversation) {
-                                      alert("No active conversation selected");
+                                      setToast({
+                                        isVisible: true,
+                                        type: "error",
+                                        title: "Error",
+                                        message: "No active conversation selected"
+                                      });
                                       return;
                                     }
                                     
@@ -3157,7 +3686,12 @@ export default function AdminChat() {
                                     const conversationId = activeConversation.id;
                                     
                                     if (!petUniqueId || !petKind) {
-                                      alert("Pet information not found. Please ensure this conversation has pet context.");
+                                      setToast({
+                                        isVisible: true,
+                                        type: "error",
+                                        title: "Error",
+                                        message: "Pet information not found. Please ensure this conversation has pet context."
+                                      });
                                       return;
                                     }
                                     
@@ -3187,11 +3721,21 @@ export default function AdminChat() {
                                       },
                                     }));
                                     
-                                    alert(`Chatroom invitation sent to ${displayName}! They will receive a notification.`);
+                                    setToast({
+                                      isVisible: true,
+                                      type: "success",
+                                      title: "Invitation Sent",
+                                      message: `Chatroom invitation sent to ${displayName}! They will receive a notification.`
+                                    });
                                     setShowAddFoundUser(false);
                                     setFoundUserSearch("");
                                     } else {
-                                      alert(res.error || "Failed to send chatroom invitation");
+                                      setToast({
+                                        isVisible: true,
+                                        type: "error",
+                                        title: "Error",
+                                        message: res.error || "Failed to send chatroom invitation"
+                                      });
                                     }
                                   }
                                 }}
@@ -3307,27 +3851,66 @@ export default function AdminChat() {
                                 const res = await inviteUserToChatroom(selectedRoomId, staff.id, 'admin');
                                 
                                 if (res.ok) {
-                                  alert(`Invitation sent to ${staff.full_name || staff.username}!`);
-                                  // Reload participants to show the new admin
+                                  setToast({
+                                    isVisible: true,
+                                    type: "success",
+                                    title: "Invitation Sent",
+                                    message: `Invitation sent to ${staff.full_name || staff.username}!`
+                                  });
+                                  // Reload participants AND access requests to show the new admin
                                   const participantsRes = await fetchChatroomParticipants(selectedRoomId);
+                                  const accessRequestsRes = await fetchChatroomAccessRequestsAdmin(selectedRoomId);
+                                  
                                   if (participantsRes.ok && Array.isArray(participantsRes.data)) {
                                     const participants = participantsRes.data;
-                                    const requestedUser = participants.find((p: any) => p.role === 'requested_user');
-                                    const foundedUser = participants.find((p: any) => p.role === 'founded_user');
-                                    const admins = participants.filter((p: any) => p.role === 'admin');
+                                    const accessRequests = accessRequestsRes.ok && Array.isArray(accessRequestsRes.data) ? accessRequestsRes.data : [];
+                                    
+                                    // Get active participants
+                                    const acceptedRequestedUser = participants.find((p: any) => p.role === 'requested_user');
+                                    const acceptedFoundedUser = participants.find((p: any) => p.role === 'founded_user');
+                                    const acceptedAdmins = participants.filter((p: any) => p.role === 'admin');
+                                    
+                                    // Get pending access requests
+                                    const pendingRequestedUser = accessRequests.find((r: any) => r.role === 'requested_user' && r.status === 'pending');
+                                    const pendingFoundedUser = accessRequests.find((r: any) => r.role === 'founded_user' && r.status === 'pending');
+                                    const pendingAdmins = accessRequests.filter((r: any) => r.role === 'admin' && r.status === 'pending');
+                                    
+                                    // Transform data to match display format
+                                    const requestedUser = acceptedRequestedUser 
+                                      ? { ...acceptedRequestedUser.user, status: 'accepted' }
+                                      : pendingRequestedUser 
+                                        ? { ...pendingRequestedUser.requested_user, status: 'pending' }
+                                        : null;
+                                        
+                                    const foundedUser = acceptedFoundedUser
+                                      ? { ...acceptedFoundedUser.user, status: 'accepted' }
+                                      : pendingFoundedUser
+                                        ? { ...pendingFoundedUser.requested_user, status: 'pending' }
+                                        : null;
+                                    
+                                    // Combine accepted and pending admins
+                                    const allAdmins = [
+                                      ...acceptedAdmins.map((p: any) => ({ ...p.user, status: 'accepted' })),
+                                      ...pendingAdmins.map((r: any) => ({ ...r.requested_user, status: 'pending' }))
+                                    ];
                                     
                                     setRoomMembersData((prev) => ({
                                       ...prev,
                                       [selectedRoomId]: {
-                                        requestedUser: requestedUser || null,
-                                        foundedUser: foundedUser || null,
-                                        admins: admins,
+                                        requestedUser: requestedUser,
+                                        foundedUser: foundedUser,
+                                        admins: allAdmins,
                                       },
                                     }));
                                   }
                                   setShowAddAdmin(false);
                                 } else {
-                                  alert(res.error || "Failed to invite admin");
+                                  setToast({
+                                    isVisible: true,
+                                    type: "error",
+                                    title: "Error",
+                                    message: res.error || "Failed to invite admin"
+                                  });
                                 }
                               }}
                               style={{

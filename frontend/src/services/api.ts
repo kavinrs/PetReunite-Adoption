@@ -1081,11 +1081,43 @@ export async function fetchChatMessagesUser(conversationId: number): Promise<Api
   return { ok: false, status: resp.status, error: message, data };
 }
 
-export async function sendChatMessageUser(conversationId: number, text: string): Promise<ApiResult> {
+export async function sendChatMessageUser(
+  conversationId: number,
+  payload: {
+    text?: string;
+    attachment?: File;
+    reply_to_message_id?: number | null;
+  }
+): Promise<ApiResult> {
   const url = `${PETS_BASE}/chat/conversations/${conversationId}/messages/`;
+  
+  // Use FormData if there's an attachment
+  if (payload.attachment) {
+    const formData = new FormData();
+    // Always send text field, even if empty
+    formData.append("text", payload.text || "");
+    if (payload.reply_to_message_id) {
+      formData.append("reply_to_message_id", payload.reply_to_message_id.toString());
+    }
+    formData.append("attachment", payload.attachment);
+    
+    const resp = await fetchWithAuth(url, {
+      method: "POST",
+      body: formData,
+    });
+    const data = await parseJSONSafe(resp);
+    if (resp.ok) return { ok: true, status: resp.status, data };
+    const message = extractErrorMessage(data) ?? "Failed to send message";
+    return { ok: false, status: resp.status, error: message, data };
+  }
+  
+  // Regular JSON request if no attachment
   const resp = await fetchWithAuth(url, {
     method: "POST",
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({
+      text: payload.text || "",
+      reply_to_message_id: payload.reply_to_message_id ?? undefined,
+    }),
   });
   const data = await parseJSONSafe(resp);
   if (resp.ok) {
@@ -1100,18 +1132,7 @@ export async function sendChatMessageUserWithReply(
   text: string,
   reply_to_message_id?: number | null,
 ): Promise<ApiResult> {
-  const url = `${PETS_BASE}/chat/conversations/${conversationId}/messages/`;
-  const resp = await fetchWithAuth(url, {
-    method: "POST",
-    body: JSON.stringify({
-      text,
-      reply_to_message_id: reply_to_message_id ?? undefined,
-    }),
-  });
-  const data = await parseJSONSafe(resp);
-  if (resp.ok) return { ok: true, status: resp.status, data };
-  const message = extractErrorMessage(data) ?? "Failed to send message";
-  return { ok: false, status: resp.status, error: message, data };
+  return sendChatMessageUser(conversationId, { text, reply_to_message_id });
 }
 
 export async function fetchAdminChatConversations(statusFilter?: string): Promise<ApiResult> {
@@ -1159,11 +1180,43 @@ export async function fetchChatMessagesAdmin(conversationId: number): Promise<Ap
   return { ok: false, status: resp.status, error: message, data };
 }
 
-export async function sendChatMessageAdmin(conversationId: number, text: string): Promise<ApiResult> {
+export async function sendChatMessageAdmin(
+  conversationId: number,
+  payload: {
+    text?: string;
+    attachment?: File;
+    reply_to_message_id?: number | null;
+  }
+): Promise<ApiResult> {
   const url = `${PETS_BASE}/admin/chat/conversations/${conversationId}/messages/`;
+  
+  // Use FormData if there's an attachment
+  if (payload.attachment) {
+    const formData = new FormData();
+    // Always send text field, even if empty
+    formData.append("text", payload.text || "");
+    if (payload.reply_to_message_id) {
+      formData.append("reply_to_message_id", payload.reply_to_message_id.toString());
+    }
+    formData.append("attachment", payload.attachment);
+    
+    const resp = await fetchWithAuth(url, {
+      method: "POST",
+      body: formData,
+    });
+    const data = await parseJSONSafe(resp);
+    if (resp.ok) return { ok: true, status: resp.status, data };
+    const message = extractErrorMessage(data) ?? "Failed to send message";
+    return { ok: false, status: resp.status, error: message, data };
+  }
+  
+  // Regular JSON request if no attachment
   const resp = await fetchWithAuth(url, {
     method: "POST",
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({
+      text: payload.text || "",
+      reply_to_message_id: payload.reply_to_message_id ?? undefined,
+    }),
   });
   const data = await parseJSONSafe(resp);
   if (resp.ok) {
@@ -1178,18 +1231,7 @@ export async function sendChatMessageAdminWithReply(
   text: string,
   reply_to_message_id?: number | null,
 ): Promise<ApiResult> {
-  const url = `${PETS_BASE}/admin/chat/conversations/${conversationId}/messages/`;
-  const resp = await fetchWithAuth(url, {
-    method: "POST",
-    body: JSON.stringify({
-      text,
-      reply_to_message_id: reply_to_message_id ?? undefined,
-    }),
-  });
-  const data = await parseJSONSafe(resp);
-  if (resp.ok) return { ok: true, status: resp.status, data };
-  const message = extractErrorMessage(data) ?? "Failed to send message";
-  return { ok: false, status: resp.status, error: message, data };
+  return sendChatMessageAdmin(conversationId, { text, reply_to_message_id });
 }
 
 export async function updateAdminConversationStatus(
@@ -1582,17 +1624,74 @@ export async function fetchChatroomMessages(chatroomId: number): Promise<ApiResu
 export async function sendChatroomMessage(
   chatroomId: number,
   payload: {
-    text: string;
+    text?: string;
     reply_to_message_id?: number;
+    attachment?: File;
   }
 ): Promise<ApiResult> {
   const url = `${PETS_BASE}/chatrooms/${chatroomId}/messages/`;
+  
+  // Use FormData if there's an attachment
+  if (payload.attachment) {
+    const formData = new FormData();
+    // Always send text field, even if empty
+    formData.append("text", payload.text || "");
+    if (payload.reply_to_message_id) {
+      formData.append("reply_to_message_id", payload.reply_to_message_id.toString());
+    }
+    formData.append("attachment", payload.attachment);
+    
+    const resp = await fetchWithAuth(url, {
+      method: "POST",
+      body: formData,
+    });
+    const data = await parseJSONSafe(resp);
+    if (resp.ok) return { ok: true, status: resp.status, data };
+    const message = extractErrorMessage(data) ?? "Failed to send message";
+    return { ok: false, status: resp.status, error: message, data };
+  }
+  
+  // Regular JSON request if no attachment
   const resp = await fetchWithAuth(url, {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ text: payload.text || "", reply_to_message_id: payload.reply_to_message_id }),
   });
   const data = await parseJSONSafe(resp);
   if (resp.ok) return { ok: true, status: resp.status, data };
   const message = extractErrorMessage(data) ?? "Failed to send message";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/**
+ * Delete a chatroom message for the current user only
+ */
+export async function deleteChatroomMessageForMe(
+  chatroomId: number,
+  messageId: number,
+): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chatrooms/${chatroomId}/messages/${messageId}/delete-for-me/`;
+  const resp = await fetchWithAuth(url, { 
+    method: "POST", 
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}) 
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to delete message";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/**
+ * Delete a chatroom message for everyone
+ */
+export async function deleteChatroomMessageForEveryone(
+  chatroomId: number,
+  messageId: number,
+): Promise<ApiResult> {
+  const url = `${PETS_BASE}/chatrooms/${chatroomId}/messages/${messageId}/delete-for-everyone/`;
+  const resp = await fetchWithAuth(url, { method: "DELETE" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to delete message";
   return { ok: false, status: resp.status, error: message, data };
 }

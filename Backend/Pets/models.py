@@ -309,7 +309,7 @@ class ChatMessage(models.Model):
         related_name="messages",
     )
     sender = models.ForeignKey(User, on_delete=models.CASCADE)
-    text = models.TextField()
+    text = models.TextField(blank=True)
     # Reply support (WhatsApp-like)
     reply_to = models.ForeignKey(
         "self",
@@ -317,6 +317,36 @@ class ChatMessage(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="replies",
+    )
+    # Attachment support
+    attachment = models.FileField(
+        upload_to="chat_attachments/%Y/%m/%d/",
+        null=True,
+        blank=True,
+        help_text="File attachment (image, video, document, or folder archive)"
+    )
+    attachment_type = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+        choices=[
+            ('image', 'Image'),
+            ('video', 'Video'),
+            ('document', 'Document'),
+            ('folder', 'Folder Archive'),
+        ],
+        help_text="Type of attachment"
+    )
+    attachment_name = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Original filename"
+    )
+    attachment_size = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="File size in bytes"
     )
     # Delete support
     is_deleted = models.BooleanField(default=False)
@@ -553,13 +583,43 @@ class ChatroomMessage(models.Model):
         related_name='messages'
     )
     sender = models.ForeignKey(User, on_delete=models.CASCADE)
-    text = models.TextField()
+    text = models.TextField(blank=True)
     reply_to = models.ForeignKey(
         'self',
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
         related_name='replies'
+    )
+    # Attachment support
+    attachment = models.FileField(
+        upload_to="chatroom_attachments/%Y/%m/%d/",
+        null=True,
+        blank=True,
+        help_text="File attachment (image, video, document, or folder archive)"
+    )
+    attachment_type = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+        choices=[
+            ('image', 'Image'),
+            ('video', 'Video'),
+            ('document', 'Document'),
+            ('folder', 'Folder Archive'),
+        ],
+        help_text="Type of attachment"
+    )
+    attachment_name = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Original filename"
+    )
+    attachment_size = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="File size in bytes"
     )
     is_deleted = models.BooleanField(default=False)
     deleted_for = models.JSONField(default=list, blank=True)

@@ -4,6 +4,7 @@ import {
   acceptChatroomAccessRequest,
   rejectChatroomAccessRequest,
 } from "../services/api";
+import Toast from "../components/Toast";
 
 interface ChatroomAccessRequest {
   id: number;
@@ -38,6 +39,12 @@ export default function MyChatroomRequests() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<number | null>(null);
+  const [toast, setToast] = useState<{
+    isVisible: boolean;
+    type: "success" | "error";
+    title: string;
+    message: string;
+  } | null>(null);
 
   useEffect(() => {
     loadRequests();
@@ -48,8 +55,8 @@ export default function MyChatroomRequests() {
     setError(null);
     const res = await fetchChatroomAccessRequests();
     if (res.ok && Array.isArray(res.data)) {
-      // Only show pending requests (hide accepted/rejected)
-      setRequests(res.data.filter((req: any) => req.status === 'pending'));
+      // Show ALL requests (pending, accepted, rejected) - persistent history
+      setRequests(res.data);
     } else {
       setError(res.error || "Failed to load requests");
     }
@@ -60,12 +67,24 @@ export default function MyChatroomRequests() {
     setProcessingId(requestId);
     const res = await acceptChatroomAccessRequest(requestId);
     if (res.ok) {
-      // Remove from list after accepting
-      setRequests((prev) => prev.filter((r) => r.id !== requestId));
+      // Update status in the list (don't remove)
+      setRequests((prev) => prev.map((r) => 
+        r.id === requestId ? { ...r, status: 'accepted', responded_at: new Date().toISOString() } : r
+      ));
       // Show success message
-      alert("Chatroom invitation accepted! The chatroom has been created and you can now access it in Chat Rooms.");
+      setToast({
+        isVisible: true,
+        type: "success",
+        title: "Success",
+        message: "Chatroom invitation accepted! The chatroom has been created and you can now access it in Chat Rooms."
+      });
     } else {
-      alert(res.error || "Failed to accept request");
+      setToast({
+        isVisible: true,
+        type: "error",
+        title: "Error",
+        message: res.error || "Failed to accept request"
+      });
     }
     setProcessingId(null);
   }
@@ -77,11 +96,23 @@ export default function MyChatroomRequests() {
     setProcessingId(requestId);
     const res = await rejectChatroomAccessRequest(requestId);
     if (res.ok) {
-      // Remove from list after rejecting
-      setRequests((prev) => prev.filter((r) => r.id !== requestId));
-      alert("Chatroom invitation rejected.");
+      // Update status in the list (don't remove)
+      setRequests((prev) => prev.map((r) => 
+        r.id === requestId ? { ...r, status: 'rejected', responded_at: new Date().toISOString() } : r
+      ));
+      setToast({
+        isVisible: true,
+        type: "success",
+        title: "Success",
+        message: "Chatroom invitation rejected."
+      });
     } else {
-      alert(res.error || "Failed to reject request");
+      setToast({
+        isVisible: true,
+        type: "error",
+        title: "Error",
+        message: res.error || "Failed to reject request"
+      });
     }
     setProcessingId(null);
   }
@@ -131,6 +162,15 @@ export default function MyChatroomRequests() {
 
   return (
     <div style={{ padding: 24 }}>
+      {toast && (
+        <Toast
+          type={toast.type}
+          title={toast.title}
+          message={toast.message}
+          isVisible={toast.isVisible}
+          onClose={() => setToast(null)}
+        />
+      )}
       <div style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 24, fontWeight: 700, color: "#0f172a", marginBottom: 8 }}>
           Chatroom Invitations
@@ -197,8 +237,69 @@ export default function MyChatroomRequests() {
                     <strong>Request Type:</strong> {request.request_type === "chatroom_creation_request" ? "Chatroom Creation Request" : "Chatroom Join Request"}
                   </div>
 
-                  {/* Action Buttons */}
-                  {(
+                  {/* Status Badge */}
+                  <div style={{ marginBottom: 12 }}>
+                    {request.status === 'pending' && (
+                      <div>
+                        <span style={{
+                          display: "inline-block",
+                          padding: "4px 12px",
+                          borderRadius: 999,
+                          background: "#fef3c7",
+                          color: "#92400e",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          marginBottom: 4,
+                        }}>
+                          Pending
+                        </span>
+                        <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
+                          Waiting for your response
+                        </div>
+                      </div>
+                    )}
+                    {request.status === 'accepted' && (
+                      <div>
+                        <span style={{
+                          display: "inline-block",
+                          padding: "4px 12px",
+                          borderRadius: 999,
+                          background: "#d1fae5",
+                          color: "#065f46",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          marginBottom: 4,
+                        }}>
+                          Accepted
+                        </span>
+                        <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
+                          You accepted this invitation. Go to Chat Rooms to access it.
+                        </div>
+                      </div>
+                    )}
+                    {request.status === 'rejected' && (
+                      <div>
+                        <span style={{
+                          display: "inline-block",
+                          padding: "4px 12px",
+                          borderRadius: 999,
+                          background: "#fee2e2",
+                          color: "#991b1b",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          marginBottom: 4,
+                        }}>
+                          Rejected
+                        </span>
+                        <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
+                          You rejected this invitation.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action Buttons - Only show for pending requests */}
+                  {request.status === 'pending' && (
                     <div style={{ display: "flex", gap: 12 }}>
                       <button
                         onClick={() => handleAccept(request.id)}

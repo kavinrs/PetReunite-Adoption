@@ -18,6 +18,9 @@ import {
   sendChatroomMessage,
 } from "../services/api";
 
+import { MessageAttachmentDisplay } from "../components/ChatAttachment";
+import Toast from "../components/Toast";
+
 import emojiIcon from "../assets/chat/emoji.png";
 import galleryIcon from "../assets/chat/gallery.png";
 import sendIcon from "../assets/chat/send.png";
@@ -60,6 +63,9 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
   const [chatroomMessagesLoading, setChatroomMessagesLoading] = useState(false);
   const [chatroomMessageInput, setChatroomMessageInput] = useState("");
   const [chatroomReplyingTo, setChatroomReplyingTo] = useState<any | null>(null);
+  const [chatroomShowEmojiPicker, setChatroomShowEmojiPicker] = useState(false);
+  const [chatroomSelectedFile, setChatroomSelectedFile] = useState<File | null>(null);
+  const chatroomFileInputRef = useRef<HTMLInputElement | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +80,8 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
   const [messageInput, setMessageInput] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const [conversationSelectedFile, setConversationSelectedFile] = useState<File | null>(null);
+  const conversationFileInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [messageError, setMessageError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -90,6 +98,12 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
     messageId: number;
     x: number;
     y: number;
+  } | null>(null);
+  const [toast, setToast] = useState<{
+    isVisible: boolean;
+    type: "success" | "error";
+    title: string;
+    message: string;
   } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -235,6 +249,15 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
         padding: 32,
       }}
     >
+      {toast && (
+        <Toast
+          type={toast.type}
+          title={toast.title}
+          message={toast.message}
+          isVisible={toast.isVisible}
+          onClose={() => setToast(null)}
+        />
+      )}
       <div
         style={{
           display: "flex",
@@ -845,7 +868,21 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                                 Message deleted
                               </span>
                             ) : (
-                              (m.text || m.content)
+                              <>
+                                {(m.text || m.content)}
+                                
+                                {/* Attachment Display */}
+                                {m.attachment_url && (
+                                  <div style={{ marginTop: (m.text || m.content) ? 8 : 0 }}>
+                                    <MessageAttachmentDisplay
+                                      attachmentUrl={m.attachment_url}
+                                      attachmentType={m.attachment_type}
+                                      attachmentName={m.attachment_name}
+                                      attachmentSize={m.attachment_size}
+                                    />
+                                  </div>
+                                )}
+                              </>
                             )}
 
                             {hoveredMessageId === Number(m.id) && (
@@ -963,7 +1000,17 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                 <form
                   onSubmit={async (e) => {
                     e.preventDefault();
-                    if (!selectedConversationId || !messageInput.trim()) return;
+                    
+                    // Validate: must have text OR attachment
+                    const hasText = messageInput.trim().length > 0;
+                    const hasAttachment = conversationSelectedFile !== null;
+                    
+                    if (!selectedConversationId || (!hasText && !hasAttachment)) {
+                      if (!hasText && !hasAttachment) {
+                        setMessageError("Please enter a message or select a file");
+                      }
+                      return;
+                    }
 
                     const text = messageInput.trim();
                     setMessageInput("");
@@ -994,31 +1041,20 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                       );
                     }
 
-                    const res = replyingTo
-                      ? await sendChatMessageUserWithReply(
-                          selectedConversationId,
-                          text,
-                          replyingTo?.id ? Number(replyingTo.id) : undefined,
-                        )
-                      : await sendChatMessageUser(selectedConversationId, text);
+                    const res = await sendChatMessageUser(selectedConversationId, {
+                      text: text || undefined,
+                      attachment: conversationSelectedFile || undefined,
+                      reply_to_message_id: replyingTo?.id ? Number(replyingTo.id) : undefined,
+                    });
+                    
                     if (res.ok) {
                       setReplyingTo(null);
-                      setMessages((prev) => [
-                        ...prev,
-                        {
-                          id: res.data?.id ?? `local-${Date.now()}`,
-                          text,
-                          sender_role: "user",
-                          sender: { id: currentUserId },
-                          reply_to: replyingTo
-                            ? {
-                                id: replyingTo.id,
-                                text: replyingTo.text ?? "",
-                                sender: replyingTo.sender ?? null,
-                              }
-                            : null,
-                        },
-                      ]);
+                      setConversationSelectedFile(null);
+                      // Reload messages to get the new message with attachment
+                      const messagesRes = await fetchChatMessagesUser(selectedConversationId);
+                      if (messagesRes.ok && Array.isArray(messagesRes.data)) {
+                        setMessages(messagesRes.data);
+                      }
                     } else if (res.error) {
                       setMessageError(res.error);
                     }
@@ -1120,6 +1156,45 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                       </div>
                     )}
 
+                    {/* File Preview */}
+                    {conversationSelectedFile && (
+                      <div
+                        style={{
+                          padding: "8px 12px",
+                          background: "#f3f4f6",
+                          borderRadius: 8,
+                          border: "1px solid #e5e7eb",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          marginBottom: 8,
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "#0f172a" }}>
+                            📎 {conversationSelectedFile.name}
+                          </div>
+                          <div style={{ fontSize: 11, color: "#6b7280" }}>
+                            {(conversationSelectedFile.size / 1024).toFixed(1)} KB
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setConversationSelectedFile(null)}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            cursor: "pointer",
+                            fontSize: 16,
+                            lineHeight: 1,
+                            color: "#ef4444",
+                          }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
+
                     <div
                       style={{
                         display: "flex",
@@ -1165,7 +1240,7 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                       />
                       <button
                         type="button"
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={() => conversationFileInputRef.current?.click()}
                         style={{
                           border: "none",
                           background: "transparent",
@@ -1183,13 +1258,14 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                       </button>
                       <button
                         type="submit"
+                        disabled={!messageInput.trim() && !conversationSelectedFile}
                         style={{
                           border: "none",
                           background: "transparent",
-                          cursor: selectedConversationId
+                          cursor: (messageInput.trim() || conversationSelectedFile)
                             ? "pointer"
                             : "not-allowed",
-                          opacity: selectedConversationId ? 0.9 : 0.5,
+                          opacity: (messageInput.trim() || conversationSelectedFile) ? 0.9 : 0.5,
                           padding: 0,
                           display: "flex",
                           alignItems: "center",
@@ -1202,18 +1278,6 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                         />
                       </button>
                     </div>
-
-                    {selectedFileName && (
-                      <div
-                        style={{
-                          fontSize: 11,
-                          color: "#6b7280",
-                          paddingLeft: 6,
-                        }}
-                      >
-                        Selected file: {selectedFileName}
-                      </div>
-                    )}
 
                     {messageError && (
                       <div
@@ -1230,11 +1294,15 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
 
                     <input
                       type="file"
-                      ref={fileInputRef}
+                      ref={conversationFileInputRef}
+                      accept="image/*,video/*,.pdf,.doc,.docx,.zip,.rar,.tar,.gz"
                       style={{ display: "none" }}
                       onChange={(e) => {
                         const file = e.target.files?.[0] || null;
-                        setSelectedFileName(file ? file.name : null);
+                        setConversationSelectedFile(file);
+                        if (e.target) {
+                          e.target.value = "";
+                        }
                       }}
                     />
                   </div>
@@ -1634,161 +1702,71 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                         <div
                           key={msg.id}
                           style={{
+                            width: "100%",
+                            display: "flex",
+                            justifyContent: isMe ? "flex-end" : "flex-start",
+                            marginBottom: "12px",
+                          }}
+                        >
+                          <div style={{
+                            maxWidth: "70%",
                             display: "flex",
                             flexDirection: "column",
                             alignItems: isMe ? "flex-end" : "flex-start",
-                            paddingRight: isMe ? 32 : 0,
-                          }}
-                        >
-                          {/* Sender Name on Top */}
-                          <div
-                            style={{
-                              fontSize: 11,
+                          }}>
+                            {/* Sender Name */}
+                            <div style={{
+                              fontSize: "11px",
                               fontWeight: 600,
                               color: "#64748b",
-                              marginBottom: 4,
-                              paddingLeft: isMe ? 0 : 12,
-                              paddingRight: isMe ? 12 : 0,
-                            }}
-                          >
-                            {senderName}
-                          </div>
-
-                          <div
-                            style={{
-                              position: "relative",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 4,
-                            }}
-                          >
-                            <div
-                              style={{
-                                position: "relative",
-                                maxWidth: "70%",
-                                padding: "10px 14px",
-                                borderRadius: 18,
-                                fontSize: 14,
-                                lineHeight: 1.5,
-                                background: isMe ? "#6366f1" : "#ffffff",
-                                color: isMe ? "#ffffff" : "#111827",
-                                border: isMe ? "none" : "1px solid #e5e7eb",
-                                boxShadow: isMe ? "0 2px 8px rgba(99,102,241,0.25)" : "0 2px 8px rgba(0,0,0,0.08)",
-                                wordBreak: "break-word",
-                                display: "block",
-                              }}
-                              onMouseEnter={() => setHoveredMessageId(msg.id)}
-                              onMouseLeave={() => setHoveredMessageId(null)}
-                              onContextMenu={(e) => {
-                                e.preventDefault();
-                                setContextMenu({
-                                  messageId: msg.id,
-                                  x: e.clientX,
-                                  y: e.clientY,
-                                });
-                              }}
-                            >
-                            {/* Reply Preview */}
-                            {msg.reply_to && (
-                              <div
-                                style={{
-                                  marginBottom: 6,
-                                  padding: "6px 8px",
-                                  borderRadius: 12,
-                                  background: isMe ? "rgba(255,255,255,0.18)" : "#f3f4f6",
-                                  borderLeft: `3px solid ${isMe ? "#ffffff" : "#0ea5e9"}`,
-                                  fontSize: 11,
-                                  opacity: 0.95,
-                                }}
-                              >
-                                <div style={{ fontWeight: 700, marginBottom: 2 }}>
-                                  {msg.reply_to.sender?.username || "Reply"}
-                                </div>
-                                <div
-                                  style={{
-                                    whiteSpace: "nowrap",
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                  }}
-                                >
-                                  {msg.reply_to.text || ""}
-                                </div>
-                              </div>
-                            )}
-
-                              {/* Message Text */}
-                              <div style={{ 
-                                wordBreak: "break-word",
-                                whiteSpace: "pre-wrap",
-                                display: "block"
-                              }}>
-                                {msg.text}
-                              </div>
+                              marginBottom: "4px",
+                              paddingLeft: isMe ? "0" : "12px",
+                              paddingRight: isMe ? "12px" : "0",
+                            }}>
+                              {senderName}
                             </div>
 
-                            {/* Three-dot Menu - Closer to message */}
-                            {hoveredMessageId === msg.id && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setMenuForMessageId((prev) =>
-                                    prev === msg.id ? null : msg.id,
-                                  );
-                                  setContextMenu(null);
-                                  const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
-                                  const items: { label: string; onClick: () => void }[] = [
-                                    {
-                                      label: "Reply",
-                                      onClick: () => {
-                                        setChatroomReplyingTo(msg);
-                                        setMenuForMessageId(null);
-                                        setOptionsMenu(null);
-                                      },
-                                    },
-                                  ];
-                                  setOptionsMenu({
-                                    message: msg,
-                                    x: rect.right,
-                                    y: rect.bottom,
-                                    items,
-                                  });
-                                }}
-                                style={{
-                                  width: 22,
-                                  height: 22,
-                                  borderRadius: "50%",
-                                  border: "1px solid rgba(0,0,0,0.1)",
-                                  background: "#111827",
-                                  color: "#ffffff",
-                                  cursor: "pointer",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  fontSize: 14,
-                                  lineHeight: 1,
-                                  flexShrink: 0,
-                                }}
-                              >
-                                ⋮
-                              </button>
-                            )}
-                          </div>
+                            {/* Message Bubble */}
+                            <div style={{
+                              padding: "10px 14px",
+                              borderRadius: "18px",
+                              background: isMe ? "#6366f1" : "#ffffff",
+                              color: isMe ? "#ffffff" : "#111827",
+                              border: isMe ? "none" : "1px solid #e5e7eb",
+                              boxShadow: isMe ? "0 2px 8px rgba(99,102,241,0.25)" : "0 2px 8px rgba(0,0,0,0.08)",
+                              fontSize: "14px",
+                              lineHeight: "1.5",
+                              wordWrap: "break-word",
+                              overflowWrap: "break-word",
+                            }}>
+                              {msg.text && (typeof msg.text === 'string' ? msg.text : Array.isArray(msg.text) ? msg.text.join('') : String(msg.text || ''))}
+                              
+                              {/* Attachment Display */}
+                              {msg.attachment_url && (
+                                <div style={{ marginTop: msg.text ? 8 : 0 }}>
+                                  <MessageAttachmentDisplay
+                                    attachmentUrl={msg.attachment_url}
+                                    attachmentType={msg.attachment_type}
+                                    attachmentName={msg.attachment_name}
+                                    attachmentSize={msg.attachment_size}
+                                  />
+                                </div>
+                              )}
+                            </div>
 
-                          {/* Timestamp */}
-                          <div
-                            style={{
-                              fontSize: 10,
+                            {/* Timestamp */}
+                            <div style={{
+                              fontSize: "10px",
                               color: "#9ca3af",
-                              marginTop: 2,
-                              paddingLeft: isMe ? 0 : 12,
-                              paddingRight: isMe ? 12 : 0,
-                            }}
-                          >
-                            {new Date(msg.created_at).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                              marginTop: "2px",
+                              paddingLeft: isMe ? "0" : "12px",
+                              paddingRight: isMe ? "12px" : "0",
+                            }}>
+                              {new Date(msg.created_at).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </div>
                           </div>
                         </div>
                       );
@@ -1901,26 +1879,128 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                       </div>
                     )}
 
+                    {/* File Preview */}
+                    {chatroomSelectedFile && (
+                      <div
+                        style={{
+                          marginBottom: 8,
+                          padding: "8px 12px",
+                          borderRadius: 8,
+                          background: "#f3f4f6",
+                          border: "1px solid #e5e7eb",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, color: "#0f172a", fontWeight: 600 }}>
+                            📎 {chatroomSelectedFile.name}
+                          </div>
+                          <div style={{ fontSize: 11, color: "#6b7280" }}>
+                            {(chatroomSelectedFile.size / 1024).toFixed(1)} KB
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setChatroomSelectedFile(null)}
+                          style={{
+                            padding: "4px 8px",
+                            borderRadius: 6,
+                            border: "none",
+                            background: "transparent",
+                            color: "#ef4444",
+                            cursor: "pointer",
+                            fontSize: 16,
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Emoji Picker */}
+                    {chatroomShowEmojiPicker && (
+                      <div
+                        style={{
+                          marginBottom: 8,
+                          padding: 8,
+                          borderRadius: 8,
+                          background: "#ffffff",
+                          border: "1px solid #e5e7eb",
+                          display: "flex",
+                          gap: 8,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        {["😊", "😂", "😍", "❤️", "👍", "🙏", "😢", "😮", "🎉", "🔥", "👏", "💯"].map((emo) => (
+                          <span
+                            key={emo}
+                            onClick={() => {
+                              setChatroomMessageInput((prev) => prev + emo);
+                              setChatroomShowEmojiPicker(false);
+                            }}
+                            style={{
+                              fontSize: 24,
+                              cursor: "pointer",
+                              padding: 4,
+                            }}
+                          >
+                            {emo}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Hidden File Input */}
+                    <input
+                      ref={chatroomFileInputRef}
+                      type="file"
+                      accept="image/*,video/*,.pdf,.doc,.docx,.zip,.rar,.tar,.gz"
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        setChatroomSelectedFile(file);
+                        if (e.target) {
+                          e.target.value = "";
+                        }
+                      }}
+                    />
+
                     {/* Input Box */}
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <div style={{ fontSize: 20, cursor: "pointer" }}>😊</div>
+                      <button
+                        type="button"
+                        onClick={() => setChatroomShowEmojiPicker((v) => !v)}
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          cursor: "pointer",
+                          fontSize: 20,
+                          padding: 4,
+                        }}
+                      >
+                        😊
+                      </button>
                       <input
                         type="text"
                         placeholder="Type a message"
                         value={chatroomMessageInput}
                         onChange={(e) => setChatroomMessageInput(e.target.value)}
                         onKeyPress={async (e) => {
-                          if (e.key === "Enter" && !e.shiftKey && chatroomMessageInput.trim()) {
+                          if (e.key === "Enter" && !e.shiftKey && (chatroomMessageInput.trim() || chatroomSelectedFile)) {
                             e.preventDefault();
-                            console.log("User sending chatroom message", { selectedChatroomId, text: chatroomMessageInput });
+                            console.log("User sending chatroom message", { selectedChatroomId, text: chatroomMessageInput, hasFile: !!chatroomSelectedFile });
                             const res = await sendChatroomMessage(selectedChatroomId, {
-                              text: chatroomMessageInput,
+                              text: chatroomMessageInput || undefined,
                               reply_to_message_id: chatroomReplyingTo?.id,
+                              attachment: chatroomSelectedFile || undefined,
                             });
                             console.log("User chatroom message response", res);
                             if (res.ok) {
                               setChatroomMessageInput("");
                               setChatroomReplyingTo(null);
+                              setChatroomSelectedFile(null);
                               // Reload messages
                               const messagesRes = await fetchChatroomMessages(selectedChatroomId);
                               if (messagesRes.ok && Array.isArray(messagesRes.data)) {
@@ -1928,7 +2008,12 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                               }
                             } else {
                               console.error("Failed to send message", res.error);
-                              alert(`Failed to send message: ${res.error || "Unknown error"}`);
+                              setToast({
+                                isVisible: true,
+                                type: "error",
+                                title: "Error",
+                                message: `Failed to send message: ${res.error || "Unknown error"}`
+                              });
                             }
                           }
                         }}
@@ -1943,20 +2028,34 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                           color: "#111827",
                         }}
                       />
-                      <div style={{ fontSize: 20, cursor: "pointer" }}>📎</div>
+                      <button
+                        type="button"
+                        onClick={() => chatroomFileInputRef.current?.click()}
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          cursor: "pointer",
+                          fontSize: 20,
+                          padding: 4,
+                        }}
+                      >
+                        📎
+                      </button>
                       <button
                         type="button"
                         onClick={async () => {
-                          if (!chatroomMessageInput.trim()) return;
-                          console.log("User clicking send button", { selectedChatroomId, text: chatroomMessageInput });
+                          if (!chatroomMessageInput.trim() && !chatroomSelectedFile) return;
+                          console.log("User clicking send button", { selectedChatroomId, text: chatroomMessageInput, hasFile: !!chatroomSelectedFile });
                           const res = await sendChatroomMessage(selectedChatroomId, {
-                            text: chatroomMessageInput,
+                            text: chatroomMessageInput || undefined,
                             reply_to_message_id: chatroomReplyingTo?.id,
+                            attachment: chatroomSelectedFile || undefined,
                           });
                           console.log("User chatroom message response", res);
                           if (res.ok) {
                             setChatroomMessageInput("");
                             setChatroomReplyingTo(null);
+                            setChatroomSelectedFile(null);
                             // Reload messages
                             const messagesRes = await fetchChatroomMessages(selectedChatroomId);
                             if (messagesRes.ok && Array.isArray(messagesRes.data)) {
@@ -1964,18 +2063,23 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                             }
                           } else {
                             console.error("Failed to send message", res.error);
-                            alert(`Failed to send message: ${res.error || "Unknown error"}`);
+                            setToast({
+                              isVisible: true,
+                              type: "error",
+                              title: "Error",
+                              message: `Failed to send message: ${res.error || "Unknown error"}`
+                            });
                           }
                         }}
-                        disabled={!chatroomMessageInput.trim()}
+                        disabled={!chatroomMessageInput.trim() && !chatroomSelectedFile}
                         style={{
                           padding: "8px 12px",
                           borderRadius: 8,
                           border: "none",
-                          background: chatroomMessageInput.trim() ? "#3b82f6" : "#e5e7eb",
+                          background: (chatroomMessageInput.trim() || chatroomSelectedFile) ? "#3b82f6" : "#e5e7eb",
                           color: "white",
                           fontSize: 20,
-                          cursor: chatroomMessageInput.trim() ? "pointer" : "not-allowed",
+                          cursor: (chatroomMessageInput.trim() || chatroomSelectedFile) ? "pointer" : "not-allowed",
                         }}
                       >
                         ✈️

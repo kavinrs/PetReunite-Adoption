@@ -12,6 +12,9 @@ from .models import (
     STATUS_CHOICES,
     AdoptionRequest,
     ChatMessage,
+    Chatroom,
+    ChatroomMessage,
+    ChatroomParticipant,
     Conversation,
     FoundPetReport,
     LostPetReport,
@@ -679,6 +682,7 @@ class UserChatMessageListCreateView(generics.ListCreateAPIView):
     """List/send messages in a conversation for the owning user."""
 
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
 
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -691,17 +695,63 @@ class UserChatMessageListCreateView(generics.ListCreateAPIView):
         return convo.messages.select_related("sender")
 
     def perform_create(self, serializer):
+        import mimetypes
+        
         convo_id = self.kwargs["conversation_id"]
         convo = get_object_or_404(Conversation, pk=convo_id, user=self.request.user)
         if convo.status != "active":
             raise permissions.PermissionDenied("Conversation is not active.")
+        
         reply_to_id = self.request.data.get("reply_to_message_id")
         reply_to = None
         if reply_to_id not in (None, "", "null"):
-            reply_to = get_object_or_404(
-                ChatMessage, pk=reply_to_id, conversation=convo
+            try:
+                reply_to = get_object_or_404(
+                    ChatMessage, pk=reply_to_id, conversation=convo
+                )
+            except Exception as e:
+                # Log but don't fail if reply_to is invalid
+                print(f"Invalid reply_to_id: {reply_to_id}, error: {e}")
+        
+        # Handle file attachment
+        attachment_file = self.request.FILES.get('attachment')
+        attachment_type = None
+        attachment_name = None
+        attachment_size = None
+        
+        if attachment_file:
+            attachment_name = attachment_file.name
+            attachment_size = attachment_file.size
+            
+            # Determine attachment type based on MIME type
+            mime_type, _ = mimetypes.guess_type(attachment_name)
+            if mime_type:
+                if mime_type.startswith('image/'):
+                    attachment_type = 'image'
+                elif mime_type.startswith('video/'):
+                    attachment_type = 'video'
+                elif attachment_name.endswith(('.zip', '.tar', '.gz', '.rar')):
+                    attachment_type = 'folder'
+                else:
+                    attachment_type = 'document'
+            else:
+                attachment_type = 'document'
+        
+        try:
+            serializer.save(
+                conversation=convo,
+                sender=self.request.user,
+                reply_to=reply_to,
+                attachment=attachment_file,
+                attachment_type=attachment_type,
+                attachment_name=attachment_name,
+                attachment_size=attachment_size
             )
-        serializer.save(conversation=convo, sender=self.request.user, reply_to=reply_to)
+        except Exception as e:
+            print(f"Error saving message: {e}")
+            print(f"Request data: {self.request.data}")
+            print(f"Request FILES: {self.request.FILES}")
+            raise
 
 
 class AdminChatMessageListCreateView(generics.ListCreateAPIView):
@@ -713,6 +763,7 @@ class AdminChatMessageListCreateView(generics.ListCreateAPIView):
     """
 
     permission_classes = [IsAdminOrStaff]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
 
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -725,6 +776,8 @@ class AdminChatMessageListCreateView(generics.ListCreateAPIView):
         return convo.messages.select_related("sender")
 
     def perform_create(self, serializer):
+        import mimetypes
+        
         convo_id = self.kwargs["conversation_id"]
         convo = get_object_or_404(Conversation, pk=convo_id)
         # Admin can message in active or waiting(read_only) states (and also while
@@ -735,13 +788,57 @@ class AdminChatMessageListCreateView(generics.ListCreateAPIView):
         if convo.admin_id is None:
             convo.admin = self.request.user
             convo.save(update_fields=["admin", "updated_at"])
+        
         reply_to_id = self.request.data.get("reply_to_message_id")
         reply_to = None
         if reply_to_id not in (None, "", "null"):
-            reply_to = get_object_or_404(
-                ChatMessage, pk=reply_to_id, conversation=convo
+            try:
+                reply_to = get_object_or_404(
+                    ChatMessage, pk=reply_to_id, conversation=convo
+                )
+            except Exception as e:
+                # Log but don't fail if reply_to is invalid
+                print(f"Invalid reply_to_id: {reply_to_id}, error: {e}")
+        
+        # Handle file attachment
+        attachment_file = self.request.FILES.get('attachment')
+        attachment_type = None
+        attachment_name = None
+        attachment_size = None
+        
+        if attachment_file:
+            attachment_name = attachment_file.name
+            attachment_size = attachment_file.size
+            
+            # Determine attachment type based on MIME type
+            mime_type, _ = mimetypes.guess_type(attachment_name)
+            if mime_type:
+                if mime_type.startswith('image/'):
+                    attachment_type = 'image'
+                elif mime_type.startswith('video/'):
+                    attachment_type = 'video'
+                elif attachment_name.endswith(('.zip', '.tar', '.gz', '.rar')):
+                    attachment_type = 'folder'
+                else:
+                    attachment_type = 'document'
+            else:
+                attachment_type = 'document'
+        
+        try:
+            serializer.save(
+                conversation=convo,
+                sender=self.request.user,
+                reply_to=reply_to,
+                attachment=attachment_file,
+                attachment_type=attachment_type,
+                attachment_name=attachment_name,
+                attachment_size=attachment_size
             )
-        serializer.save(conversation=convo, sender=self.request.user, reply_to=reply_to)
+        except Exception as e:
+            print(f"Error saving admin message: {e}")
+            print(f"Request data: {self.request.data}")
+            print(f"Request FILES: {self.request.FILES}")
+            raise
 
 
 class AdminConversationListView(generics.ListAPIView):
@@ -933,6 +1030,81 @@ class AdminChatMessageDeleteForEveryoneView(APIView):
         msg.is_deleted = True
         msg.save(update_fields=["is_deleted"])
         return Response(ChatMessageSerializer(msg, context={"request": request}).data)
+
+
+class ChatroomMessageDeleteForMeView(APIView):
+    """Delete a chatroom message for the current user only"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, chatroom_id, message_id):
+        # Check if user is a participant in the chatroom
+        chatroom = get_object_or_404(Chatroom, pk=chatroom_id)
+        is_participant = ChatroomParticipant.objects.filter(
+            chatroom=chatroom,
+            user=request.user,
+            is_active=True
+        ).exists()
+        
+        if not is_participant:
+            return Response(
+                {"detail": "You are not a participant in this chatroom."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        msg = get_object_or_404(ChatroomMessage, pk=message_id, chatroom=chatroom)
+        uid = int(request.user.id)
+        deleted_for = msg.deleted_for or []
+        if uid not in deleted_for:
+            deleted_for.append(uid)
+            msg.deleted_for = deleted_for
+            msg.save(update_fields=["deleted_for"])
+        
+        return Response(
+            ChatroomMessageSerializer(msg, context={"request": request}).data
+        )
+
+
+class ChatroomMessageDeleteForEveryoneView(APIView):
+    """Delete a chatroom message for everyone"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, chatroom_id, message_id):
+        # Check if user is a participant in the chatroom
+        chatroom = get_object_or_404(Chatroom, pk=chatroom_id)
+        is_participant = ChatroomParticipant.objects.filter(
+            chatroom=chatroom,
+            user=request.user,
+            is_active=True
+        ).exists()
+        
+        if not is_participant:
+            return Response(
+                {"detail": "You are not a participant in this chatroom."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        msg = get_object_or_404(ChatroomMessage, pk=message_id, chatroom=chatroom)
+        
+        if msg.is_system:
+            return Response(
+                {"detail": "Cannot delete system message."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Only the sender can delete for everyone
+        if msg.sender_id != request.user.id:
+            return Response(
+                {"detail": "You can only delete your own messages for everyone."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        msg.is_deleted = True
+        msg.save(update_fields=["is_deleted"])
+        
+        return Response(
+            ChatroomMessageSerializer(msg, context={"request": request}).data
+        )
+
 
 class CreateMessageView(APIView):
     """Create a new message in adoption request chat"""
@@ -1737,14 +1909,29 @@ class ClearChatroomMessagesView(APIView):
 
 
 class DeleteChatroomView(APIView):
-    """Delete entire chatroom including messages and participants (admin only)"""
-    permission_classes = [permissions.IsAuthenticated, IsAdminOrStaff]
+    """Delete entire chatroom including messages and participants"""
+    permission_classes = [permissions.IsAuthenticated]
     
     def delete(self, request, chatroom_id):
         from .models import Chatroom
         
         try:
             chatroom = Chatroom.objects.get(id=chatroom_id)
+            
+            # Check if user is an admin OR a participant in the chatroom
+            is_admin = request.user.is_staff or request.user.is_superuser
+            is_participant = ChatroomParticipant.objects.filter(
+                chatroom=chatroom,
+                user=request.user,
+                is_active=True
+            ).exists()
+            
+            if not (is_admin or is_participant):
+                return Response(
+                    {"error": "You don't have permission to delete this chatroom"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
             chatroom_name = chatroom.name
             
             # Delete the chatroom (cascade will delete messages and participants)
@@ -1768,6 +1955,7 @@ class ChatroomMessageListCreateView(generics.ListCreateAPIView):
     """List and create messages in a chatroom"""
     serializer_class = ChatroomMessageSerializer
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
     
     def get_queryset(self):
         from .models import ChatroomMessage, ChatroomParticipant
@@ -1789,6 +1977,9 @@ class ChatroomMessageListCreateView(generics.ListCreateAPIView):
     
     def perform_create(self, serializer):
         from .models import Chatroom, ChatroomParticipant
+        import mimetypes
+        import os
+        
         chatroom_id = self.kwargs.get('chatroom_id')
         
         # Verify chatroom exists
@@ -1817,8 +2008,37 @@ class ChatroomMessageListCreateView(generics.ListCreateAPIView):
             except ChatroomMessage.DoesNotExist:
                 pass
         
+        # Handle file attachment
+        attachment_file = self.request.FILES.get('attachment')
+        attachment_type = None
+        attachment_name = None
+        attachment_size = None
+        
+        if attachment_file:
+            attachment_name = attachment_file.name
+            attachment_size = attachment_file.size
+            
+            # Determine attachment type based on MIME type
+            mime_type, _ = mimetypes.guess_type(attachment_name)
+            if mime_type:
+                if mime_type.startswith('image/'):
+                    attachment_type = 'image'
+                elif mime_type.startswith('video/'):
+                    attachment_type = 'video'
+                elif attachment_name.endswith(('.zip', '.tar', '.gz', '.rar')):
+                    attachment_type = 'folder'
+                else:
+                    attachment_type = 'document'
+            else:
+                # Default to document if MIME type cannot be determined
+                attachment_type = 'document'
+        
         serializer.save(
             chatroom=chatroom,
             sender=self.request.user,
-            reply_to=reply_to
+            reply_to=reply_to,
+            attachment=attachment_file,
+            attachment_type=attachment_type,
+            attachment_name=attachment_name,
+            attachment_size=attachment_size
         )

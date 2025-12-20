@@ -51,6 +51,8 @@ from .views import (
     ChatroomAccessRequestAcceptView,
     ChatroomAccessRequestRejectView,
     ChatroomMessageListCreateView,
+    ChatroomMessageDeleteForMeView,
+    ChatroomMessageDeleteForEveryoneView,
     ChatroomParticipantsView,
     ClearChatroomMessagesView,
     DeleteChatroomView,
@@ -304,6 +306,16 @@ urlpatterns = [
         "chatrooms/<int:chatroom_id>/messages/",
         ChatroomMessageListCreateView.as_view(),
         name="chatroom-messages",
+    ),
+    path(
+        "chatrooms/<int:chatroom_id>/messages/<int:message_id>/delete-for-me/",
+        ChatroomMessageDeleteForMeView.as_view(),
+        name="chatroom-message-delete-for-me",
+    ),
+    path(
+        "chatrooms/<int:chatroom_id>/messages/<int:message_id>/delete-for-everyone/",
+        ChatroomMessageDeleteForEveryoneView.as_view(),
+        name="chatroom-message-delete-for-everyone",
     ),
     path(
         "chatrooms/<int:chatroom_id>/participants/",

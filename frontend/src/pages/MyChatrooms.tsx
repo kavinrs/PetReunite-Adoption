@@ -3,8 +3,10 @@ import {
   fetchMyChatrooms,
   fetchChatroomMessages,
   sendChatroomMessage,
+  deleteChatroom,
   type ApiResult,
 } from "../services/api";
+import Toast from "../components/Toast";
 
 interface Chatroom {
   id: number;
@@ -38,6 +40,7 @@ interface ChatMessage {
     id: number;
     username: string;
     full_name: string;
+    is_staff?: boolean;
   };
   text: string;
   reply_to: any | null;
@@ -50,6 +53,12 @@ export default function MyChatrooms() {
   const [chatrooms, setChatrooms] = useState<Chatroom[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{
+    isVisible: boolean;
+    type: "success" | "error";
+    title: string;
+    message: string;
+  } | null>(null);
   
   const [selectedChatroomId, setSelectedChatroomId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -137,7 +146,12 @@ export default function MyChatrooms() {
         setMessages(messagesRes.data as ChatMessage[]);
       }
     } else {
-      alert(res.error || "Failed to send message");
+      setToast({
+        isVisible: true,
+        type: "error",
+        title: "Error",
+        message: res.error || "Failed to send message"
+      });
     }
   }
 
@@ -155,6 +169,15 @@ export default function MyChatrooms() {
         overflow: "hidden",
       }}
     >
+      {toast && (
+        <Toast
+          type={toast.type}
+          title={toast.title}
+          message={toast.message}
+          isVisible={toast.isVisible}
+          onClose={() => setToast(null)}
+        />
+      )}
       {/* Left Sidebar: Chatroom List */}
       <div
         style={{
@@ -337,17 +360,70 @@ export default function MyChatrooms() {
                   {selectedChatroom.pet_unique_id} • {selectedChatroom.purpose}
                 </div>
               </div>
-              <div
-                style={{
-                  padding: "4px 12px",
-                  borderRadius: 999,
-                  background: "#d1fae5",
-                  color: "#065f46",
-                  fontSize: 12,
-                  fontWeight: 600,
-                }}
-              >
-                Active
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div
+                  style={{
+                    padding: "4px 12px",
+                    borderRadius: 999,
+                    background: "#d1fae5",
+                    color: "#065f46",
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  Active
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!selectedChatroomId) return;
+                    if (!window.confirm(`Are you sure you want to delete the chatroom "${selectedChatroom.name}"? This action cannot be undone.`)) return;
+                    
+                    try {
+                      const res = await deleteChatroom(selectedChatroomId);
+                      if (res.ok) {
+                        setToast({
+                          isVisible: true,
+                          type: "success",
+                          title: "Success",
+                          message: "Chatroom deleted successfully"
+                        });
+                        setSelectedChatroomId(null);
+                        // Reload chatrooms list
+                        loadChatrooms();
+                      } else {
+                        setToast({
+                          isVisible: true,
+                          type: "error",
+                          title: "Error",
+                          message: `Failed to delete chatroom: ${res.error}`
+                        });
+                      }
+                    } catch (err) {
+                      console.error("Error deleting chatroom:", err);
+                      setToast({
+                        isVisible: true,
+                        type: "error",
+                        title: "Error",
+                        message: "An error occurred while deleting the chatroom"
+                      });
+                    }
+                  }}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 8,
+                    background: "#fee2e2",
+                    color: "#991b1b",
+                    border: "1px solid #fecaca",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  🗑️ Delete Room
+                </button>
               </div>
             </div>
 
@@ -400,6 +476,33 @@ export default function MyChatrooms() {
               {messages.map((msg) => {
                 const isSystem = msg.is_system;
                 const senderName = msg.sender.full_name || msg.sender.username;
+                
+                // Determine sender role for color coding
+                const isAdmin = msg.sender?.is_staff === true;
+                
+                // Generate unique color for each user based on their ID
+                const getUserColor = (userId: number, isAdmin: boolean) => {
+                  if (isAdmin) return "#f59e0b"; // amber-500 for admins
+                  
+                  // Array of professional, distinct colors for users
+                  const userColors = [
+                    "#6366f1", // indigo-500
+                    "#8b5cf6", // violet-500
+                    "#ec4899", // pink-500
+                    "#14b8a6", // teal-500
+                    "#f97316", // orange-500
+                    "#06b6d4", // cyan-500
+                    "#84cc16", // lime-500
+                    "#a855f7", // purple-500
+                    "#10b981", // emerald-500
+                    "#f43f5e", // rose-500
+                  ];
+                  
+                  // Use user ID to consistently assign a color
+                  return userColors[userId % userColors.length];
+                };
+                
+                const senderNameColor = getUserColor(msg.sender?.id || 0, isAdmin);
 
                 if (isSystem) {
                   return (
@@ -473,11 +576,11 @@ export default function MyChatrooms() {
                           style={{
                             fontSize: 12,
                             fontWeight: 600,
-                            color: "#6366f1",
+                            color: senderNameColor,
                             marginBottom: 4,
                           }}
                         >
-                          {senderName}
+                          {senderName} {isAdmin ? "👑" : ""}
                         </div>
                         <div
                           style={{

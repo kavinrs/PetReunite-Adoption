@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { createChatroomInvitation } from "../services/api";
+import Toast from "./Toast";
 
 interface ChatroomInvitationButtonProps {
   userId: number;
@@ -20,6 +21,12 @@ export default function ChatroomInvitationButton({
 }: ChatroomInvitationButtonProps) {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [toast, setToast] = useState<{
+    isVisible: boolean;
+    type: "success" | "error";
+    title: string;
+    message: string;
+  } | null>(null);
 
   async function handleSendInvitation() {
     if (!confirm(`Send chatroom invitation to ${userName || "this user"}?`)) {
@@ -36,34 +43,55 @@ export default function ChatroomInvitationButton({
 
     if (res.ok) {
       setSent(true);
-      alert("Chatroom invitation sent successfully! The user will receive a notification.");
+      setToast({
+        isVisible: true,
+        type: "success",
+        title: "Invitation Sent",
+        message: "Chatroom invitation sent successfully! The user will receive a notification."
+      });
       setTimeout(() => setSent(false), 3000);
     } else {
-      alert(res.error || "Failed to send chatroom invitation");
+      setToast({
+        isVisible: true,
+        type: "error",
+        title: "Error",
+        message: res.error || "Failed to send chatroom invitation"
+      });
     }
     setLoading(false);
   }
 
   return (
-    <button
-      onClick={handleSendInvitation}
-      disabled={loading || sent}
-      style={{
-        width: "100%",
-        padding: "10px 16px",
-        borderRadius: 8,
-        border: "none",
-        background: sent ? "#10b981" : loading ? "#9ca3af" : "#3b82f6",
-        color: "white",
-        fontSize: 14,
-        fontWeight: 600,
-        cursor: loading || sent ? "not-allowed" : "pointer",
-        opacity: loading ? 0.7 : 1,
-        transition: "all 0.2s",
-        ...style,
+    <>
+      {toast && (
+        <Toast
+          type={toast.type}
+          title={toast.title}
+          message={toast.message}
+          isVisible={toast.isVisible}
+          onClose={() => setToast(null)}
+        />
+      )}
+      <button
+        onClick={handleSendInvitation}
+        disabled={loading || sent}
+        style={{
+          width: "100%",
+          padding: "10px 16px",
+          borderRadius: 8,
+          border: "none",
+          background: sent ? "#10b981" : loading ? "#9ca3af" : "#3b82f6",
+          color: "white",
+          fontSize: 14,
+          fontWeight: 600,
+          cursor: loading || sent ? "not-allowed" : "pointer",
+          opacity: loading ? 0.7 : 1,
+          transition: "all 0.2s",
+          ...style,
       }}
     >
       {loading ? "Sending..." : sent ? "✓ Invitation Sent" : "📨 Send Chatroom Invitation"}
     </button>
+    </>
   );
 }

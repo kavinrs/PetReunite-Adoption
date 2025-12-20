@@ -426,6 +426,7 @@ class ChatMessageSerializer(serializers.ModelSerializer):
     sender_role = serializers.SerializerMethodField()
     reply_to = serializers.SerializerMethodField()
     is_deleted_for_me = serializers.SerializerMethodField()
+    attachment_url = serializers.SerializerMethodField()
 
     class Meta:
         model = ChatMessage
@@ -436,6 +437,11 @@ class ChatMessageSerializer(serializers.ModelSerializer):
             "sender_role",
             "text",
             "reply_to",
+            "attachment",
+            "attachment_type",
+            "attachment_name",
+            "attachment_size",
+            "attachment_url",
             "is_deleted",
             "is_deleted_for_me",
             "is_system",
@@ -447,6 +453,7 @@ class ChatMessageSerializer(serializers.ModelSerializer):
             "sender",
             "sender_role",
             "reply_to",
+            "attachment_url",
             "is_deleted",
             "is_deleted_for_me",
             "is_system",
@@ -477,6 +484,22 @@ class ChatMessageSerializer(serializers.ModelSerializer):
             "text": "Message deleted" if getattr(rt, "is_deleted", False) else rt.text,
             "sender": UserSummarySerializer(rt.sender).data if rt.sender_id else None,
         }
+    
+    def get_attachment_url(self, obj):
+        """Return full URL for attachment if it exists"""
+        if obj.attachment:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.attachment.url)
+            return obj.attachment.url
+        return None
+    
+    def get_is_deleted_for_me(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        deleted_for = obj.deleted_for or []
+        return request.user.id in deleted_for
 
     def get_is_deleted_for_me(self, obj):
         request = self.context.get("request")
@@ -509,10 +532,36 @@ class ChatMessageCreateSerializer(serializers.ModelSerializer):
         model = ChatMessage
         fields = ("text", "reply_to_message_id")
 
-    def validate_text(self, value):
-        if not value.strip():
-            raise serializers.ValidationError("Message cannot be empty.")
-        return value.strip()
+    def validate(self, data):
+        """Validate that either text or attachment is provided"""
+        text = data.get('text', '').strip()
+        
+        # Check if attachment exists in the request
+        # Only check FILES if the request is multipart (has files)
+        request = self.context.get('request')
+        has_attachment = False
+        if request:
+            # Check content type to avoid UnsupportedMediaType error when sending JSON
+            content_type = getattr(request, 'content_type', '')
+            if content_type and 'multipart' in content_type:
+                try:
+                    has_attachment = bool(request.FILES.get('attachment'))
+                except Exception:
+                    has_attachment = False
+        
+        # Must have either text or attachment
+        if not text and not has_attachment:
+            raise serializers.ValidationError({
+                "text": "Message must contain either text or an attachment."
+            })
+        
+        # Clean up text
+        if text:
+            data['text'] = text
+        else:
+            data['text'] = ''  # Allow empty text if there's an attachment
+        
+        return data
 
 
 
@@ -738,6 +787,7 @@ class ChatroomMessageSerializer(serializers.ModelSerializer):
     sender = UserSummarySerializer(read_only=True)
     reply_to = serializers.SerializerMethodField()
     is_deleted_for_me = serializers.SerializerMethodField()
+    attachment_url = serializers.SerializerMethodField()
     
     class Meta:
         model = ChatroomMessage
@@ -747,12 +797,48 @@ class ChatroomMessageSerializer(serializers.ModelSerializer):
             'sender',
             'text',
             'reply_to',
+            'attachment',
+            'attachment_type',
+            'attachment_name',
+            'attachment_size',
+            'attachment_url',
             'is_deleted',
             'is_deleted_for_me',
             'is_system',
             'created_at',
         ]
-        read_only_fields = ['id', 'chatroom', 'sender', 'created_at', 'is_deleted', 'is_system']
+        read_only_fields = ['id', 'chatroom', 'sender', 'created_at', 'is_deleted', 'is_system', 'attachment_url']
+    
+    def validate(self, data):
+        """Validate that either text or attachment is provided"""
+        text = data.get('text', '').strip()
+        
+        # Check if attachment exists in the request
+        # Only check FILES if the request is multipart (has files)
+        request = self.context.get('request')
+        has_attachment = False
+        if request:
+            # Check content type to avoid UnsupportedMediaType error when sending JSON
+            content_type = getattr(request, 'content_type', '')
+            if content_type and 'multipart' in content_type:
+                try:
+                    has_attachment = bool(request.FILES.get('attachment'))
+                except Exception:
+                    has_attachment = False
+        
+        # Must have either text or attachment
+        if not text and not has_attachment:
+            raise serializers.ValidationError({
+                "text": "Message must contain either text or an attachment."
+            })
+        
+        # Clean up text
+        if text:
+            data['text'] = text
+        else:
+            data['text'] = ''  # Allow empty text if there's an attachment
+        
+        return data
     
     def get_reply_to(self, obj):
         if not obj.reply_to:
@@ -769,6 +855,15 @@ class ChatroomMessageSerializer(serializers.ModelSerializer):
             return False
         deleted_for = obj.deleted_for or []
         return request.user.id in deleted_for
+    
+    def get_attachment_url(self, obj):
+        """Return full URL for attachment if it exists"""
+        if obj.attachment:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.attachment.url)
+            return obj.attachment.url
+        return None
     
     def to_representation(self, instance):
         data = super().to_representation(instance)

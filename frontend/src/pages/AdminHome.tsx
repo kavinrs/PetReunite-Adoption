@@ -463,6 +463,7 @@ import {
 import AdminChat from "./AdminChat";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
+import { CITY_COORDS, STATE_COORDS } from "../utils/mapCoordinates";
 import "leaflet/dist/leaflet.css";
 import { useMap } from "react-leaflet";
 import * as RL from "react-leaflet";
@@ -660,8 +661,11 @@ function AdminHome() {
     const initialTab = (qs.get("tab") as TabKey | null) || null;
     if (open && initialTab !== "stats") {
       setTab("stats");
+      // Clear the openMap state after using it
+      // Use navigate with replace to clear the state properly
+      navigate(location.pathname + location.search, { replace: true, state: {} });
     }
-  }, [location.state, location.search]);
+  }, [location.state, location.search, location.pathname, navigate]);
 
   // Note: we intentionally do NOT auto-refresh the admin home.
   // Data should refresh only on initial load/login, tab changes,
@@ -2579,40 +2583,7 @@ function AdminHome() {
     const [points, setPoints] = useState<
       { lat: number; lon: number; kind: "lost" | "found" | "adoption"; location: string; count: number }[]
     >([]);
-    const CITY_COORDS: Record<string, [number, number]> = {
-      chennai: [13.0827, 80.2707],
-      bengaluru: [12.9716, 77.5946],
-      bangalore: [12.9716, 77.5946],
-      mumbai: [19.076, 72.8777],
-      pune: [18.5204, 73.8567],
-      hyderabad: [17.385, 78.4867],
-      delhi: [28.6139, 77.209],
-      ahmedabad: [23.0225, 72.5714],
-      kolkata: [22.5726, 88.3639],
-      coimbatore: [11.0168, 76.9558],
-      madurai: [9.9252, 78.1198],
-      nelore: [14.4426, 79.9865],
-      nellore: [14.4426, 79.9865],
-      visakhapatnam: [17.6868, 83.2185],
-      tirupati: [13.6288, 79.4192],
-      kochi: [9.9312, 76.2673],
-      kozhikode: [11.2588, 75.7804],
-      jaipur: [26.9124, 75.7873],
-    };
-    const STATE_COORDS: Record<string, [number, number]> = {
-      tamilnadu: [11.1271, 78.6569],
-      tamil_nadu: [11.1271, 78.6569],
-      karnataka: [15.3173, 75.7139],
-      maharashtra: [19.7515, 75.7139],
-      andhra_pradesh: [15.9129, 79.74],
-      "andhra pradesh": [15.9129, 79.74],
-      telangana: [17.1232, 79.2088],
-      kerala: [10.8505, 76.2711],
-      delhi: [28.6139, 77.209],
-      gujarat: [22.2587, 71.1924],
-      west_bengal: [22.9868, 87.855],
-      "west bengal": [22.9868, 87.855],
-    };
+    // Use imported coordinates from mapCoordinates.ts
     useEffect(() => {
       let cancelled = false;
       async function geocodeAll() {
@@ -2780,42 +2751,72 @@ function AdminHome() {
     >([]);
     const [expanded, setExpanded] = useState(false);
 
-    const CITY_COORDS: Record<string, [number, number]> = {
-      chennai: [13.0827, 80.2707],
-      bengaluru: [12.9716, 77.5946],
-      bangalore: [12.9716, 77.5946],
-      mumbai: [19.076, 72.8777],
-      pune: [18.5204, 73.8567],
-      hyderabad: [17.385, 78.4867],
-      delhi: [28.6139, 77.209],
-      ahmedabad: [23.0225, 72.5714],
-      kolkata: [22.5726, 88.3639],
-      coimbatore: [11.0168, 76.9558],
-      madurai: [9.9252, 78.1198],
-      nelore: [14.4426, 79.9865],
-      nellore: [14.4426, 79.9865],
-      visakhapatnam: [17.6868, 83.2185],
-      tirupati: [13.6288, 79.4192],
-      kochi: [9.9312, 76.2673],
-      kozhikode: [11.2588, 75.7804],
-      jaipur: [26.9124, 75.7873],
-    };
-    const STATE_COORDS: Record<string, [number, number]> = {
-      tamilnadu: [11.1271, 78.6569],
-      tamil_nadu: [11.1271, 78.6569],
-      karnataka: [15.3173, 75.7139],
-      maharashtra: [19.7515, 75.7139],
-      andhra_pradesh: [15.9129, 79.74],
-      "andhra pradesh": [15.9129, 79.74],
-      telangana: [17.1232, 79.2088],
-      kerala: [10.8505, 76.2711],
-      delhi: [28.6139, 77.209],
-      gujarat: [22.2587, 71.1924],
-      west_bengal: [22.9868, 87.855],
-      "west bengal": [22.9868, 87.855],
-    };
+    // Use imported coordinates from mapCoordinates.ts
 
-    async function geocode(city?: string, state?: string): Promise<{ lat: number; lon: number } | null> {
+    // Extract coordinates from Google Maps URL
+    function extractCoordsFromUrl(url?: string | null): { lat: number; lon: number } | null {
+      if (!url) return null;
+      
+      try {
+        // Google Maps URL patterns:
+        // 1. https://maps.google.com/?q=12.9716,77.5946
+        // 2. https://www.google.com/maps?q=12.9716,77.5946
+        // 3. https://maps.app.goo.gl/... (shortened, can't extract directly - will fallback to city/state)
+        // 4. https://www.google.com/maps/@12.9716,77.5946,15z
+        // 5. https://www.google.com/maps/place/.../@12.9716,77.5946
+        // 6. https://goo.gl/maps/... (old shortened format)
+        
+        // Pattern 1 & 2: ?q=lat,lon or &q=lat,lon
+        const qMatch = url.match(/[?&]q=(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/);
+        if (qMatch) {
+          const lat = parseFloat(qMatch[1]);
+          const lon = parseFloat(qMatch[2]);
+          if (!isNaN(lat) && !isNaN(lon)) {
+            return { lat, lon };
+          }
+        }
+        
+        // Pattern 4 & 5: /@lat,lon (with optional zoom and other params)
+        const atMatch = url.match(/@(-?\d+\.?\d*),\s*(-?\d+\.?\d*)(?:,|\/)/);
+        if (atMatch) {
+          const lat = parseFloat(atMatch[1]);
+          const lon = parseFloat(atMatch[2]);
+          if (!isNaN(lat) && !isNaN(lon)) {
+            return { lat, lon };
+          }
+        }
+        
+        // Pattern: /maps/place/.../@lat,lon,zoom
+        const placeMatch = url.match(/\/maps\/place\/[^/]+\/@(-?\d+\.?\d*),\s*(-?\d+\.?\d*),/);
+        if (placeMatch) {
+          const lat = parseFloat(placeMatch[1]);
+          const lon = parseFloat(placeMatch[2]);
+          if (!isNaN(lat) && !isNaN(lon)) {
+            return { lat, lon };
+          }
+        }
+        
+        // If it's a shortened URL (goo.gl or maps.app.goo.gl), we can't extract coords
+        // Return null to fallback to city/state lookup
+        if (url.includes('goo.gl') || url.includes('maps.app.goo.gl')) {
+          return null;
+        }
+        
+        return null;
+      } catch (e) {
+        console.error("Error extracting coords from URL:", e);
+        return null;
+      }
+    }
+
+    async function geocode(city?: string, state?: string, locationUrl?: string | null): Promise<{ lat: number; lon: number } | null> {
+      // First, try to extract coordinates from location_url if provided
+      if (locationUrl) {
+        const coords = extractCoordsFromUrl(locationUrl);
+        if (coords) return coords;
+      }
+      
+      // Fallback to city/state lookup
       const cityKey = (city || "").trim().toLowerCase();
       const stateKey = (state || "").trim().toLowerCase();
       const hit = CITY_COORDS[cityKey] || STATE_COORDS[stateKey];
@@ -2826,8 +2827,13 @@ function AdminHome() {
 
     useEffect(() => {
       const open = (loc.state as any)?.openMap;
-      if (open) setMapExpanded(true);
-    }, [loc.state, setMapExpanded]);
+      if (open) {
+        setMapExpanded(true);
+        // Clear the openMap state to prevent issues when navigating back
+        // Use navigate with replace to clear the state properly
+        navigate(loc.pathname + loc.search, { replace: true, state: {} });
+      }
+    }, [loc.state, loc.pathname, loc.search, navigate, setMapExpanded]);
 
     useEffect(() => {
       let cancelled = false;
@@ -2860,7 +2866,7 @@ function AdminHome() {
 
         const addItem = async (entry: any, kind: "lost" | "found" | "adoption") => {
           if (kind === "lost") {
-            const g = await geocode(entry.city, entry.state);
+            const g = await geocode(entry.city, entry.state, entry.location_url);
             if (!g) return;
             next.push({
               id: entry.id,
@@ -2874,7 +2880,7 @@ function AdminHome() {
               lon: g.lon,
             });
           } else if (kind === "found") {
-            const g = await geocode(entry.found_city, entry.state);
+            const g = await geocode(entry.found_city, entry.state, entry.location_url);
             if (!g) return;
             next.push({
               id: entry.id,
@@ -2888,7 +2894,7 @@ function AdminHome() {
               lon: g.lon,
             });
           } else {
-            const g = await geocode(entry.location_city, entry.location_state);
+            const g = await geocode(entry.location_city, entry.location_state, null);
             if (!g) return;
             next.push({
               id: entry.id,

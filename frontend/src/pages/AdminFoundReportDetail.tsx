@@ -41,6 +41,8 @@ export default function AdminFoundReportDetail() {
       navigate("/admin?tab=stats", { state: { openMap: true } });
     } else if (from === "admin-chat-requests") {
       navigate("/admin?tab=chat&view=requests", { replace: true });
+    } else if (from === "admin-chat") {
+      navigate("/admin?tab=chat", { replace: true });
     } else if (from === "admin-found") {
       navigate("/admin?tab=found", { replace: true });
     } else if (from === "pending-approvals") {
@@ -57,6 +59,8 @@ export default function AdminFoundReportDetail() {
       ? "Back to Pending Approvals"
       : (location.state as any)?.from === "admin-chat-requests"
       ? "Back"
+      : (location.state as any)?.from === "admin-chat"
+      ? "Back to Chat"
       : "Back to Pets";
 
   if (loading) return <div style={{ padding: 32 }}>Loading report...</div>;
@@ -96,6 +100,7 @@ export default function AdminFoundReportDetail() {
     : null;
 
   const fieldIcons: Record<string, string> = {
+    "Pet Name": "🐾",
     "Pet Type": "📘",
     "Breed": "🧬",
     "Gender": "⚧",
@@ -110,6 +115,7 @@ export default function AdminFoundReportDetail() {
   };
 
   const fields = [
+    ["Pet Name", report.pet_name],
     ["Pet Type", report.pet_type],
     ["Breed", report.breed],
     ["Gender", report.gender],
@@ -529,6 +535,7 @@ export default function AdminFoundReportDetail() {
                         }}
                       >
                         {report.reporter?.username || "Unknown"}
+                        {report.reporter?.user_unique_id && ` (${report.reporter.user_unique_id})`}
                       </div>
                     </div>
                   </div>

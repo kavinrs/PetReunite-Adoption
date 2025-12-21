@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { reportLostPet } from "../services/api";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
+import Toast from "../components/Toast";
 
 type Feedback = { type: "success" | "error"; message: string } | null;
 
@@ -30,6 +31,12 @@ export default function ReportLostPet() {
   const [photo, setPhoto] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const [toast, setToast] = useState<{
+    isVisible: boolean;
+    type: "success" | "error";
+    title: string;
+    message: string;
+  } | null>(null);
   const [locating, setLocating] = useState(false);
   const [locError, setLocError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -70,13 +77,20 @@ export default function ReportLostPet() {
       photo,
     });
     if (res.ok) {
-      setFeedback({ type: "success", message: "Lost pet report submitted." });
+      setToast({
+        isVisible: true,
+        type: "success",
+        title: "Success",
+        message: "Lost pet report submitted successfully! Awaiting admin approval."
+      });
       setForm(initialForm);
       setPhoto(null);
     } else {
-      setFeedback({
+      setToast({
+        isVisible: true,
         type: "error",
-        message: res.error ?? "Unable to submit report.",
+        title: "Error",
+        message: res.error ?? "Unable to submit report. Please try again."
       });
     }
     setSubmitting(false);
@@ -92,6 +106,15 @@ export default function ReportLostPet() {
         fontFamily: "Inter, sans-serif",
       }}
     >
+      {toast && (
+        <Toast
+          type={toast.type}
+          title={toast.title}
+          message={toast.message}
+          isVisible={toast.isVisible}
+          onClose={() => setToast(null)}
+        />
+      )}
       <div
         style={{
           maxWidth: 940,

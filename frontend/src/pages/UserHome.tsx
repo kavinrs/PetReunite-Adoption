@@ -1423,7 +1423,7 @@ export default function UserHome() {
                           <div style={{ fontSize: 12, color: "#64748b" }}>{r.city}{r.state ? ", " + r.state : ""}</div>
                           <div style={{ fontSize: 12, color: "#374151", marginTop: 4 }}>Last seen: {r.city}{r.state ? ", " + r.state : ""}</div>
                           {activityExpanded === `lost-${r.id}` && (
-                            <div style={{ fontSize: 12, color: "#374151", marginTop: 6 }}>
+                            <div style={{ fontSize: 12, color: "#000000", marginTop: 6 }}>
                               {r.pet_name && (
                                 <div>
                                   <strong>Pet name:</strong> {r.pet_name}
@@ -1587,7 +1587,7 @@ export default function UserHome() {
                           <div style={{ fontSize: 12, color: "#64748b" }}>{r.found_city}{r.state ? ", " + r.state : ""}</div>
                           <div style={{ fontSize: 12, color: "#374151", marginTop: 4 }}>Last seen: {r.found_city}{r.state ? ", " + r.state : ""}</div>
                           {activityExpanded === `found-${r.id}` && (
-                            <div style={{ fontSize: 12, color: "#374151", marginTop: 6 }}>
+                            <div style={{ fontSize: 12, color: "#000000", marginTop: 6 }}>
                               <div>
                                 <strong>Pet type:</strong> {r.pet_type}
                               </div>

@@ -126,6 +126,12 @@ export default function AdminChat() {
   // Current admin user unique ID for message alignment (USR000024 format)
   const [currentAdminUserId, setCurrentAdminUserId] = useState<string | null>(null);
   
+  // Chat pet details view state
+  const [showChatPetDetails, setShowChatPetDetails] = useState(false);
+  const [chatPetDetails, setChatPetDetails] = useState<any | null>(null);
+  const [chatPetDetailsLoading, setChatPetDetailsLoading] = useState(false);
+  const [chatPetDetailsSource, setChatPetDetailsSource] = useState<"lost" | "found" | null>(null);
+  
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
@@ -1157,13 +1163,13 @@ export default function AdminChat() {
                         >
                           <div>
                             <div style={{ fontWeight: 600 }}>Pet name</div>
-                            <div>{selectedPet?.pet_name || c.pet_name || "-"}</div>
+                            <div>{c.pet_name || selectedPet?.pet_name || "-"}</div>
                           </div>
                           <div>
                             <div style={{ fontWeight: 600 }}>Pet type</div>
                             <div>
-                              {selectedPet?.pet_type ||
-                                c.pet_type ||
+                              {c.pet_type ||
+                                selectedPet?.pet_type ||
                                 c.pet_kind ||
                                 "-"}
                             </div>
@@ -1178,29 +1184,70 @@ export default function AdminChat() {
                               }}
                             >
                               <span>
-                                {selectedPet?.pet_unique_id ||
-                                  c.pet_unique_id ||
+                                {c.pet_unique_id ||
+                                  selectedPet?.pet_unique_id ||
                                   (c.pet_id != null
-                                    ? `${c.pet_id}`
+                                    ? `#${c.pet_id}`
                                     : "-")}
                               </span>
-                              {(selectedPet?.id || c.pet_id) && (
+                              {(c.pet_unique_id || c.pet_id || selectedPet?.id) && (
                                 <button
                                   onClick={() => {
-                                    const reportId =
-                                      selectedPet?.id ?? c.pet_id;
-                                    if (selectedPetSource === "found") {
-                                      navigate(`/admin/found/${reportId}`, {
-                                        state: { from: "admin-chat-requests" },
-                                      });
-                                    } else if (selectedPetSource === "lost") {
-                                      navigate(`/admin/lost/${reportId}`, {
-                                        state: { from: "admin-chat-requests" },
-                                      });
-                                    } else if (reportId) {
-                                      navigate(`/pets/${reportId}`, {
-                                        state: { from: "admin-chat-requests", requestId: c.id },
-                                      });
+                                    // Use pet_unique_id to determine the type and navigate
+                                    const petUniqueId = c.pet_unique_id || selectedPet?.pet_unique_id;
+                                    const petKind = c.pet_kind;
+                                    const reportId = selectedPet?.id ?? c.pet_id;
+                                    
+                                    if (petUniqueId) {
+                                      // Determine type from unique ID prefix
+                                      if (petUniqueId.startsWith('FP')) {
+                                        // Found pet - navigate to found report detail
+                                        if (reportId) {
+                                          navigate(`/admin/found/${reportId}`, {
+                                            state: { from: "admin-chat-requests" },
+                                          });
+                                        }
+                                      } else if (petUniqueId.startsWith('LP')) {
+                                        // Lost pet - navigate to lost report detail
+                                        if (reportId) {
+                                          navigate(`/admin/lost/${reportId}`, {
+                                            state: { from: "admin-chat-requests" },
+                                          });
+                                        }
+                                      } else if (petUniqueId.startsWith('AP')) {
+                                        // Adoption pet
+                                        if (reportId) {
+                                          navigate(`/pets/${reportId}`, {
+                                            state: { from: "admin-chat-requests", requestId: c.id },
+                                          });
+                                        }
+                                      }
+                                    } else if (petKind && reportId) {
+                                      // Fallback to pet_kind
+                                      if (petKind === "found") {
+                                        navigate(`/admin/found/${reportId}`, {
+                                          state: { from: "admin-chat-requests" },
+                                        });
+                                      } else if (petKind === "lost") {
+                                        navigate(`/admin/lost/${reportId}`, {
+                                          state: { from: "admin-chat-requests" },
+                                        });
+                                      } else {
+                                        navigate(`/pets/${reportId}`, {
+                                          state: { from: "admin-chat-requests", requestId: c.id },
+                                        });
+                                      }
+                                    } else if (selectedPetSource && reportId) {
+                                      // Last resort: use selectedPetSource
+                                      if (selectedPetSource === "found") {
+                                        navigate(`/admin/found/${reportId}`, {
+                                          state: { from: "admin-chat-requests" },
+                                        });
+                                      } else if (selectedPetSource === "lost") {
+                                        navigate(`/admin/lost/${reportId}`, {
+                                          state: { from: "admin-chat-requests" },
+                                        });
+                                      }
                                     }
                                   }}
                                   style={{
@@ -1315,24 +1362,149 @@ export default function AdminChat() {
             >
               <div
                 style={{
-                  fontSize: 16,
-                  fontWeight: 800,
-                  color: "#0f172a",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
                 }}
               >
+                <div
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 800,
+                    color: "#0f172a",
+                  }}
+                >
+                  {(() => {
+                    // Handle both direct chat (activeConversation) and chatroom (activeChatroom)
+                    const currentChat = activeConversation || activeChatroom;
+                    if (!currentChat) return "No chat selected";
+                    
+                    const petName = currentChat.pet_name || "";
+                    const name = activeChatroom 
+                      ? activeChatroom.name 
+                      : getUserDisplayName(activeConversation);
+                    const rawPetId =
+                      currentChat.pet_unique_id ??
+                      (currentChat.pet_id != null
+                        ? String(currentChat.pet_id)
+                        : "");
+                    const petLabel =
+                      rawPetId && !rawPetId.toUpperCase().startsWith("ID #")
+                        ? `ID #${rawPetId}`
+                        : rawPetId;
+                    
+                    // Format: "Username/Room Name - Pet Name – ID #XXX" or "Username/Room Name – ID #XXX" if no pet name
+                    if (petName && petLabel) {
+                      return `${name} - ${petName} – ${petLabel}`;
+                    } else if (petLabel) {
+                      return `${name} – ${petLabel}`;
+                    } else if (petName) {
+                      return `${name} - ${petName}`;
+                    }
+                    return name;
+                  })()}
+                </div>
+                
+                {/* Pet Details Button */}
                 {(() => {
-                  if (!activeConversation) return "No chat selected";
-                  const name = getUserDisplayName(activeConversation);
-                  const rawPetId =
-                    activeConversation.pet_unique_id ??
-                    (activeConversation.pet_id != null
-                      ? String(activeConversation.pet_id)
-                      : "");
-                  const petLabel =
-                    rawPetId && !rawPetId.toUpperCase().startsWith("ID #")
-                      ? `ID #${rawPetId}`
-                      : rawPetId;
-                  return petLabel ? `${name} – ${petLabel}` : name;
+                  const currentChat = activeConversation || activeChatroom;
+                  const petUniqueId = currentChat?.pet_unique_id;
+                  const petKind = currentChat?.pet_kind;
+                  const petId = currentChat?.pet_id; // This is the actual report ID
+                  
+                  if (!petUniqueId && !petId) return null;
+                  
+                  return (
+                    <button
+                      type="button"
+                      onClick={async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
+                        console.log("Pet details button clicked", {
+                          petUniqueId,
+                          petKind,
+                          petId,
+                          currentChat
+                        });
+                        
+                        // Load pet details and show inline
+                        setShowChatPetDetails(true);
+                        setChatPetDetailsLoading(true);
+                        setChatPetDetails(null);
+                        setChatPetDetailsSource(null);
+                        
+                        try {
+                          // Determine pet type and fetch details
+                          if (petUniqueId) {
+                            if (petUniqueId.startsWith('FP')) {
+                              // Found pet
+                              const foundRes = await fetchAdminFoundReports("all");
+                              if (foundRes.ok && Array.isArray(foundRes.data)) {
+                                const pet = foundRes.data.find((r: any) => r.pet_unique_id === petUniqueId || r.id === petId);
+                                if (pet) {
+                                  setChatPetDetails(pet);
+                                  setChatPetDetailsSource("found");
+                                }
+                              }
+                            } else if (petUniqueId.startsWith('LP')) {
+                              // Lost pet
+                              const lostRes = await fetchAdminLostReports("all");
+                              if (lostRes.ok && Array.isArray(lostRes.data)) {
+                                const pet = lostRes.data.find((r: any) => r.pet_unique_id === petUniqueId || r.id === petId);
+                                if (pet) {
+                                  setChatPetDetails(pet);
+                                  setChatPetDetailsSource("lost");
+                                }
+                              }
+                            }
+                          } else if (petKind && petId) {
+                            // Fallback to pet_kind
+                            if (petKind === "found") {
+                              const foundRes = await fetchAdminFoundReports("all");
+                              if (foundRes.ok && Array.isArray(foundRes.data)) {
+                                const pet = foundRes.data.find((r: any) => r.id === petId);
+                                if (pet) {
+                                  setChatPetDetails(pet);
+                                  setChatPetDetailsSource("found");
+                                }
+                              }
+                            } else if (petKind === "lost") {
+                              const lostRes = await fetchAdminLostReports("all");
+                              if (lostRes.ok && Array.isArray(lostRes.data)) {
+                                const pet = lostRes.data.find((r: any) => r.id === petId);
+                                if (pet) {
+                                  setChatPetDetails(pet);
+                                  setChatPetDetailsSource("lost");
+                                }
+                              }
+                            }
+                          }
+                        } finally {
+                          setChatPetDetailsLoading(false);
+                        }
+                      }}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: 999,
+                        border: "1px solid #e5e7eb",
+                        background: "#ffffff",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: "#0f172a",
+                        cursor: "pointer",
+                        transition: "all 0.2s",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "#f3f4f6";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "#ffffff";
+                      }}
+                    >
+                      Pet details
+                    </button>
+                  );
                 })()}
               </div>
               {activeConversation && (
@@ -1503,110 +1675,167 @@ export default function AdminChat() {
             </div>
 
             {/* Chatroom Header - Above messages */}
-            {viewType === "chatroom" && activeChatroom && (
-              <>
-                {console.log("Rendering chatroom header:", { viewType, activeChatroom, selectedRoomId })}
+
+            {/* Pet Details View - Inline */}
+            {showChatPetDetails && (
+              <div
+                style={{
+                  background: "#ffffff",
+                  borderRadius: 12,
+                  border: "1px solid #e5e7eb",
+                  padding: 16,
+                  marginBottom: 12,
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                }}
+              >
                 <div
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    padding: "16px 20px",
-                    borderBottom: "2px solid #e5e7eb",
-                    background: "#ffffff",
-                    borderRadius: "12px 12px 0 0",
-                    marginBottom: 0,
-                    zIndex: 10,
+                    marginBottom: 12,
                   }}
                 >
-                <div>
                   <div
                     style={{
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: 700,
                       color: "#0f172a",
                     }}
                   >
-                    {activeChatroom.name}
-                  </div>
-                  <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>
-                    Pet: {activeChatroom.pet_unique_id || activeChatroom.conversation?.pet_unique_id || "N/A"}
-                  </div>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div
-                    style={{
-                      padding: "6px 14px",
-                      borderRadius: 999,
-                      background: "#d1fae5",
-                      color: "#065f46",
-                      fontSize: 13,
-                      fontWeight: 600,
-                    }}
-                  >
-                    Active
+                    Pet Details
                   </div>
                   <button
                     type="button"
-                    onClick={async () => {
-                      if (!selectedRoomId) return;
-                      const roomName = activeChatroom?.name || "this chatroom";
-                      
-                      if (!window.confirm(`Are you sure you want to delete "${roomName}"? This will permanently delete the chatroom, all messages, and all participants. This action cannot be undone.`)) return;
-                      
-                      try {
-                        const res = await deleteChatroom(selectedRoomId);
-                        if (res.ok) {
-                          setToast({
-                            isVisible: true,
-                            type: "success",
-                            title: "Success",
-                            message: "Chatroom deleted successfully"
-                          });
-                          setSelectedRoomId(null);
-                          setShowRoomPanel(false);
-                          // Reload chatrooms list
-                          const roomsRes = await fetchAdminChatrooms();
-                          if (roomsRes.ok && Array.isArray(roomsRes.data)) {
-                            setChatRooms(roomsRes.data);
-                          }
-                        } else {
-                          setToast({
-                            isVisible: true,
-                            type: "error",
-                            title: "Error",
-                            message: `Failed to delete chatroom: ${res.error}`
-                          });
-                        }
-                      } catch (err) {
-                        console.error("Error deleting chatroom:", err);
-                        setToast({
-                          isVisible: true,
-                          type: "error",
-                          title: "Error",
-                          message: "An error occurred while deleting the chatroom"
-                        });
-                      }
+                    onClick={() => {
+                      setShowChatPetDetails(false);
+                      setChatPetDetails(null);
+                      setChatPetDetailsSource(null);
                     }}
                     style={{
-                      padding: "8px 16px",
-                      borderRadius: 8,
-                      background: "#fee2e2",
-                      color: "#991b1b",
-                      border: "2px solid #fecaca",
-                      fontSize: 13,
-                      fontWeight: 700,
+                      border: "none",
+                      background: "transparent",
+                      color: "#6b7280",
                       cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
+                      fontSize: 20,
+                      fontWeight: 600,
+                      padding: "4px 8px",
                     }}
                   >
-                    🗑️ Delete Room
+                    ×
                   </button>
                 </div>
+
+                {chatPetDetailsLoading && (
+                  <div style={{ padding: 20, textAlign: "center", color: "#6b7280" }}>
+                    Loading pet details...
+                  </div>
+                )}
+
+                {!chatPetDetailsLoading && !chatPetDetails && (
+                  <div style={{ padding: 20, textAlign: "center", color: "#ef4444" }}>
+                    Pet details not found.
+                  </div>
+                )}
+
+                {!chatPetDetailsLoading && chatPetDetails && (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: 12,
+                      fontSize: 13,
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 600, color: "#6b7280", marginBottom: 4 }}>
+                        Pet Name
+                      </div>
+                      <div style={{ color: "#0f172a" }}>
+                        {chatPetDetails.pet_name || "-"}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, color: "#6b7280", marginBottom: 4 }}>
+                        Pet Type
+                      </div>
+                      <div style={{ color: "#0f172a" }}>
+                        {chatPetDetails.pet_type || "-"}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, color: "#6b7280", marginBottom: 4 }}>
+                        Breed
+                      </div>
+                      <div style={{ color: "#0f172a" }}>
+                        {chatPetDetails.breed || "-"}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, color: "#6b7280", marginBottom: 4 }}>
+                        Color
+                      </div>
+                      <div style={{ color: "#0f172a" }}>
+                        {chatPetDetails.color || "-"}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, color: "#6b7280", marginBottom: 4 }}>
+                        City
+                      </div>
+                      <div style={{ color: "#0f172a" }}>
+                        {chatPetDetails.city || "-"}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, color: "#6b7280", marginBottom: 4 }}>
+                        State
+                      </div>
+                      <div style={{ color: "#0f172a" }}>
+                        {chatPetDetails.state || "-"}
+                      </div>
+                    </div>
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <div style={{ fontWeight: 600, color: "#6b7280", marginBottom: 4 }}>
+                        Description
+                      </div>
+                      <div style={{ color: "#0f172a" }}>
+                        {chatPetDetails.description || "-"}
+                      </div>
+                    </div>
+                    <div style={{ gridColumn: "1 / -1", marginTop: 8 }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const petId = chatPetDetails.id;
+                          if (chatPetDetailsSource === "found") {
+                            navigate(`/admin/found/${petId}`, {
+                              state: { from: "admin-chat" },
+                            });
+                          } else if (chatPetDetailsSource === "lost") {
+                            navigate(`/admin/lost/${petId}`, {
+                              state: { from: "admin-chat" },
+                            });
+                          }
+                        }}
+                        style={{
+                          padding: "8px 16px",
+                          borderRadius: 8,
+                          border: "1px solid #e5e7eb",
+                          background: "#f9fafb",
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: "#0f172a",
+                          cursor: "pointer",
+                          width: "100%",
+                        }}
+                      >
+                        View Full Details
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-              </>
             )}
 
             {/* Messages list */}

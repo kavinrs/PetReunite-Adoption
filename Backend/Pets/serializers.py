@@ -50,6 +50,7 @@ class FoundPetReportSerializer(serializers.ModelSerializer):
             "id",
             "pet_unique_id",
             "reporter",
+            "pet_name",
             "pet_type",
             "breed",
             "gender",
@@ -344,6 +345,36 @@ class MessageCreateSerializer(serializers.ModelSerializer):
 class ConversationSerializer(serializers.ModelSerializer):
     user = UserSummarySerializer(read_only=True)
     admin = UserSummarySerializer(read_only=True)
+    pet_type = serializers.SerializerMethodField()
+
+    def get_pet_type(self, obj):
+        """Fetch pet_type from the actual pet report based on pet_unique_id or pet_id"""
+        if obj.pet_unique_id:
+            if obj.pet_unique_id.startswith("LP"):
+                try:
+                    from .models import LostPetReport
+                    lost_pet = LostPetReport.objects.filter(pet_unique_id=obj.pet_unique_id).first()
+                    if lost_pet:
+                        return lost_pet.pet_type
+                except Exception:
+                    pass
+            elif obj.pet_unique_id.startswith("FP"):
+                try:
+                    from .models import FoundPetReport
+                    found_pet = FoundPetReport.objects.filter(pet_unique_id=obj.pet_unique_id).first()
+                    if found_pet:
+                        return found_pet.pet_type
+                except Exception:
+                    pass
+            elif obj.pet_unique_id.startswith("AP"):
+                try:
+                    from .models import Pet
+                    adoption_pet = Pet.objects.filter(pet_unique_id=obj.pet_unique_id).first()
+                    if adoption_pet:
+                        return adoption_pet.species
+                except Exception:
+                    pass
+        return None
 
     class Meta:
         model = Conversation
@@ -354,6 +385,7 @@ class ConversationSerializer(serializers.ModelSerializer):
             "pet_id",
             "pet_unique_id",
             "pet_name",
+            "pet_type",
             "pet_kind",
             "reason_for_chat",
             "status",
@@ -367,6 +399,7 @@ class ConversationSerializer(serializers.ModelSerializer):
             "pet_id",
             "pet_unique_id",
             "pet_name",
+            "pet_type",
             "pet_kind",
             "created_at",
             "updated_at",
@@ -392,6 +425,38 @@ class ConversationCreateSerializer(serializers.ModelSerializer):
         # pets have the same numeric ID.
         # reason_for_chat is now stored directly on the Conversation model
         fields = ("pet_id", "pet_unique_id", "pet_name", "pet_kind", "reason_for_chat", "initial_message")
+    
+    def validate(self, data):
+        """Validate that the pet exists in the database if pet_unique_id is provided"""
+        pet_unique_id = data.get("pet_unique_id")
+        
+        if pet_unique_id:
+            # Strip # prefix if present (users might enter #LP000024 instead of LP000024)
+            pet_unique_id = pet_unique_id.lstrip('#').strip()
+            data["pet_unique_id"] = pet_unique_id  # Update the data with cleaned ID
+            
+            pet_found = False
+            
+            # Check if pet exists in LostPetReport, FoundPetReport, or Pet tables
+            if pet_unique_id.startswith("LP"):
+                from .models import LostPetReport
+                if LostPetReport.objects.filter(pet_unique_id=pet_unique_id).exists():
+                    pet_found = True
+            elif pet_unique_id.startswith("FP"):
+                from .models import FoundPetReport
+                if FoundPetReport.objects.filter(pet_unique_id=pet_unique_id).exists():
+                    pet_found = True
+            elif pet_unique_id.startswith("AP"):
+                from .models import Pet
+                if Pet.objects.filter(pet_unique_id=pet_unique_id).exists():
+                    pet_found = True
+            
+            if not pet_found:
+                raise serializers.ValidationError({
+                    "pet_unique_id": f"Pet with ID '{pet_unique_id}' does not exist in the database. Please check the Pet ID and try again."
+                })
+        
+        return data
 
     def create(self, validated_data):
         request = self.context["request"]
@@ -399,6 +464,52 @@ class ConversationCreateSerializer(serializers.ModelSerializer):
 
         # Pull out the optional initial message text.
         initial_message = validated_data.pop("initial_message", "").strip()
+
+        # If pet_unique_id is provided but pet_name/pet_kind are missing,
+        # try to fetch them from the actual pet report
+        pet_unique_id = validated_data.get("pet_unique_id")
+        if pet_unique_id:
+            # Strip # prefix if present (already done in validate, but double-check)
+            pet_unique_id = pet_unique_id.lstrip('#').strip()
+            validated_data["pet_unique_id"] = pet_unique_id
+            
+            if not validated_data.get("pet_name"):
+                # Try to find the pet in LostPetReport or FoundPetReport tables
+                if pet_unique_id.startswith("LP"):
+                    try:
+                        from .models import LostPetReport
+                        lost_pet = LostPetReport.objects.filter(pet_unique_id=pet_unique_id).first()
+                        if lost_pet:
+                            validated_data["pet_name"] = lost_pet.pet_name
+                            validated_data["pet_kind"] = "lost"
+                            if not validated_data.get("pet_id"):
+                                validated_data["pet_id"] = lost_pet.id
+                    except Exception:
+                        pass
+                elif pet_unique_id.startswith("FP"):
+                    try:
+                        from .models import FoundPetReport
+                        found_pet = FoundPetReport.objects.filter(pet_unique_id=pet_unique_id).first()
+                        if found_pet:
+                            # FoundPetReport doesn't have pet_name, use pet_type instead
+                            validated_data["pet_name"] = found_pet.pet_type
+                            validated_data["pet_kind"] = "found"
+                            if not validated_data.get("pet_id"):
+                                validated_data["pet_id"] = found_pet.id
+                    except Exception:
+                        pass
+                elif pet_unique_id.startswith("AP"):
+                    try:
+                        from .models import Pet
+                        adoption_pet = Pet.objects.filter(pet_unique_id=pet_unique_id).first()
+                        if adoption_pet:
+                            validated_data["pet_name"] = adoption_pet.name
+                            validated_data["pet_kind"] = "adoption"
+                            if not validated_data.get("pet_id"):
+                                validated_data["pet_id"] = adoption_pet.id
+                    except Exception:
+                        pass
+                    pass
 
         # If pet_unique_id is provided, prefer it over pet_id to avoid confusion.
         # If only pet_id is provided (legacy), keep it for backward compatibility.
@@ -603,6 +714,7 @@ class ChatroomSerializer(serializers.ModelSerializer):
             'conversation',
             'pet_id',
             'pet_unique_id',
+            'pet_name',
             'pet_kind',
             'purpose',
             'created_by',

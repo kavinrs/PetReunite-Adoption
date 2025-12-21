@@ -21,6 +21,7 @@ class FoundPetReport(models.Model):
     reporter = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="petsapp_found_reports"
     )
+    pet_name = models.CharField(max_length=150, blank=True)
     pet_type = models.CharField(max_length=100)
     breed = models.CharField(max_length=120, blank=True)
     gender=models.CharField(max_length=10, blank=True)
@@ -433,6 +434,7 @@ class Chatroom(models.Model):
     )
     pet_id = models.IntegerField(null=True, blank=True)
     pet_unique_id = models.CharField(max_length=32, blank=True, null=True)
+    pet_name = models.CharField(max_length=150, blank=True)
     pet_kind = models.CharField(max_length=50, blank=True)
     purpose = models.CharField(
         max_length=100,

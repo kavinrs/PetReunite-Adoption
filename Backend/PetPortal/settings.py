@@ -13,6 +13,10 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from pathlib import Path
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv(os.path.join(Path(__file__).resolve().parent.parent, '.env'))
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -172,7 +176,25 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Email configuration for development – uses console backend so admin
-# verification codes are printed to the terminal instead of sending real mail.
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-DEFAULT_FROM_EMAIL = "no-reply@pawreunite.local"
+# Email configuration
+# For production, use SMTP backend to send real emails
+# For development, you can switch to console backend by setting EMAIL_BACKEND env var
+EMAIL_BACKEND = os.environ.get(
+    'EMAIL_BACKEND', 
+    'django.core.mail.backends.smtp.EmailBackend'
+)
+
+# Gmail SMTP Configuration
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')  # Your Gmail address
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')  # Your Gmail App Password
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'no-reply@pawreunite.local')
+
+# Fallback to console backend if email credentials are not configured
+if not EMAIL_HOST_USER or not EMAIL_HOST_PASSWORD:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+    print("⚠️  Email credentials not configured. Using console backend (emails will print to terminal).")
+    print("   To send real emails, set EMAIL_HOST_USER and EMAIL_HOST_PASSWORD environment variables.")
+

@@ -179,57 +179,36 @@ class AllReportsView(APIView):
 
 
 class PublicLostPetsView(generics.ListAPIView):
-    """Public view of all lost pets for dashboard display.
+    """Public view of approved lost pets for dashboard display.
 
-    Previously this endpoint only exposed reports with a very small set of
-    statuses (approved / investigating / matched). That meant newer or
-    recently-updated reports that were still marked as "pending", "resolved",
-    or "closed" silently disappeared from the public dashboard even though
-    they existed in the system.
-
-    To ensure users always see an accurate picture of current cases,
-    we now include all non-rejected statuses.
+    Only shows approved lost pet reports to regular users.
+    Pending reports are only visible to admins in the admin panel.
     """
 
     serializer_class = LostPetReportSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # Show latest 20 lost reports that have not been explicitly rejected.
+        # Show latest 20 approved lost reports only
         return LostPetReport.objects.filter(
-            status__in=[
-                "pending",
-                "approved",
-                "investigating",
-                "matched",
-                "resolved",
-                "closed",
-            ]
+            status="approved"
         ).order_by("-created_at")[:20]
 
 
 class PublicFoundPetsView(generics.ListAPIView):
-    """Public view of all found pets for dashboard display.
+    """Public view of approved found pets for dashboard display.
 
-    As with lost pets, we widen the visible statuses so that users can
-    still see found pet reports that are pending review or have been
-    marked resolved/closed, instead of only a narrow subset.
+    Only shows approved found pet reports to regular users.
+    Pending reports are only visible to admins in the admin panel.
     """
 
     serializer_class = FoundPetReportSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # Show latest 20 found reports that have not been explicitly rejected.
+        # Show latest 20 approved found reports only
         return FoundPetReport.objects.filter(
-            status__in=[
-                "pending",
-                "approved",
-                "investigating",
-                "matched",
-                "resolved",
-                "closed",
-            ]
+            status="approved"
         ).order_by("-created_at")[:20]
 
 
@@ -1798,6 +1777,7 @@ class AdminCreateChatroomView(APIView):
             name=name.strip(),
             conversation=conversation,
             pet_unique_id=conversation.pet_unique_id,
+            pet_name=conversation.pet_name,
             pet_kind=conversation.pet_kind,
             purpose="Admin Created Chatroom",
             created_by=request.user,

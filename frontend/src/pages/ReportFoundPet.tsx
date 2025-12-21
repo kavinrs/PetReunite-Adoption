@@ -2,10 +2,12 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { reportFoundPet } from "../services/api";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
+import Toast from "../components/Toast";
 
 type Feedback = { type: "success" | "error"; message: string } | null;
 
 const initialForm = {
+  pet_name: "",
   pet_type: "",
   breed: "",
   gender: "",
@@ -27,6 +29,12 @@ export default function ReportFoundPet() {
   const [photo, setPhoto] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const [toast, setToast] = useState<{
+    isVisible: boolean;
+    type: "success" | "error";
+    title: string;
+    message: string;
+  } | null>(null);
   const [locating, setLocating] = useState(false);
   const [locError, setLocError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -67,16 +75,20 @@ export default function ReportFoundPet() {
       photo,
     });
     if (res.ok) {
-      setFeedback({
+      setToast({
+        isVisible: true,
         type: "success",
-        message: "Thanks! Your found pet report has been submitted.",
+        title: "Success",
+        message: "Found pet report submitted successfully! Awaiting admin approval."
       });
       setForm(initialForm);
       setPhoto(null);
     } else {
-      setFeedback({
+      setToast({
+        isVisible: true,
         type: "error",
-        message: res.error ?? "Could not submit report.",
+        title: "Error",
+        message: res.error ?? "Unable to submit report. Please try again."
       });
     }
     setSubmitting(false);
@@ -92,6 +104,15 @@ export default function ReportFoundPet() {
         boxSizing: "border-box",
       }}
     >
+      {toast && (
+        <Toast
+          type={toast.type}
+          title={toast.title}
+          message={toast.message}
+          isVisible={toast.isVisible}
+          onClose={() => setToast(null)}
+        />
+      )}
       <div
         style={{
           maxWidth: 940,
@@ -173,6 +194,16 @@ export default function ReportFoundPet() {
               gap: 16,
             }}
           >
+            <div>
+              <label style={labelStyle}>Pet Name (if known)</label>
+              <input
+                type="text"
+                value={form.pet_name}
+                onChange={(e) => handleChange("pet_name", e.target.value)}
+                style={inputStyle}
+                placeholder="Pet Name"
+              />
+            </div>
             <div>
               <label style={labelStyle}>
                 Pet Type (Dog, Cat, etc.)

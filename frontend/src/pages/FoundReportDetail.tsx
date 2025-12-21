@@ -366,6 +366,7 @@ export default function FoundReportDetail() {
                   fontWeight: 800,
                   fontSize: 16,
                   letterSpacing: 0.2,
+                  color: "#000000",
                 }}
               >
                 Pets Details
@@ -430,9 +431,11 @@ export default function FoundReportDetail() {
                       </div>
                       <div
                         style={{
-                          fontSize: 13,
-                          fontWeight: 700,
-                          color: "#0f172a",
+                          fontSize: 14,
+                          fontWeight: 800,
+                          color: "#000000",
+                          WebkitTextFillColor: "#000000",
+                          opacity: 1,
                         }}
                       >
                         {key === "location_url" && report[key]
@@ -445,13 +448,15 @@ export default function FoundReportDetail() {
                                     )}`}
                                 target="_blank"
                                 rel="noreferrer"
-                                style={{ color: "#2563eb" }}
+                                style={{ color: "#2563eb", fontWeight: 600 }}
                               >
                                 Open in Google Maps
                               </a>
                             )
-                          : report[key] || (
-                              <span style={{ color: "#9ca3af" }}>—</span>
+                          : (
+                              <span style={{ color: "#000000", fontWeight: 800 }}>
+                                {report[key] || <span style={{ color: "#9ca3af" }}>—</span>}
+                              </span>
                             )}
                       </div>
                     </div>
@@ -594,21 +599,23 @@ export default function FoundReportDetail() {
                             r.reporter_full_name ||
                             r.reporter_name ||
                             r.reporter_username;
-                          if (fromRoot) return fromRoot;
-
-                          const nested = r.reporter || r.user || null;
-                          if (nested && typeof nested === "object") {
-                            return (
-                              nested.full_name ||
-                              nested.username ||
-                              nested.email ||
-                              "You"
-                            );
+                          const userId = r.reporter?.user_unique_id || r.user?.user_unique_id || null;
+                          
+                          let displayName = "";
+                          if (fromRoot) {
+                            displayName = fromRoot;
+                          } else {
+                            const nested = r.reporter || r.user || null;
+                            if (nested && typeof nested === "object") {
+                              displayName = nested.full_name || nested.username || nested.email || "You";
+                            } else if (nested && typeof nested !== "object") {
+                              displayName = String(nested);
+                            } else {
+                              displayName = "You";
+                            }
                           }
-
-                          if (nested && typeof nested !== "object")
-                            return String(nested);
-                          return "You";
+                          
+                          return userId ? `${displayName} (${userId})` : displayName;
                         })()}
                       </div>
                     </div>

@@ -16,6 +16,7 @@ import {
   fetchMyChatrooms,
   fetchChatroomMessages,
   sendChatroomMessage,
+  deleteChatroom,
 } from "../services/api";
 
 import { MessageAttachmentDisplay } from "../components/ChatAttachment";
@@ -1370,6 +1371,7 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                     padding: "8px 10px",
                     fontSize: 13,
                     background: "#ffffff",
+                    color: "#0f172a",
                   }}
                   placeholder="Enter pet ID"
                 />
@@ -1390,6 +1392,7 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                     fontSize: 13,
                     resize: "vertical",
                     background: "#ffffff",
+                    color: "#0f172a",
                   }}
                   placeholder="Describe why you want to chat with the admin"
                 />
@@ -1590,17 +1593,73 @@ const RoomsPage: React.FC<RoomsPageProps> = ({ embedded = false }) => {
                         Pet: {selectedChatroom.pet_unique_id}
                       </div>
                     </div>
-                    <div
-                      style={{
-                        padding: "4px 12px",
-                        borderRadius: 999,
-                        background: "#d1fae5",
-                        color: "#065f46",
-                        fontSize: 12,
-                        fontWeight: 600,
-                      }}
-                    >
-                      Active
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div
+                        style={{
+                          padding: "4px 12px",
+                          borderRadius: 999,
+                          background: "#d1fae5",
+                          color: "#065f46",
+                          fontSize: 12,
+                          fontWeight: 600,
+                        }}
+                      >
+                        Active
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (!selectedChatroomId) return;
+                          if (!window.confirm(`Are you sure you want to delete the chatroom "${selectedChatroom.name}"? This action cannot be undone.`)) return;
+                          
+                          try {
+                            const res = await deleteChatroom(selectedChatroomId);
+                            if (res.ok) {
+                              setToast({
+                                isVisible: true,
+                                type: "success",
+                                title: "Success",
+                                message: "Chatroom deleted successfully"
+                              });
+                              setSelectedChatroomId(null);
+                              // Reload chatrooms list
+                              const chatroomsRes = await fetchMyChatrooms();
+                              if (chatroomsRes.ok && Array.isArray(chatroomsRes.data)) {
+                                setChatrooms(chatroomsRes.data);
+                              }
+                            } else {
+                              setToast({
+                                isVisible: true,
+                                type: "error",
+                                title: "Error",
+                                message: `Failed to delete chatroom: ${res.error}`
+                              });
+                            }
+                          } catch (err) {
+                            console.error("Error deleting chatroom:", err);
+                            setToast({
+                              isVisible: true,
+                              type: "error",
+                              title: "Error",
+                              message: "An error occurred while deleting the chatroom"
+                            });
+                          }
+                        }}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: 8,
+                          background: "#fee2e2",
+                          color: "#991b1b",
+                          border: "1px solid #fecaca",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        🗑️ Delete Room
+                      </button>
                     </div>
                   </div>
 

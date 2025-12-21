@@ -41,6 +41,8 @@ export default function AdminLostReportDetail() {
       navigate("/admin?tab=stats", { state: { openMap: true } });
     } else if (from === "admin-chat-requests") {
       navigate("/admin?tab=chat&view=requests", { replace: true });
+    } else if (from === "admin-chat") {
+      navigate("/admin?tab=chat", { replace: true });
     } else if (from === "admin-lost") {
       navigate("/admin?tab=lost", { replace: true });
     } else if (from === "pending-approvals") {
@@ -57,6 +59,8 @@ export default function AdminLostReportDetail() {
       ? "Back to Pending Approvals"
       : (location.state as any)?.from === "admin-chat-requests"
       ? "Back"
+      : (location.state as any)?.from === "admin-chat"
+      ? "Back to Chat"
       : "Back to Pets";
 
   if (loading) return <div style={{ padding: 32 }}>Loading report...</div>;
@@ -533,6 +537,7 @@ export default function AdminLostReportDetail() {
                         }}
                       >
                         {report.reporter?.username || "Unknown"}
+                        {report.reporter?.user_unique_id && ` (${report.reporter.user_unique_id})`}
                       </div>
                     </div>
                   </div>

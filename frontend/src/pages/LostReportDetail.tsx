@@ -623,21 +623,23 @@ export default function LostReportDetail() {
                             r.reporter_full_name ||
                             r.reporter_name ||
                             r.reporter_username;
-                          if (fromRoot) return fromRoot;
-
-                          const nested = r.reporter || r.user || null;
-                          if (nested && typeof nested === "object") {
-                            return (
-                              nested.full_name ||
-                              nested.username ||
-                              nested.email ||
-                              "You"
-                            );
+                          const userId = r.reporter?.user_unique_id || r.user?.user_unique_id || null;
+                          
+                          let displayName = "";
+                          if (fromRoot) {
+                            displayName = fromRoot;
+                          } else {
+                            const nested = r.reporter || r.user || null;
+                            if (nested && typeof nested === "object") {
+                              displayName = nested.full_name || nested.username || nested.email || "You";
+                            } else if (nested && typeof nested !== "object") {
+                              displayName = String(nested);
+                            } else {
+                              displayName = "You";
+                            }
                           }
-
-                          if (nested && typeof nested !== "object")
-                            return String(nested);
-                          return "You";
+                          
+                          return userId ? `${displayName} (${userId})` : displayName;
                         })()}
                       </div>
                     </div>

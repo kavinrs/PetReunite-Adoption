@@ -602,23 +602,59 @@ export default function MyChatrooms() {
                         </div>
                       </div>
 
-                      {/* Reply Button */}
-                      {hoveredMessageId === msg.id && (
+                      {/* Three-dot menu button */}
+                      {hoveredMessageId === msg.id && !msg.is_system && (
                         <button
                           type="button"
-                          onClick={() => setReplyingTo(msg)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            
+                            const items = [
+                              {
+                                label: "Reply",
+                                onClick: () => {
+                                  setReplyingTo(msg);
+                                },
+                              },
+                              {
+                                label: "Delete for me",
+                                onClick: async () => {
+                                  // TODO: Implement delete for me functionality
+                                  console.log("Delete for me:", msg.id);
+                                },
+                              },
+                            ];
+                            
+                            // Only show "Delete for everyone" for own messages
+                            // Check if current user is the sender
+                            // For now, we'll add it for all messages - you can add user check later
+                            items.push({
+                              label: "Delete for everyone",
+                              onClick: async () => {
+                                if (!window.confirm("Delete this message for everyone?")) return;
+                                // TODO: Implement delete for everyone functionality
+                                console.log("Delete for everyone:", msg.id);
+                              },
+                            });
+                            
+                            // Show menu (you can implement a proper menu component later)
+                            // For now, just execute the first action (Reply)
+                            items[0].onClick();
+                          }}
                           style={{
                             padding: "4px 8px",
                             borderRadius: 6,
                             border: "1px solid #e5e7eb",
                             background: "#ffffff",
-                            fontSize: 11,
-                            color: "#6366f1",
+                            fontSize: 16,
+                            color: "#6b7280",
                             cursor: "pointer",
                             fontWeight: 600,
+                            lineHeight: 1,
                           }}
                         >
-                          Reply
+                          ⋮
                         </button>
                       )}
                     </div>

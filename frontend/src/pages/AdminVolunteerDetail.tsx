@@ -89,8 +89,8 @@ export default function AdminVolunteerDetail() {
 
         {error && <div style={{ marginBottom: 12, borderRadius: 8, background: "#fff1f2", color: "#b91c1c", padding: 10, fontSize: 13 }}>{error}</div>}
 
-        <div style={{ display: "grid", gridTemplateColumns: "160px 1fr 1fr", gap: 12, alignItems: "start" }}>
-          <div style={{ width: 160, height: 160, borderRadius: 12, overflow: "hidden", background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "160px 1fr 1fr", gap: 12, alignItems: "stretch" }}>
+          <div style={{ width: 160, height: 160, borderRadius: 12, overflow: "hidden", background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center", gridRow: "span 2" }}>
             {(() => {
               const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
               const origin = /^https?:/.test(apiBase)
@@ -148,7 +148,7 @@ export default function AdminVolunteerDetail() {
 
         <div style={{ marginTop: 16 }}>
           <div style={{ fontSize: 13, color: "#374151", marginBottom: 6 }}>Admin Notes</div>
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} style={{ width: "100%", minHeight: 100, padding: 12, borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 14 }} />
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} style={{ width: "100%", minHeight: 100, padding: 12, borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 14, background: "#ffffff", color: "#111827" }} />
         </div>
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>

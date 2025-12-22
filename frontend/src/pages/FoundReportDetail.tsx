@@ -61,6 +61,7 @@ export default function FoundReportDetail() {
     : null;
 
   const fieldIcons: Record<string, string> = {
+    has_tag: "🏷️",
     pet_name: "🐶",
     pet_type: "📘",
     breed: "🧬",
@@ -384,6 +385,7 @@ export default function FoundReportDetail() {
               }}
             >
               {([
+                ["has_tag", "Tag"],
                 ["pet_name", "Pet Name"],
                 ["pet_type", "Pet Type"],
                 ["breed", "Breed"],
@@ -438,26 +440,52 @@ export default function FoundReportDetail() {
                           opacity: 1,
                         }}
                       >
-                        {key === "location_url" && report[key]
+                        {key === "has_tag"
                           ? (
-                              <a
-                                href={String(report[key]).startsWith("http")
-                                  ? String(report[key])
-                                  : `https://www.google.com/maps?q=${encodeURIComponent(
-                                      String(report[key]),
-                                    )}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                style={{ color: "#2563eb", fontWeight: 600 }}
-                              >
-                                Open in Google Maps
-                              </a>
-                            )
-                          : (
                               <span style={{ color: "#000000", fontWeight: 800 }}>
-                                {report[key] || <span style={{ color: "#9ca3af" }}>—</span>}
+                                {report[key] === "present" ? "Present" : "Not Present"}
                               </span>
-                            )}
+                            )
+                          : key === "pet_name"
+                            ? (
+                                <span style={{ color: "#000000", fontWeight: 800 }}>
+                                  {report.has_tag === "present" && report[key] 
+                                    ? report[key] 
+                                    : <span style={{ color: "#9ca3af" }}>—</span>}
+                                </span>
+                              )
+                            : key === "location_url" && report[key]
+                              ? (
+                                  <a
+                                    href={String(report[key]).startsWith("http")
+                                      ? String(report[key])
+                                      : `https://www.google.com/maps?q=${encodeURIComponent(
+                                          String(report[key]),
+                                        )}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{ color: "#2563eb", fontWeight: 600 }}
+                                  >
+                                    Open in Google Maps
+                                  </a>
+                                )
+                              : key === "weight" && report[key]
+                                ? (
+                                    <span style={{ color: "#000000", fontWeight: 800 }}>
+                                      {report[key]}kg
+                                    </span>
+                                  )
+                                : key === "estimated_age" && report[key]
+                                  ? (
+                                      <span style={{ color: "#000000", fontWeight: 800 }}>
+                                        {report[key]} years
+                                      </span>
+                                    )
+                                  : (
+                                      <span style={{ color: "#000000", fontWeight: 800 }}>
+                                        {report[key] || <span style={{ color: "#9ca3af" }}>—</span>}
+                                      </span>
+                                    )}
                       </div>
                     </div>
                   </div>

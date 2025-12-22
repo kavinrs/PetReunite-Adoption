@@ -65,10 +65,13 @@ class FoundPetReportSerializer(serializers.ModelSerializer):
             "description",
             "photo",
             "photo_url",
+            "has_tag",
             "status",
             "admin_notes",
             "has_user_update",
             "previous_snapshot",
+            "converted_to_adoption",
+            "adoption_pet",
             "created_at",
             "updated_at",
         )
@@ -80,6 +83,8 @@ class FoundPetReportSerializer(serializers.ModelSerializer):
             "admin_notes",
             "has_user_update",
             "previous_snapshot",
+            "converted_to_adoption",
+            "adoption_pet",
             "created_at",
             "updated_at",
         )
@@ -642,6 +647,10 @@ class ChatMessageCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChatMessage
         fields = ("text", "reply_to_message_id")
+        # Allow extra fields to be passed to save() - reply_to, attachment, etc.
+        extra_kwargs = {
+            'text': {'required': False, 'allow_blank': True},
+        }
 
     def validate(self, data):
         """Validate that either text or attachment is provided"""
@@ -672,7 +681,16 @@ class ChatMessageCreateSerializer(serializers.ModelSerializer):
         else:
             data['text'] = ''  # Allow empty text if there's an attachment
         
+        # Remove reply_to_message_id from validated data as it's handled by the view
+        data.pop('reply_to_message_id', None)
+        
         return data
+
+    def create(self, validated_data):
+        """Create a new ChatMessage, handling extra fields passed from the view."""
+        # The view passes reply_to, attachment, etc. directly to save()
+        # These are passed as kwargs to create(), so we handle them here
+        return super().create(validated_data)
 
 
 

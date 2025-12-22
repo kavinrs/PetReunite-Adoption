@@ -4,7 +4,7 @@ import { reportLostPet } from "../services/api";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
 import Toast from "../components/Toast";
 
-type Feedback = { type: "success" | "error"; message: string } | null;
+type Feedback = { type: "success" | "error" | "warning"; message: string } | null;
 
 const initialForm = {
   pet_name: "",
@@ -33,7 +33,7 @@ export default function ReportLostPet() {
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [toast, setToast] = useState<{
     isVisible: boolean;
-    type: "success" | "error";
+    type: "success" | "error" | "warning";
     title: string;
     message: string;
   } | null>(null);
@@ -69,6 +69,18 @@ export default function ReportLostPet() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    
+    // Validate photo is required
+    if (!photo) {
+      setToast({
+        isVisible: true,
+        type: "error",
+        title: "Photo Required",
+        message: "Please upload a photo of your pet."
+      });
+      return;
+    }
+    
     setSubmitting(true);
     setFeedback(null);
     const res = await reportLostPet({
@@ -79,8 +91,8 @@ export default function ReportLostPet() {
     if (res.ok) {
       setToast({
         isVisible: true,
-        type: "success",
-        title: "Success",
+        type: "warning",
+        title: "Report Submitted",
         message: "Lost pet report submitted successfully! Awaiting admin approval."
       });
       setForm(initialForm);
@@ -224,9 +236,12 @@ export default function ReportLostPet() {
               />
             </div>
             <div>
-              <label style={labelStyle}>Breed</label>
+              <label style={labelStyle}>
+                Breed<span style={{ color: "#f97316" }}> *</span>
+              </label>
               <input
                 type="text"
+                required
                 value={form.breed}
                 onChange={(e) => handleChange("breed", e.target.value)}
                 style={inputStyle}
@@ -234,8 +249,11 @@ export default function ReportLostPet() {
               />
             </div>
             <div>
-              <label style={labelStyle}>Gender</label>
+              <label style={labelStyle}>
+                Gender<span style={{ color: "#f97316" }}> *</span>
+              </label>
               <select
+                required
                 value={form.gender}
                 onChange={(e) => handleChange("gender" as any, e.target.value)}
                 style={inputStyle}
@@ -316,9 +334,12 @@ export default function ReportLostPet() {
               />
             </div>
           <div>
-            <label style={labelStyle}>Pincode</label>
+            <label style={labelStyle}>
+              Pincode<span style={{ color: "#f97316" }}> *</span>
+            </label>
             <input
               type="text"
+              required
               value={form.pincode}
               onChange={(e) => handleChange("pincode", e.target.value)}
               style={inputStyle}
@@ -326,19 +347,25 @@ export default function ReportLostPet() {
             />
           </div>
           <div>
-            <label style={labelStyle}>Lost Time</label>
+            <label style={labelStyle}>
+              Lost Time<span style={{ color: "#f97316" }}> *</span>
+            </label>
             <input
               type="datetime-local"
+              required
               value={form.lost_time}
               onChange={(e) => handleChange("lost_time", e.target.value)}
               style={inputStyle}
             />
           </div>
             <div>
-              <label style={labelStyle}>Location URL</label>
+              <label style={labelStyle}>
+                Location URL<span style={{ color: "#f97316" }}> *</span>
+              </label>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <input
                   type="text"
+                  required
                   value={form.location_url ?? ""}
                   onChange={(e) => handleChange("location_url" as any, e.target.value)}
                   style={inputStyle}
@@ -377,19 +404,44 @@ export default function ReportLostPet() {
               </div>
             </div>
             <div>
-              <label style={labelStyle}>Upload Photo</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
+              <label style={labelStyle}>
+                Upload Photo<span style={{ color: "#f97316" }}> *</span>
+              </label>
+              <div
                 style={{
-                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
                   padding: "11px 12px",
                   borderRadius: 12,
-                  border: "1px solid rgba(15,23,42,0.15)",
+                  border: photo ? "1px solid rgba(15,23,42,0.15)" : "1px solid rgba(249,115,22,0.4)",
                   background: "#fff",
                 }}
-              />
+              >
+                <label
+                  style={{
+                    padding: "6px 14px",
+                    borderRadius: 6,
+                    background: "#374151",
+                    color: "#fff",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Choose File
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
+                    style={{ display: "none" }}
+                  />
+                </label>
+                <span style={{ fontSize: 13, color: photo ? "#16a34a" : "#9ca3af", fontWeight: photo ? 500 : 400 }}>
+                  {photo ? photo.name : "No file chosen"}
+                </span>
+              </div>
             </div>
           </div>
 

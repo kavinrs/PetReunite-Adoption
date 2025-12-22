@@ -15,6 +15,7 @@ from .views import (
     AdminReportSummaryView,
     AdminUpdateAdoptionRequestView,
     AdminUserListView,
+    AdminUserDeleteView,
     AdminStaffListView,
     AdminUserActivityView,
     AdminChatMessageDeleteForEveryoneView,
@@ -61,6 +62,9 @@ from .views import (
     AdminCreateChatroomView,
     AdminChatroomParticipantsView,
     AdminChatroomAccessRequestsView,
+    # Adoption from Found Pets Views
+    EligibleForAdoptionListView,
+    ConvertToAdoptionView,
 )
 
 urlpatterns = [
@@ -84,6 +88,7 @@ urlpatterns = [
     # Admin dashboard endpoints
     path("admin/summary/", AdminReportSummaryView.as_view(), name="admin-report-summary"),
     path("admin/users/", AdminUserListView.as_view(), name="admin-user-list"),
+    path("admin/users/<int:user_id>/", AdminUserDeleteView.as_view(), name="admin-user-delete"),
     path("admin/staff/", AdminStaffListView.as_view(), name="admin-staff-list"),
     path(
         "admin/users/<int:user_id>/activity/",
@@ -331,5 +336,16 @@ urlpatterns = [
         "chatrooms/<int:chatroom_id>/delete/",
         DeleteChatroomView.as_view(),
         name="delete-chatroom",
+    ),
+    # Adoption from Found Pets endpoints
+    path(
+        "admin/adoption/eligible-pets/",
+        EligibleForAdoptionListView.as_view(),
+        name="eligible-for-adoption-list",
+    ),
+    path(
+        "admin/adoption/convert/<int:pk>/",
+        ConvertToAdoptionView.as_view(),
+        name="convert-to-adoption",
     ),
 ]

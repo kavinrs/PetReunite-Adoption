@@ -88,6 +88,7 @@ export default function AdminChat() {
   const [chatRooms, setChatRooms] = useState<any[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
   const [showRoomPanel, setShowRoomPanel] = useState(false);
+  const [showRoomMembersSidebar, setShowRoomMembersSidebar] = useState(true);
   
   // View type: "conversation" for direct chats, "chatroom" for group chats
   const [viewType, setViewType] = useState<"conversation" | "chatroom">("conversation");
@@ -125,6 +126,7 @@ export default function AdminChat() {
   
   // Current admin user unique ID for message alignment (USR000024 format)
   const [currentAdminUserId, setCurrentAdminUserId] = useState<string | null>(null);
+  const [currentAdminUserNumericId, setCurrentAdminUserNumericId] = useState<number | null>(null);
   
   // Chat pet details view state
   const [showChatPetDetails, setShowChatPetDetails] = useState(false);
@@ -159,41 +161,41 @@ export default function AdminChat() {
 
     // Fetch room participants and access requests from backend
     const loadRoomMembers = async () => {
-      // Fetch participants (accepted users)
+      // Fetch participants (active members)
       const participantsRes = await fetchChatroomParticipants(selectedRoomId);
       
-      // Fetch access requests (pending invitations)
+      // Fetch access requests (for any legacy pending invitations)
       const accessRequestsRes = await fetchChatroomAccessRequestsAdmin(selectedRoomId);
       
       const participants = participantsRes.ok && Array.isArray(participantsRes.data) ? participantsRes.data : [];
       const accessRequests = accessRequestsRes.ok && Array.isArray(accessRequestsRes.data) ? accessRequestsRes.data : [];
       
-      // Organize participants by role (accepted users)
+      // Organize participants by role (active members)
       const acceptedRequestedUser = participants.find((p: any) => p.role === 'requested_user');
       const acceptedFoundedUser = participants.find((p: any) => p.role === 'founded_user');
       const acceptedAdmins = participants.filter((p: any) => p.role === 'admin');
       
-      // Find pending invitations
+      // Find any legacy pending invitations (should be rare with direct add)
       const pendingRequestedUser = accessRequests.find((r: any) => r.role === 'requested_user' && r.status === 'pending');
       const pendingFoundedUser = accessRequests.find((r: any) => r.role === 'founded_user' && r.status === 'pending');
       const pendingAdmins = accessRequests.filter((r: any) => r.role === 'admin' && r.status === 'pending');
       
-      // Determine final status for each role
+      // Determine final status for each role - use 'added' for active members
       const requestedUser = acceptedRequestedUser 
-        ? { ...acceptedRequestedUser.user, status: 'accepted' }
+        ? { ...acceptedRequestedUser.user, status: 'added' }
         : pendingRequestedUser 
           ? { ...pendingRequestedUser.requested_user, status: 'pending' }
           : null;
           
       const foundedUser = acceptedFoundedUser
-        ? { ...acceptedFoundedUser.user, status: 'accepted' }
+        ? { ...acceptedFoundedUser.user, status: 'added' }
         : pendingFoundedUser
           ? { ...pendingFoundedUser.requested_user, status: 'pending' }
           : null;
       
-      // Combine accepted and pending admins
+      // Combine active and pending admins
       const allAdmins = [
-        ...acceptedAdmins.map((p: any) => ({ ...p.user, status: 'accepted' })),
+        ...acceptedAdmins.map((p: any) => ({ ...p.user, status: 'added' })),
         ...pendingAdmins.map((r: any) => ({ ...r.requested_user, status: 'pending' }))
       ];
       
@@ -261,6 +263,10 @@ export default function AdminChat() {
       if (res.ok && res.data?.user_unique_id) {
         console.log("Setting currentAdminUserId to:", res.data.user_unique_id);
         setCurrentAdminUserId(res.data.user_unique_id);
+        // Also store the numeric user ID for deleted_for checks
+        if (res.data?.user_id) {
+          setCurrentAdminUserNumericId(res.data.user_id);
+        }
       }
     }
     loadCurrentUser();
@@ -1897,7 +1903,13 @@ export default function AdminChat() {
                   const isAdmin =
                     !m.is_system && userId && m.sender && m.sender.id !== userId;
                   const isSystem = Boolean(m.is_system);
-                  const text = (m.text || m.content || "") as string;
+                  const isDeleted = Boolean(m.is_deleted);
+                  const isDeletedForMe = currentAdminUserNumericId && Array.isArray(m.deleted_for) && m.deleted_for.includes(currentAdminUserNumericId);
+                  
+                  // Skip messages deleted for current user
+                  if (isDeletedForMe) return null;
+                  
+                  const text = isDeleted ? "Message deleted" : (m.text || m.content || "") as string;
                   const systemColor = (() => {
                     const t = text.toLowerCase();
                     if (t.includes("active")) return "#16a34a";
@@ -1974,7 +1986,7 @@ export default function AdminChat() {
                             });
                           }}
                         >
-                        {m.reply_to && !isSystem && (
+                        {!isDeleted && m.reply_to && !isSystem && (
                           <div
                             style={{
                               marginBottom: 6,
@@ -1994,10 +2006,12 @@ export default function AdminChat() {
                             </div>
                           </div>
                         )}
-                        {m.text ?? ""}
+                        <span style={{ fontStyle: isDeleted ? "italic" : "normal", opacity: isDeleted ? 0.7 : 1 }}>
+                          {text}
+                        </span>
                         
-                        {/* Attachment Display */}
-                        {m.attachment_url && (
+                        {/* Attachment Display - only show if not deleted */}
+                        {!isDeleted && m.attachment_url && (
                           <div style={{ marginTop: m.text ? 8 : 0 }}>
                             <MessageAttachmentDisplay
                               attachmentUrl={m.attachment_url}
@@ -2008,7 +2022,7 @@ export default function AdminChat() {
                           </div>
                         )}
 
-                        {!isSystem && hoveredMessageId === Number(m.id) && (
+                        {!isSystem && !isDeleted && hoveredMessageId === Number(m.id) && (
                           <button
                             type="button"
                             onClick={(e) => {
@@ -2155,13 +2169,14 @@ export default function AdminChat() {
                   {activeChatroom &&
                     chatroomMessages.map((m: any) => {
                       const isSystem = Boolean(m.is_system);
+                      const isDeleted = Boolean(m.is_deleted);
                       
-                      // Filter out deleted messages (same as direct chat)
+                      // Filter out messages deleted for current user
                       if (m.is_deleted_for_me || m.text === null) {
                         return null;
                       }
                       
-                      const text = (m.text || m.content || "") as string;
+                      const text = isDeleted ? "Message deleted" : (m.text || m.content || "") as string;
                       // Compare using stable user_unique_id (USR000024 format)
                       const isOwnMessage = m.sender?.user_unique_id === currentAdminUserId;
                       
@@ -2274,7 +2289,7 @@ export default function AdminChat() {
                                 display: "inline-block",
                               }}
                             >
-                              {m.reply_to && (
+                              {!isDeleted && m.reply_to && (
                                 <div
                                   style={{
                                     fontSize: 12,
@@ -2296,10 +2311,12 @@ export default function AdminChat() {
                                   </div>
                                 </div>
                               )}
-                              {text}
+                              <span style={{ fontStyle: isDeleted ? "italic" : "normal", opacity: isDeleted ? 0.7 : 1 }}>
+                                {text}
+                              </span>
                               
-                              {/* Attachment Display */}
-                              {m.attachment_url && (
+                              {/* Attachment Display - only show if not deleted */}
+                              {!isDeleted && m.attachment_url && (
                                 <div style={{ marginTop: text ? 8 : 0 }}>
                                   <MessageAttachmentDisplay
                                     attachmentUrl={m.attachment_url}
@@ -2311,7 +2328,7 @@ export default function AdminChat() {
                               )}
                             </div>
 
-                            {!isSystem && hoveredMessageId === m.id && (
+                            {!isSystem && !isDeleted && hoveredMessageId === m.id && (
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -2990,31 +3007,114 @@ export default function AdminChat() {
         )}
       </div>
       
-      {/* Right Panel - Room Management (Only visible when in a chat room) */}
-      {showRoomPanel && selectedRoomId && (
-        <div
-          style={{
-            width: 280,
-            borderLeft: "1px solid #e5e7eb",
-            background: "#f9fafb",
-            display: "flex",
-            flexDirection: "column",
-            padding: 16,
-            boxSizing: "border-box",
-            gap: 16,
-            overflowY: "auto",
-          }}
-        >
-          <div>
+      {/* Right Panel - Room Management (Only visible when in a chat room and not viewing requests) */}
+      {showRoomPanel && selectedRoomId && viewType === "chatroom" && centerView === "chat" && (
+        <>
+          {/* Toggle Button to Show Sidebar (only visible when sidebar is hidden) */}
+          {!showRoomMembersSidebar && (
             <div
               style={{
-                fontSize: 16,
-                fontWeight: 800,
-                color: "#0f172a",
-                marginBottom: 4,
+                width: 40,
+                borderLeft: "1px solid #e5e7eb",
+                background: "#f9fafb",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                paddingTop: 16,
               }}
             >
-              Room Members
+              <button
+                type="button"
+                onClick={() => setShowRoomMembersSidebar(true)}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  background: "#ffffff",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                }}
+                title="Show Room Members"
+              >
+                <span style={{ 
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
+                  alignItems: "center",
+                }}>
+                  <span style={{ width: 14, height: 2, background: "#64748b", borderRadius: 1 }}></span>
+                  <span style={{ width: 14, height: 2, background: "#64748b", borderRadius: 1 }}></span>
+                  <span style={{ width: 14, height: 2, background: "#64748b", borderRadius: 1 }}></span>
+                </span>
+              </button>
+            </div>
+          )}
+          
+          {/* Room Members Sidebar */}
+          {showRoomMembersSidebar && (
+          <div
+            style={{
+              width: 280,
+              borderLeft: "1px solid #e5e7eb",
+              background: "#f9fafb",
+              display: "flex",
+              flexDirection: "column",
+              padding: 16,
+              boxSizing: "border-box",
+              gap: 16,
+              overflowY: "auto",
+            }}
+          >
+          <div>
+            {/* Header with Toggle and Title */}
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 4,
+            }}>
+              {/* Toggle Button (Three Lines) */}
+              <button
+                type="button"
+                onClick={() => setShowRoomMembersSidebar(false)}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 6,
+                  border: "1px solid #e5e7eb",
+                  background: "#ffffff",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+                title="Hide Room Members"
+              >
+                <span style={{ 
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
+                  alignItems: "center",
+                }}>
+                  <span style={{ width: 12, height: 2, background: "#64748b", borderRadius: 1 }}></span>
+                  <span style={{ width: 12, height: 2, background: "#64748b", borderRadius: 1 }}></span>
+                  <span style={{ width: 12, height: 2, background: "#64748b", borderRadius: 1 }}></span>
+                </span>
+              </button>
+              <div
+                style={{
+                  fontSize: 16,
+                  fontWeight: 800,
+                  color: "#0f172a",
+                }}
+              >
+                Room Members
+              </div>
             </div>
             <div style={{ 
               fontSize: 12, 
@@ -3136,10 +3236,11 @@ export default function AdminChat() {
                 if (user) {
                   const statusColors = {
                     pending: { bg: "#fef3c7", text: "#92400e", label: "Pending" },
-                    accepted: { bg: "#d1fae5", text: "#065f46", label: "Accepted" },
+                    accepted: { bg: "#d1fae5", text: "#065f46", label: "Member" },
+                    added: { bg: "#d1fae5", text: "#065f46", label: "Member" },
                     rejected: { bg: "#fee2e2", text: "#991b1b", label: "Rejected" },
                   };
-                  const statusStyle = statusColors[status as keyof typeof statusColors] || statusColors.pending;
+                  const statusStyle = statusColors[status as keyof typeof statusColors] || statusColors.added;
                   
                   return (
                     <div
@@ -3241,10 +3342,11 @@ export default function AdminChat() {
                 if (user) {
                   const statusColors = {
                     pending: { bg: "#fef3c7", text: "#92400e", label: "Pending" },
-                    accepted: { bg: "#d1fae5", text: "#065f46", label: "Accepted" },
+                    accepted: { bg: "#d1fae5", text: "#065f46", label: "Member" },
+                    added: { bg: "#d1fae5", text: "#065f46", label: "Member" },
                     rejected: { bg: "#fee2e2", text: "#991b1b", label: "Rejected" },
                   };
-                  const statusStyle = statusColors[status as keyof typeof statusColors] || statusColors.pending;
+                  const statusStyle = statusColors[status as keyof typeof statusColors] || statusColors.added;
                   
                   return (
                     <div
@@ -3343,8 +3445,9 @@ export default function AdminChat() {
                   const statusColors = {
                     pending: { bg: "#fef3c7", text: "#92400e", label: "Pending" },
                     accepted: { bg: "#dbeafe", text: "#1e40af", label: "Admin" },
+                    added: { bg: "#dbeafe", text: "#1e40af", label: "Admin" },
                   };
-                  const statusStyle = statusColors[admin.status as keyof typeof statusColors] || statusColors.accepted;
+                  const statusStyle = statusColors[admin.status as keyof typeof statusColors] || statusColors.added;
                   
                   return (
                     <div
@@ -3508,8 +3611,8 @@ export default function AdminChat() {
                             setToast({
                               isVisible: true,
                               type: "success",
-                              title: "Invitation Sent",
-                              message: `Invitation sent to ${getUserDisplayName(activeConversation)}! They will receive a notification.`
+                              title: "User Added",
+                              message: `${getUserDisplayName(activeConversation)} has been added to the chatroom!`
                             });
                             setShowAddUserFromChat(false);
                             
@@ -3532,13 +3635,13 @@ export default function AdminChat() {
                               
                               // Transform data to match display format
                               const requestedUser = acceptedRequestedUser 
-                                ? { ...acceptedRequestedUser.user, status: 'accepted' }
+                                ? { ...acceptedRequestedUser.user, status: 'added' }
                                 : pendingRequestedUser 
                                   ? { ...pendingRequestedUser.requested_user, status: 'pending' }
                                   : null;
                                   
                               const foundedUser = acceptedFoundedUser
-                                ? { ...acceptedFoundedUser.user, status: 'accepted' }
+                                ? { ...acceptedFoundedUser.user, status: 'added' }
                                 : pendingFoundedUser
                                   ? { ...pendingFoundedUser.requested_user, status: 'pending' }
                                   : null;
@@ -3584,6 +3687,7 @@ export default function AdminChat() {
                           });
                           
                           if (res.ok) {
+                            // User is now directly added to the chatroom
                             setInvitationRequests((prev) => ({
                               ...prev,
                               [conversationId]: {
@@ -3594,17 +3698,23 @@ export default function AdminChat() {
                                     username: getUserDisplayName(activeConversation),
                                     full_name: getUserDisplayName(activeConversation)
                                   },
-                                  status: 'pending',
-                                  requestId: res.data?.id || 0,
+                                  status: 'added',
+                                  requestId: res.data?.chatroom?.id || 0,
                                 },
                               },
                             }));
                             
+                            // Refresh chatrooms list
+                            const chatroomsRes = await fetchAdminChatrooms();
+                            if (chatroomsRes.ok && Array.isArray(chatroomsRes.data)) {
+                              setChatRooms(chatroomsRes.data);
+                            }
+                            
                             setToast({
                               isVisible: true,
                               type: "success",
-                              title: "Invitation Sent",
-                              message: `Chatroom invitation sent to ${getUserDisplayName(activeConversation)}! They will receive a notification.`
+                              title: "User Added",
+                              message: `${getUserDisplayName(activeConversation)} has been added to the chatroom!`
                             });
                             setShowAddUserFromChat(false);
                           } else {
@@ -3612,7 +3722,7 @@ export default function AdminChat() {
                               isVisible: true,
                               type: "error",
                               title: "Error",
-                              message: res.error || "Failed to send chatroom invitation"
+                              message: res.error || "Failed to add user to chatroom"
                             });
                           }
                         }
@@ -3846,8 +3956,8 @@ export default function AdminChat() {
                                       setToast({
                                         isVisible: true,
                                         type: "success",
-                                        title: "Invitation Sent",
-                                        message: `Invitation sent to ${displayName}! They will receive a notification.`
+                                        title: "User Added",
+                                        message: `${displayName} has been added to the chatroom!`
                                       });
                                       setShowAddFoundUser(false);
                                       
@@ -3870,13 +3980,13 @@ export default function AdminChat() {
                                         
                                         // Transform data to match display format
                                         const requestedUser = acceptedRequestedUser 
-                                          ? { ...acceptedRequestedUser.user, status: 'accepted' }
+                                          ? { ...acceptedRequestedUser.user, status: 'added' }
                                           : pendingRequestedUser 
                                             ? { ...pendingRequestedUser.requested_user, status: 'pending' }
                                             : null;
                                             
                                         const foundedUser = acceptedFoundedUser
-                                          ? { ...acceptedFoundedUser.user, status: 'accepted' }
+                                          ? { ...acceptedFoundedUser.user, status: 'added' }
                                           : pendingFoundedUser
                                             ? { ...pendingFoundedUser.requested_user, status: 'pending' }
                                             : null;
@@ -3944,17 +4054,23 @@ export default function AdminChat() {
                                               full_name: displayName,
                                             email: displayEmail,
                                           },
-                                          status: 'pending',
-                                          requestId: res.data?.id || 0,
+                                          status: 'added',
+                                          requestId: res.data?.chatroom?.id || 0,
                                         },
                                       },
                                     }));
                                     
+                                    // Refresh chatrooms list
+                                    const chatroomsRes = await fetchAdminChatrooms();
+                                    if (chatroomsRes.ok && Array.isArray(chatroomsRes.data)) {
+                                      setChatRooms(chatroomsRes.data);
+                                    }
+                                    
                                     setToast({
                                       isVisible: true,
                                       type: "success",
-                                      title: "Invitation Sent",
-                                      message: `Chatroom invitation sent to ${displayName}! They will receive a notification.`
+                                      title: "User Added",
+                                      message: `${displayName} has been added to the chatroom!`
                                     });
                                     setShowAddFoundUser(false);
                                     setFoundUserSearch("");
@@ -3963,7 +4079,7 @@ export default function AdminChat() {
                                         isVisible: true,
                                         type: "error",
                                         title: "Error",
-                                        message: res.error || "Failed to send chatroom invitation"
+                                        message: res.error || "Failed to add user to chatroom"
                                       });
                                     }
                                   }
@@ -4083,8 +4199,8 @@ export default function AdminChat() {
                                   setToast({
                                     isVisible: true,
                                     type: "success",
-                                    title: "Invitation Sent",
-                                    message: `Invitation sent to ${staff.full_name || staff.username}!`
+                                    title: "Admin Added",
+                                    message: `${staff.full_name || staff.username} has been added to the chatroom!`
                                   });
                                   // Reload participants AND access requests to show the new admin
                                   const participantsRes = await fetchChatroomParticipants(selectedRoomId);
@@ -4099,27 +4215,27 @@ export default function AdminChat() {
                                     const acceptedFoundedUser = participants.find((p: any) => p.role === 'founded_user');
                                     const acceptedAdmins = participants.filter((p: any) => p.role === 'admin');
                                     
-                                    // Get pending access requests
+                                    // Get pending access requests (should be empty now with direct add)
                                     const pendingRequestedUser = accessRequests.find((r: any) => r.role === 'requested_user' && r.status === 'pending');
                                     const pendingFoundedUser = accessRequests.find((r: any) => r.role === 'founded_user' && r.status === 'pending');
                                     const pendingAdmins = accessRequests.filter((r: any) => r.role === 'admin' && r.status === 'pending');
                                     
                                     // Transform data to match display format
                                     const requestedUser = acceptedRequestedUser 
-                                      ? { ...acceptedRequestedUser.user, status: 'accepted' }
+                                      ? { ...acceptedRequestedUser.user, status: 'added' }
                                       : pendingRequestedUser 
                                         ? { ...pendingRequestedUser.requested_user, status: 'pending' }
                                         : null;
                                         
                                     const foundedUser = acceptedFoundedUser
-                                      ? { ...acceptedFoundedUser.user, status: 'accepted' }
+                                      ? { ...acceptedFoundedUser.user, status: 'added' }
                                       : pendingFoundedUser
                                         ? { ...pendingFoundedUser.requested_user, status: 'pending' }
                                         : null;
                                     
                                     // Combine accepted and pending admins
                                     const allAdmins = [
-                                      ...acceptedAdmins.map((p: any) => ({ ...p.user, status: 'accepted' })),
+                                      ...acceptedAdmins.map((p: any) => ({ ...p.user, status: 'added' })),
                                       ...pendingAdmins.map((r: any) => ({ ...r.requested_user, status: 'pending' }))
                                     ];
                                     
@@ -4182,6 +4298,8 @@ export default function AdminChat() {
             </div>
           </div>
         </div>
+          )}
+        </>
       )}
     </div>
   );

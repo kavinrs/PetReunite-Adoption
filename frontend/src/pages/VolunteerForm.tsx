@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createVolunteerRequest } from "../services/api";
+import Toast from "../components/Toast";
 
 type ExperienceLevel = "beginner" | "moderate" | "experienced" | "professional";
 
@@ -10,6 +11,12 @@ export default function VolunteerForm() {
   const [error, setError] = useState<string | null>(null);
 
   const [fullName, setFullName] = useState("");
+  const [toast, setToast] = useState<{
+    isVisible: boolean;
+    type: "success" | "error" | "warning";
+    title: string;
+    message: string;
+  } | null>(null);
   const [age, setAge] = useState<string>("");
   const [idProofType, setIdProofType] = useState("");
   const [idProofFile, setIdProofFile] = useState<File | null>(null);
@@ -76,9 +83,22 @@ export default function VolunteerForm() {
 
     const res = await createVolunteerRequest(payload as any);
     if (res.ok) {
-      navigate("/user", { replace: true });
+      setToast({
+        isVisible: true,
+        type: "success",
+        title: "Request Submitted",
+        message: "Your volunteer request has been submitted successfully! We'll review it shortly."
+      });
+      setTimeout(() => {
+        navigate("/user", { replace: true });
+      }, 2000);
     } else {
-      setError(res.error || "Failed to submit volunteer request");
+      setToast({
+        isVisible: true,
+        type: "error",
+        title: "Error",
+        message: res.error || "Failed to submit volunteer request"
+      });
     }
     setSubmitting(false);
   }

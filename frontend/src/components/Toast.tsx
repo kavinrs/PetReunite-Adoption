@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 
 interface ToastProps {
-  type: "success" | "error";
+  type: "success" | "error" | "warning";
   title: string;
   message: string;
   isVisible: boolean;
@@ -39,6 +39,29 @@ export default function Toast({
   if (!isVisible) return null;
 
   const isSuccess = type === "success";
+  const isWarning = type === "warning";
+  
+  // Get colors based on type
+  const getBorderColor = () => {
+    if (isSuccess) return "#d1fae5";
+    return "#fee2e2"; // red for both error and warning
+  };
+  
+  const getGradient = () => {
+    if (isSuccess) return "linear-gradient(135deg, #10b981, #059669)";
+    return "linear-gradient(135deg, #ef4444, #dc2626)"; // red for both error and warning
+  };
+  
+  const getProgressColor = () => {
+    if (isSuccess) return "#10b981";
+    return "#ef4444"; // red for both error and warning
+  };
+  
+  const getIcon = () => {
+    if (isSuccess) return "✓";
+    if (isWarning) return "!";
+    return "✕";
+  };
 
   return (
     <div
@@ -54,39 +77,37 @@ export default function Toast({
         opacity: isAnimating ? 1 : 0,
         transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
         zIndex: 10000,
-        maxWidth: 400,
-        minWidth: 320,
+        maxWidth: 480,
+        minWidth: 380,
       }}
     >
       <div
         style={{
           background: "#ffffff",
-          borderRadius: 16,
-          padding: 16,
+          borderRadius: 18,
+          padding: 20,
           boxShadow: "0 20px 50px rgba(15, 23, 42, 0.15)",
-          border: `1px solid ${isSuccess ? "#d1fae5" : "#fee2e2"}`,
+          border: `1px solid ${getBorderColor()}`,
           display: "flex",
           alignItems: "flex-start",
-          gap: 12,
+          gap: 16,
         }}
       >
         {/* Icon */}
         <div
           style={{
-            width: 40,
-            height: 40,
+            width: 52,
+            height: 52,
             borderRadius: "50%",
-            background: isSuccess
-              ? "linear-gradient(135deg, #10b981, #059669)"
-              : "linear-gradient(135deg, #ef4444, #dc2626)",
+            background: getGradient(),
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             flexShrink: 0,
           }}
         >
-          <span style={{ fontSize: 18, color: "white" }}>
-            {isSuccess ? "✓" : "✕"}
+          <span style={{ fontSize: 24, color: "white", fontWeight: 700 }}>
+            {getIcon()}
           </span>
         </div>
 
@@ -94,18 +115,18 @@ export default function Toast({
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
-              fontSize: 14,
+              fontSize: 18,
               fontWeight: 700,
               color: "#111827",
-              marginBottom: 4,
+              marginBottom: 6,
             }}
           >
             {title}
           </div>
           <div
             style={{
-              fontSize: 13,
-              color: "#6b7280",
+              fontSize: 15,
+              color: "#4b5563",
               lineHeight: 1.5,
             }}
           >
@@ -122,7 +143,7 @@ export default function Toast({
             background: "transparent",
             cursor: "pointer",
             color: "#9ca3af",
-            fontSize: 18,
+            fontSize: 22,
             padding: 4,
             lineHeight: 1,
             flexShrink: 0,
@@ -140,16 +161,16 @@ export default function Toast({
           bottom: 0,
           left: 0,
           right: 0,
-          height: 3,
-          background: isSuccess ? "#d1fae5" : "#fee2e2",
-          borderRadius: "0 0 16px 16px",
+          height: 4,
+          background: getBorderColor(),
+          borderRadius: "0 0 18px 18px",
           overflow: "hidden",
         }}
       >
         <div
           style={{
             height: "100%",
-            background: isSuccess ? "#10b981" : "#ef4444",
+            background: getProgressColor(),
             animation: `toast-progress ${autoCloseMs}ms linear`,
             transformOrigin: "left",
           }}

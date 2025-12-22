@@ -438,9 +438,13 @@ export default function LostReportDetail() {
                               )
                             : key === "lost_time" && form[key]
                               ? new Date(form[key]).toLocaleString()
-                              : form[key] || (
-                                  <span style={{ color: "#9ca3af" }}>—</span>
-                                )}
+                              : key === "weight" && form[key]
+                                ? `${form[key]}kg`
+                                : key === "age" && form[key]
+                                  ? `${form[key]} years`
+                                  : form[key] || (
+                                      <span style={{ color: "#9ca3af" }}>—</span>
+                                    )}
                         </div>
                       ) : key === "lost_time" ? (
                         <input

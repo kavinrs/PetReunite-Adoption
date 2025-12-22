@@ -251,7 +251,7 @@ export default function MyChatrooms() {
                 fontStyle: "italic",
               }}
             >
-              No chatrooms yet. Accept an invitation to join.
+              No chatrooms yet. You'll see rooms here when an admin adds you.
             </div>
           )}
 

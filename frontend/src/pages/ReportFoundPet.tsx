@@ -20,6 +20,7 @@ const initialForm = {
   description: "",
   location_url: "",
   found_time: "",
+  has_tag: "not_present",
 };
 
 export default function ReportFoundPet() {
@@ -67,6 +68,18 @@ export default function ReportFoundPet() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    
+    // Validate photo is required
+    if (!photo) {
+      setToast({
+        isVisible: true,
+        type: "error",
+        title: "Photo Required",
+        message: "Please upload a photo of the found pet."
+      });
+      return;
+    }
+    
     setSubmitting(true);
     setFeedback(null);
     const res = await reportFoundPet({
@@ -195,13 +208,36 @@ export default function ReportFoundPet() {
             }}
           >
             <div>
-              <label style={labelStyle}>Pet Name (if known)</label>
+              <label style={labelStyle}>Tag (Name Tag on Pet)</label>
+              <select
+                value={form.has_tag}
+                onChange={(e) => {
+                  handleChange("has_tag" as any, e.target.value);
+                  // Clear pet name if tag is not present
+                  if (e.target.value === "not_present") {
+                    handleChange("pet_name", "");
+                  }
+                }}
+                style={inputStyle}
+              >
+                <option value="not_present">Not Present</option>
+                <option value="present">Present</option>
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>
+                Pet Name {form.has_tag === "present" ? "(from tag)" : "(if known)"}
+              </label>
               <input
                 type="text"
-                value={form.pet_name}
+                value={form.has_tag === "not_present" ? "" : form.pet_name}
                 onChange={(e) => handleChange("pet_name", e.target.value)}
-                style={inputStyle}
-                placeholder="Pet Name"
+                style={{
+                  ...inputStyle,
+                  background: form.has_tag === "not_present" ? "#f3f4f6" : "#fff",
+                }}
+                placeholder={form.has_tag === "present" ? "Enter name from tag" : "No tag - name unknown"}
+                disabled={form.has_tag === "not_present"}
               />
             </div>
             <div>
@@ -298,9 +334,12 @@ export default function ReportFoundPet() {
               />
             </div>
             <div>
-              <label style={labelStyle}>Pincode</label>
+              <label style={labelStyle}>
+                Pincode<span style={{ color: "#f97316" }}> *</span>
+              </label>
               <input
                 type="text"
+                required
                 value={form.pincode}
                 onChange={(e) => handleChange("pincode" as any, e.target.value)}
                 style={inputStyle}
@@ -308,34 +347,65 @@ export default function ReportFoundPet() {
               />
             </div>
             <div>
-              <label style={labelStyle}>Upload Photo</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
+              <label style={labelStyle}>
+                Upload Photo<span style={{ color: "#f97316" }}> *</span>
+              </label>
+              <div
                 style={{
-                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
                   padding: "11px 12px",
                   borderRadius: 12,
-                  border: "1px solid rgba(15,23,42,0.15)",
+                  border: photo ? "1px solid rgba(15,23,42,0.15)" : "1px solid rgba(249,115,22,0.4)",
                   background: "#fff",
                 }}
-              />
+              >
+                <label
+                  style={{
+                    padding: "6px 14px",
+                    borderRadius: 6,
+                    background: "#374151",
+                    color: "#fff",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Choose File
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
+                    style={{ display: "none" }}
+                  />
+                </label>
+                <span style={{ fontSize: 13, color: photo ? "#16a34a" : "#9ca3af", fontWeight: photo ? 500 : 400 }}>
+                  {photo ? photo.name : "No file chosen"}
+                </span>
+              </div>
             </div>
             <div>
-              <label style={labelStyle}>Found Time</label>
+              <label style={labelStyle}>
+                Found Time<span style={{ color: "#f97316" }}> *</span>
+              </label>
               <input
                 type="datetime-local"
+                required
                 value={form.found_time}
                 onChange={(e) => handleChange("found_time" as any, e.target.value)}
                 style={inputStyle}
               />
             </div>
             <div>
-              <label style={labelStyle}>Location URL</label>
+              <label style={labelStyle}>
+                Location URL<span style={{ color: "#f97316" }}> *</span>
+              </label>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <input
                   type="text"
+                  required
                   value={form.location_url ?? ""}
                   onChange={(e) => handleChange("location_url" as any, e.target.value)}
                   style={inputStyle}

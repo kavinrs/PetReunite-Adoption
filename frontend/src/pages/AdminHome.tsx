@@ -454,16 +454,20 @@ import {
   updateAdoptionRequestStatus,
   deleteAdoptionRequest,
   fetchAdminUsers,
+  deleteAdminUser,
   fetchAvailablePets,
   fetchAdminVolunteerRequests,
   updateAdminVolunteerRequest,
   deleteAdminVolunteerRequest,
   fetchNotifications,
+  fetchEligibleForAdoption,
+  convertToAdoption,
 } from "../services/api";
 import AdminChat from "./AdminChat";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
 import { CITY_COORDS, STATE_COORDS } from "../utils/mapCoordinates";
+import Toast from "../components/Toast";
 import "leaflet/dist/leaflet.css";
 import { useMap } from "react-leaflet";
 import * as RL from "react-leaflet";
@@ -516,6 +520,8 @@ function AdminHome() {
   const [foundReports, setFoundReports] = useState<any[]>([]);
   const [lostReports, setLostReports] = useState<any[]>([]);
   const [adoptionRequests, setAdoptionRequests] = useState<any[]>([]);
+  const [eligibleForAdoption, setEligibleForAdoption] = useState<any[]>([]);
+  const [adoptionSubTab, setAdoptionSubTab] = useState<"requests" | "eligible">("requests");
   const [volunteerRequests, setVolunteerRequests] = useState<any[]>([]);
   const [adminUsers, setAdminUsers] = useState<any[]>([]);
   const [tab, setTab] = useState<TabKey>("dashboard");
@@ -554,6 +560,12 @@ function AdminHome() {
 
   const [error, setError] = useState<string | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [toast, setToast] = useState<{
+    isVisible: boolean;
+    type: "success" | "error";
+    title: string;
+    message: string;
+  } | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -726,20 +738,58 @@ function AdminHome() {
       if (res.ok) setLostReports(res.data ?? []);
       else if (res.error) setError(res.error);
     } else if (nextTab === "adoptions") {
-      const res = await fetchAllAdoptionRequests();
-      if (res.ok) {
+      // Load both adoption requests and eligible pets
+      const [reqRes, eligibleRes] = await Promise.all([
+        fetchAllAdoptionRequests(),
+        fetchEligibleForAdoption()
+      ]);
+      if (reqRes.ok) {
         const filtered =
           nextStatus === "all"
-            ? (res.data ?? [])
-            : (res.data ?? []).filter((req: any) => req.status === nextStatus);
+            ? (reqRes.data ?? [])
+            : (reqRes.data ?? []).filter((req: any) => req.status === nextStatus);
         setAdoptionRequests(filtered);
-      } else if (res.error) setError(res.error);
+      } else if (reqRes.error) setError(reqRes.error);
+      if (eligibleRes.ok) {
+        setEligibleForAdoption(eligibleRes.data ?? []);
+      }
     } else if (nextTab === "volunteers") {
       const res = await fetchAdminVolunteerRequests(
         nextStatus === "all" ? undefined : { status: nextStatus },
       );
       if (res.ok) setVolunteerRequests(res.data ?? []);
       else if (res.error) setError(res.error);
+    }
+    setTableLoading(false);
+  }
+
+  async function reloadEligiblePets() {
+    const res = await fetchEligibleForAdoption();
+    if (res.ok) {
+      setEligibleForAdoption(res.data ?? []);
+    }
+  }
+
+  async function handleConvertToAdoption(foundPetId: number) {
+    setTableLoading(true);
+    const res = await convertToAdoption(foundPetId);
+    if (res.ok) {
+      setToast({
+        isVisible: true,
+        type: "success",
+        title: "Success",
+        message: "Pet has been added to the adoption list!"
+      });
+      // Reload eligible pets and pets list
+      await reloadEligiblePets();
+      await reloadPets();
+    } else {
+      setToast({
+        isVisible: true,
+        type: "error",
+        title: "Error",
+        message: res.error || "Failed to convert pet to adoption"
+      });
     }
     setTableLoading(false);
   }
@@ -1089,28 +1139,69 @@ function AdminHome() {
                     : "User"}
                 </td>
                 <td style={{ padding: "10px 16px" }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const userId = u.user_id ?? u.id;
-                      if (!userId) return;
-                      navigate(`/admin/users/${userId}/activity`, {
-                        state: { username: u.username },
-                      });
-                    }}
-                    style={{
-                      padding: "6px 10px",
-                      borderRadius: 999,
-                      border: "1px solid #e5e7eb",
-                      background: "#ffffff",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: "#0f172a",
-                      cursor: "pointer",
-                    }}
-                  >
-                    View
-                  </button>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const userId = u.user_id ?? u.id;
+                        if (!userId) return;
+                        navigate(`/admin/users/${userId}/activity`, {
+                          state: { username: u.username },
+                        });
+                      }}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: 999,
+                        border: "1px solid #e5e7eb",
+                        background: "#ffffff",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: "#0f172a",
+                        cursor: "pointer",
+                      }}
+                    >
+                      View
+                    </button>
+                    {!u.is_staff && !u.is_superuser && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const ok = window.confirm(`Delete user "${u.username}"? This action cannot be undone.`);
+                          if (!ok) return;
+                          const userId = u.user_id ?? u.id;
+                          const res = await deleteAdminUser(userId);
+                          if (res.ok) {
+                            setAdminUsers((prev) => prev.filter((user: any) => (user.user_id ?? user.id) !== userId));
+                            setToast({
+                              isVisible: true,
+                              type: "success",
+                              title: "User Deleted",
+                              message: `User "${u.username}" has been deleted successfully.`
+                            });
+                          } else {
+                            setToast({
+                              isVisible: true,
+                              type: "error",
+                              title: "Error",
+                              message: res.error || "Failed to delete user"
+                            });
+                          }
+                        }}
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: 999,
+                          border: "1px solid #ef4444",
+                          background: "#ffffff",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: "#b91c1c",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
                 </td>
                 <td
                   style={{
@@ -3307,16 +3398,151 @@ function AdminHome() {
                     style={{ display: "flex", gap: 8, alignItems: "center" }}
                   >
                     {renderStatusBadge(r.status)}
-                    {isVolunteers && (
+                    {/* Delete button for Lost reports (not pending) */}
+                    {isLost && r.status !== "pending" && (
+                      <button
+                        onClick={async () => {
+                          const ok = window.confirm("Delete this lost pet report?");
+                          if (!ok) return;
+                          const res = await deleteAdminLostReport(r.id);
+                          if (res.ok) {
+                            setLostReports((prev) =>
+                              prev.filter((v: any) => v.id !== r.id),
+                            );
+                            setToast({
+                              isVisible: true,
+                              type: "success",
+                              title: "Report Deleted",
+                              message: "Lost pet report has been deleted successfully."
+                            });
+                          } else {
+                            setToast({
+                              isVisible: true,
+                              type: "error",
+                              title: "Error",
+                              message: res.error || "Failed to delete report"
+                            });
+                          }
+                        }}
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: 999,
+                          border: "1px solid #ef4444",
+                          background: "#ffffff",
+                          color: "#b91c1c",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Delete
+                      </button>
+                    )}
+                    {/* Delete button for Found reports (not pending) */}
+                    {isFound && r.status !== "pending" && (
+                      <button
+                        onClick={async () => {
+                          const ok = window.confirm("Delete this found pet report?");
+                          if (!ok) return;
+                          const res = await deleteAdminFoundReport(r.id);
+                          if (res.ok) {
+                            setFoundReports((prev) =>
+                              prev.filter((v: any) => v.id !== r.id),
+                            );
+                            setToast({
+                              isVisible: true,
+                              type: "success",
+                              title: "Report Deleted",
+                              message: "Found pet report has been deleted successfully."
+                            });
+                          } else {
+                            setToast({
+                              isVisible: true,
+                              type: "error",
+                              title: "Error",
+                              message: res.error || "Failed to delete report"
+                            });
+                          }
+                        }}
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: 999,
+                          border: "1px solid #ef4444",
+                          background: "#ffffff",
+                          color: "#b91c1c",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Delete
+                      </button>
+                    )}
+                    {/* Delete button for Adoption requests (not pending) */}
+                    {isAdoption && r.status !== "pending" && (
+                      <button
+                        onClick={async () => {
+                          const ok = window.confirm("Delete this adoption request?");
+                          if (!ok) return;
+                          const res = await deleteAdoptionRequest(r.id);
+                          if (res.ok) {
+                            setAdoptionRequests((prev) =>
+                              prev.filter((v: any) => v.id !== r.id),
+                            );
+                            setToast({
+                              isVisible: true,
+                              type: "success",
+                              title: "Request Deleted",
+                              message: "Adoption request has been deleted successfully."
+                            });
+                          } else {
+                            setToast({
+                              isVisible: true,
+                              type: "error",
+                              title: "Error",
+                              message: res.error || "Failed to delete request"
+                            });
+                          }
+                        }}
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: 999,
+                          border: "1px solid #ef4444",
+                          background: "#ffffff",
+                          color: "#b91c1c",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Delete
+                      </button>
+                    )}
+                    {/* Delete button for Volunteers (not pending) */}
+                    {isVolunteers && r.status !== "pending" && (
                       <button
                         onClick={async () => {
                           const ok = window.confirm("Delete this volunteer request?");
                           if (!ok) return;
                           const res = await deleteAdminVolunteerRequest(r.id);
-                          if (res.ok)
+                          if (res.ok) {
                             setVolunteerRequests((prev) =>
                               prev.filter((v: any) => v.id !== r.id),
                             );
+                            setToast({
+                              isVisible: true,
+                              type: "success",
+                              title: "Request Deleted",
+                              message: "Volunteer request has been deleted successfully."
+                            });
+                          } else {
+                            setToast({
+                              isVisible: true,
+                              type: "error",
+                              title: "Error",
+                              message: res.error || "Failed to delete request"
+                            });
+                          }
                         }}
                         style={{
                           padding: "6px 10px",
@@ -3607,6 +3833,16 @@ function AdminHome() {
         fontFamily: "'Inter', sans-serif",
       }}
     >
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          type={toast.type}
+          title={toast.title}
+          message={toast.message}
+          isVisible={toast.isVisible}
+          onClose={() => setToast(null)}
+        />
+      )}
       {/* Sidebar */}
       <div
         style={{
@@ -3771,7 +4007,7 @@ function AdminHome() {
                 marginBottom: "8px",
               }}
             >
-              <span>💜</span> Adoption Requests
+              <span>💜</span> Adoption
             </button>
 
             <button
@@ -3934,7 +4170,7 @@ function AdminHome() {
                     : tab === "lost"
                       ? "Lost Pet Reports"
                       : tab === "adoptions"
-                        ? "Adoption Requests"
+                        ? "Adoption"
                         : tab === "pets"
                           ? "All Pets"
                           : tab === "users"
@@ -4383,6 +4619,50 @@ function AdminHome() {
 
           {tab !== "dashboard" && tab !== "pets" && tab !== "stats" && tab !== "users" && tab !== "chat" && (
             <div style={{ marginBottom: 16 }}>
+              {/* Sub-tabs for Adoption tab */}
+              {tab === "adoptions" && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ display: "flex", gap: 0, background: "#f1f5f9", borderRadius: 12, padding: 4 }}>
+                    <button
+                      onClick={() => setAdoptionSubTab("requests")}
+                      style={{
+                        flex: 1,
+                        padding: "12px 20px",
+                        borderRadius: 10,
+                        border: "none",
+                        background: adoptionSubTab === "requests" ? "#8b5cf6" : "transparent",
+                        color: adoptionSubTab === "requests" ? "white" : "#64748b",
+                        fontSize: 14,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                      }}
+                    >
+                      Adoption Requests ({adoptionRequests.length})
+                    </button>
+                    <button
+                      onClick={() => setAdoptionSubTab("eligible")}
+                      style={{
+                        flex: 1,
+                        padding: "12px 20px",
+                        borderRadius: 10,
+                        border: "none",
+                        background: adoptionSubTab === "eligible" ? "#8b5cf6" : "transparent",
+                        color: adoptionSubTab === "eligible" ? "white" : "#64748b",
+                        fontSize: 14,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                      }}
+                    >
+                      Eligible for Adoption ({eligibleForAdoption.length})
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {/* Show search/filter only for requests sub-tab or non-adoption tabs */}
+              {(tab !== "adoptions" || adoptionSubTab === "requests") && (
               <div
                 style={{
                   display: "grid",
@@ -4470,6 +4750,98 @@ function AdminHome() {
                   ))}
                 </div>
               </div>
+              )}
+            </div>
+          )}
+
+          {/* Eligible for Adoption section */}
+          {tab === "adoptions" && adoptionSubTab === "eligible" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {tableLoading ? (
+                <div style={{ padding: 18, fontSize: 14, color: "#9ca3af" }}>Loading...</div>
+              ) : eligibleForAdoption.length === 0 ? (
+                <div style={{ padding: 40, textAlign: "center", color: "#94a3b8" }}>
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>🐾</div>
+                  <div style={{ fontWeight: 600 }}>No pets eligible for adoption yet</div>
+                  <div style={{ fontSize: 13, marginTop: 4 }}>Found pets become eligible after 20 days if unclaimed</div>
+                </div>
+              ) : (
+                eligibleForAdoption.map((pet: any) => {
+                  const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
+                  const origin = /^https?:/.test(apiBase) ? new URL(apiBase).origin : "http://localhost:8000";
+                  const rawPhoto = pet.photo_url || pet.photo;
+                  const photoSrc = rawPhoto ? (String(rawPhoto).startsWith("http") ? String(rawPhoto) : (String(rawPhoto).startsWith("/") ? origin + String(rawPhoto) : origin + "/media/" + String(rawPhoto))) : null;
+                  const daysOld = Math.floor((Date.now() - new Date(pet.created_at).getTime()) / (1000 * 60 * 60 * 24));
+                  
+                  return (
+                    <div
+                      key={pet.id}
+                      style={{
+                        background: "white",
+                        borderRadius: 16,
+                        padding: 16,
+                        border: "1px solid #f1f5f9",
+                        boxShadow: "0 4px 24px rgba(0, 0, 0, 0.06)",
+                      }}
+                    >
+                      <div style={{ display: "grid", gridTemplateColumns: "100px 1fr auto", gap: 16, alignItems: "center" }}>
+                        {photoSrc ? (
+                          <img src={photoSrc} alt={pet.pet_type || "Pet"} style={{ width: 100, height: 100, borderRadius: 12, objectFit: "cover" }} />
+                        ) : (
+                          <div style={{ width: 100, height: 100, borderRadius: 12, background: "#dbeafe", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32 }}>🐾</div>
+                        )}
+                        <div>
+                          <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                            <span style={{ padding: "2px 8px", borderRadius: 999, background: "#dbeafe", color: "#1d4ed8", fontSize: 12, fontWeight: 800 }}>FOUND</span>
+                            <span style={{ padding: "2px 8px", borderRadius: 999, background: "#fef3c7", color: "#92400e", fontSize: 12, fontWeight: 700 }}>{daysOld} days old</span>
+                          </div>
+                          <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>{pet.pet_name || pet.pet_type || "Found Pet"}</div>
+                          <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>{pet.found_city}{pet.state ? ", " + pet.state : ""}</div>
+                          <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
+                            {pet.breed && <span>Breed: {pet.breed} • </span>}
+                            {pet.color && <span>Color: {pet.color} • </span>}
+                            {pet.gender && <span>Gender: {pet.gender}</span>}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          <button
+                            onClick={() => navigate(`/admin/found/${pet.id}`, { state: { from: "admin-found" } })}
+                            style={{
+                              padding: "10px 20px",
+                              borderRadius: 999,
+                              border: "none",
+                              background: "#111827",
+                              color: "white",
+                              fontSize: 13,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            View Details
+                          </button>
+                          <button
+                            onClick={() => handleConvertToAdoption(pet.id)}
+                            disabled={tableLoading}
+                            style={{
+                              padding: "10px 20px",
+                              borderRadius: 999,
+                              border: "none",
+                              background: tableLoading ? "#d1d5db" : "linear-gradient(135deg, #8b5cf6, #6366f1)",
+                              color: "white",
+                              fontSize: 13,
+                              fontWeight: 600,
+                              cursor: tableLoading ? "not-allowed" : "pointer",
+                              boxShadow: "0 4px 12px rgba(139, 92, 246, 0.3)",
+                            }}
+                          >
+                            Add for Adoption
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           )}
 
@@ -4845,7 +5217,7 @@ function AdminHome() {
             </div>
           )}
 
-          {(tab === "lost" || tab === "found" || tab === "adoptions" || tab === "volunteers") &&
+          {(tab === "lost" || tab === "found" || (tab === "adoptions" && adoptionSubTab === "requests") || tab === "volunteers") &&
             renderCards()}
         </div>
       </div>

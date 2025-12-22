@@ -151,10 +151,10 @@ export default function MyChatroomRequests() {
       <div style={{ padding: 24, textAlign: "center" }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>📬</div>
         <div style={{ fontSize: 18, fontWeight: 600, color: "#0f172a", marginBottom: 8 }}>
-          No Pending Requests
+          No Chatroom Activity
         </div>
         <div style={{ fontSize: 14, color: "#64748b" }}>
-          You don't have any chatroom invitations at the moment.
+          When an admin adds you to a chatroom, it will appear directly in your Chat Rooms.
         </div>
       </div>
     );
@@ -173,10 +173,10 @@ export default function MyChatroomRequests() {
       )}
       <div style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 24, fontWeight: 700, color: "#0f172a", marginBottom: 8 }}>
-          Chatroom Invitations
+          Chatroom Activity History
         </h2>
         <p style={{ fontSize: 14, color: "#64748b" }}>
-          Admin has invited you to join these chatrooms. Accept to start chatting.
+          History of chatroom additions. New chatrooms appear directly in your Chat Rooms.
         </p>
       </div>
 

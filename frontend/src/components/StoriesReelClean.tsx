@@ -50,7 +50,7 @@ const STORIES: Story[] = [
     objectPosition: "center 40%",
   },
   {
-    image: "/horse.jpeg",
+    image: "/horse-image.jpeg",
     title: "Shadow's Safe Return",
     label: "Community Rescue",
     rating: 5,
@@ -114,7 +114,7 @@ export default function StoriesReel() {
         activeIndexRef.current = next;
         return next;
       });
-    }, 5000);
+    }, 3000);
     return () => window.clearInterval(id);
   }, [inView, isPaused, prefersReducedMotion]);
 
@@ -124,7 +124,9 @@ export default function StoriesReel() {
     const nextIndex = ((index % count) + count) % count;
     activeIndexRef.current = nextIndex;
     setActiveIndex(nextIndex);
+    // Pause briefly when manually navigating, then resume auto-play
     setIsPaused(true);
+    setTimeout(() => setIsPaused(false), 3000);
   };
 
   const goNext = () => {

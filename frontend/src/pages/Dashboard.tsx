@@ -361,20 +361,22 @@ export default function Dashboard() {
 
   const splitCard: React.CSSProperties = {
     width: "100%",
-    maxWidth: "1180px",
+    maxWidth: "900px",
     display: "grid",
-    gridTemplateColumns: "minmax(380px,520px) minmax(380px,520px)",
+    gridTemplateColumns: "1fr 1fr",
     borderRadius: 18,
     boxShadow: "0 18px 45px rgba(15,23,42,0.12)",
     overflow: "hidden",
     margin: "0 auto",
+    minHeight: "400px",
+    maxHeight: "480px",
   };
 
   const leftPane: React.CSSProperties = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: 16,
+    padding: 24,
     background: "#ffffff",
     borderTopLeftRadius: 18,
     borderBottomLeftRadius: 18,
@@ -404,14 +406,14 @@ export default function Dashboard() {
     justifyContent: "center",
     textAlign: "center",
     color: "#2c3e50",
-    padding: 40,
+    padding: 24,
   };
 
   const card: React.CSSProperties = {
     width: "100%",
-    maxWidth: 480,
+    maxWidth: 400,
     background: "white",
-    padding: 36,
+    padding: 32,
     borderRadius: 18,
     boxShadow: "0 18px 45px rgba(15,23,42,0.12)",
     color: "#0f172a",
@@ -422,24 +424,24 @@ export default function Dashboard() {
   const titleStyle: React.CSSProperties = {
     textAlign: "center",
     margin: 0,
-    marginBottom: 12,
-    fontSize: 18,
+    marginBottom: 18,
+    fontSize: 24,
     fontWeight: 700,
   };
   const input: React.CSSProperties = {
     width: "100%",
-    padding: "8px 10px",
+    padding: "10px 12px",
     marginTop: 4,
     borderRadius: 6,
     border: "1px solid #e5e7eb",
     background: "#f8fafc",
     color: "#0f172a",
     boxSizing: "border-box",
-    fontSize: 12,
+    fontSize: 14,
   };
   const btn: React.CSSProperties = {
-    marginTop: 12,
-    padding: "8px 14px",
+    marginTop: 14,
+    padding: "10px 16px",
     borderRadius: 8,
     border: "none",
     background: "linear-gradient(90deg,#0ea5e9,#2563eb)",
@@ -447,26 +449,26 @@ export default function Dashboard() {
     fontWeight: 600,
     cursor: "pointer",
     boxShadow: "0 8px 24px rgba(14,165,233,0.25)",
-    fontSize: 12,
+    fontSize: 14,
   };
   const smallText: React.CSSProperties = {
-    marginTop: 10,
+    marginTop: 12,
     textAlign: "center",
     color: "rgba(15,23,42,0.6)",
-    fontSize: 11,
+    fontSize: 13,
   };
   const blueLink: React.CSSProperties = {
     color: "#2563eb",
     textDecoration: "underline",
     cursor: "pointer",
     fontWeight: 600,
-    fontSize: 11,
+    fontSize: 13,
   };
   const label: React.CSSProperties = {
     display: "block",
-    marginTop: 6,
-    marginBottom: 2,
-    fontSize: 11,
+    marginTop: 8,
+    marginBottom: 4,
+    fontSize: 13,
     fontWeight: 500,
     color: "rgba(15,23,42,0.8)",
   };
@@ -642,35 +644,6 @@ export default function Dashboard() {
           >
             Home
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab("login");
-              setShowRegister(false);
-            }}
-            style={{
-              ...menuBtnBase,
-              ...(activeTab === "login" && !showRegister
-                ? menuBtnActive
-                : {}),
-            }}
-          >
-            Login
-          </button>
-          <div style={topRightText}>
-            <span>Don't have an account?</span>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("login");
-                setRegisterType("user");
-                setShowRegister(true);
-              }}
-              style={topRightLink}
-            >
-              Sign up
-            </button>
-          </div>
         </nav>
 
         <div style={splitCard}>
@@ -1427,21 +1400,21 @@ export default function Dashboard() {
           <div style={rightPane}>
             <div style={rightContent}>
               <svg
-                width="64"
-                height="64"
+                width="48"
+                height="48"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="#2c3e50"
                 strokeWidth="1.5"
-                style={{ marginBottom: 16 }}
+                style={{ marginBottom: 12 }}
               >
                 <path d="M22 2L11 13"></path>
                 <path d="M22 2L15 22L11 13L2 9L22 2Z"></path>
               </svg>
-              <h2 style={{ fontSize: 36, fontWeight: 800, margin: 0 }}>
+              <h2 style={{ fontSize: 28, fontWeight: 800, margin: 0 }}>
                 Welcome to PetReunite
               </h2>
-              <p style={{ marginTop: 8, opacity: 0.85, maxWidth: 320 }}>
+              <p style={{ marginTop: 8, opacity: 0.85, maxWidth: 280, fontSize: 14 }}>
                 Our community helps bring lost pets back to their loving homes.
                 Every share, post, and view counts.
               </p>

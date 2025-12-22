@@ -18,6 +18,11 @@ STATUS_CHOICES = [
 
 
 class FoundPetReport(models.Model):
+    TAG_CHOICES = [
+        ('present', 'Present'),
+        ('not_present', 'Not Present'),
+    ]
+    
     reporter = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="petsapp_found_reports"
     )
@@ -39,10 +44,21 @@ class FoundPetReport(models.Model):
         blank=True,
         null=True,
     )
+    has_tag = models.CharField(max_length=20, choices=TAG_CHOICES, default='not_present', blank=True)
     status = models.CharField(max_length=32, choices=STATUS_CHOICES, default="pending")
     admin_notes = models.TextField(blank=True)
     has_user_update = models.BooleanField(default=False)
     previous_snapshot = JSONField(blank=True, null=True)
+    # Track if this found pet has been converted to adoption listing
+    converted_to_adoption = models.BooleanField(default=False)
+    adoption_pet = models.ForeignKey(
+        'Pet',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='source_found_report',
+        help_text="Reference to the adoption pet created from this found report"
+    )
     # Stable public unique ID used for communication and referencing found pets
     pet_unique_id = models.CharField(max_length=32, unique=True, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)

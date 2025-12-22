@@ -81,6 +81,7 @@ export default function UserHome() {
   const [chatRequestsLoading, setChatRequestsLoading] = useState(false);
   const [chatroomRequests, setChatroomRequests] = useState<any[]>([]);
   const [chatroomRequestsLoading, setChatroomRequestsLoading] = useState(false);
+  const [activitySubTab, setActivitySubTab] = useState<"lost" | "found" | "adoption" | "chat">("lost");
   const [userHasNotification, setUserHasNotification] = useState(false);
   const [userNotificationOpen, setUserNotificationOpen] = useState(false);
   const [dismissedUserNotifications, setDismissedUserNotifications] = useState<string[]>([]);
@@ -407,6 +408,10 @@ export default function UserHome() {
         (a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
       );
+    } else if (sortBy === "Alphabetical") {
+      filtered.sort((a, b) =>
+        (a.displayName || "").localeCompare(b.displayName || ""),
+      );
     }
 
     setFilteredPets(filtered);
@@ -564,6 +569,10 @@ export default function UserHome() {
         (a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
       );
+    } else if (sortBy === "Alphabetical") {
+      items = [...items].sort((a, b) =>
+        (a.pet_name || a.pet_type || "").localeCompare(b.pet_name || b.pet_type || ""),
+      );
     }
     return items;
   }, [activity.lost, selectedSpecies, sortBy]);
@@ -578,6 +587,10 @@ export default function UserHome() {
       items = [...items].sort(
         (a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+    } else if (sortBy === "Alphabetical") {
+      items = [...items].sort((a, b) =>
+        (a.pet_name || a.pet_type || "").localeCompare(b.pet_name || b.pet_type || ""),
       );
     }
     return items;
@@ -595,6 +608,10 @@ export default function UserHome() {
       items = [...items].sort(
         (a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+    } else if (sortBy === "Alphabetical") {
+      items = [...items].sort((a, b) =>
+        (a.pet?.name || "").localeCompare(b.pet?.name || ""),
       );
     }
     return items;
@@ -1050,7 +1067,7 @@ export default function UserHome() {
                   <span
                     style={{ fontWeight: 800, color: "#0f172a", fontSize: 14 }}
                   >
-                    {displayName}
+                    {displayName} <span style={{ fontWeight: 700, color: "#2563eb" }}>(User)</span>
                   </span>
                   <span
                     style={{
@@ -1085,7 +1102,7 @@ export default function UserHome() {
                 >
                   <div style={{ marginBottom: 10, textAlign: "center" }}>
                     <div style={{ fontWeight: 800, fontSize: 13 }}>
-                      {displayName}
+                      {displayName} <span style={{ fontWeight: 700, color: "#2563eb" }}>(User)</span>
                     </div>
                     <div
                       style={{
@@ -1302,6 +1319,10 @@ export default function UserHome() {
                         <option value="Cat">Cats</option>
                         <option value="Rabbit">Rabbits</option>
                         <option value="Bird">Birds</option>
+                        <option value="Cow">Cows</option>
+                        <option value="Goat">Goats</option>
+                        <option value="Duck">Ducks</option>
+                        <option value="Horse">Horses</option>
                       </select>
                     </div>
                   </div>
@@ -1354,905 +1375,321 @@ export default function UserHome() {
 
             {/* Main content: Activity or Dashboard cards (chat rendered separately) */}
             {pageTab === "activity" ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {activityLoading && <div style={{ padding: 12 }}>Loading activity…</div>}
-                {!activityLoading && (
-                  <>
-                    {/* Lost reports section (respect category filter) */}
-                    {(selectedCategory === "All pets" ||
-                      selectedCategory === "Lost pet") && (
-                      <>
-                        <div style={{ fontSize: 18, fontWeight: 800, marginTop: 8 }}>
-                          Lost Pet Reports
-                        </div>
-                        {activityLostFiltered.length === 0 ? (
-                          <div style={{ padding: 12, color: "#64748b" }}>
-                            No lost reports yet.
-                          </div>
-                        ) : (
-                          activityLostFiltered.map((r: any) => (
-                        <div key={`lost-${r.id}`} style={{ background: "white", border: "1px solid #f1f5f9", borderRadius: 16, padding: 16, display: "grid", gridTemplateColumns: "100px 1fr auto", gap: 16 }}>
-                          {(() => {
-                            const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
-                            const origin = /^https?:/.test(apiBase) ? new URL(apiBase).origin : "http://localhost:8000";
-                            const raw = r.photo_url || r.photo;
-                            const src = raw ? (String(raw).startsWith("http") ? String(raw) : (String(raw).startsWith("/") ? origin + String(raw) : origin + "/media/" + String(raw))) : null;
-                            return src ? (
-                              <img src={src} alt={r.pet_name || r.pet_type || "Pet"} style={{ width: 100, height: 100, borderRadius: 12, objectFit: "cover" }} />
-                            ) : (
-                              <div style={{ width: 100, height: 100, borderRadius: 12, background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center" }}>🐾</div>
-                            );
-                          })()}
-                          <div>
-                            <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-                              <span
+              <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                {/* Activity Sub-tabs */}
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 0,
+                    background: "#ffffff",
+                    borderRadius: "16px 16px 0 0",
+                    padding: "4px",
+                    boxShadow: "0 2px 8px rgba(15,23,42,0.08)",
+                    marginBottom: 0,
+                  }}
+                >
+                  {[
+                    { id: "lost" as const, label: "Lost Pets", icon: "🔴", count: activityLostFiltered.length },
+                    { id: "found" as const, label: "Found Pets", icon: "🔵", count: activityFoundFiltered.length },
+                    { id: "adoption" as const, label: "Adoptions", icon: "💜", count: activityAdoptionsFiltered.length },
+                    { id: "chat" as const, label: "Chat Requests", icon: "💬", count: chatRequests.length },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActivitySubTab(tab.id)}
+                      style={{
+                        flex: 1,
+                        padding: "14px 16px",
+                        border: "none",
+                        borderRadius: 12,
+                        background: activitySubTab === tab.id
+                          ? "linear-gradient(135deg, #ff8a00, #ff2fab)"
+                          : "transparent",
+                        color: activitySubTab === tab.id ? "white" : "#64748b",
+                        fontWeight: 700,
+                        fontSize: 13,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 8,
+                        transition: "all 0.2s ease",
+                        boxShadow: activitySubTab === tab.id
+                          ? "0 4px 12px rgba(255,138,0,0.3)"
+                          : "none",
+                      }}
+                    >
+                      <span>{tab.icon}</span>
+                      <span>{tab.label}</span>
+                      <span
+                        style={{
+                          background: activitySubTab === tab.id
+                            ? "rgba(255,255,255,0.25)"
+                            : "#f1f5f9",
+                          color: activitySubTab === tab.id ? "white" : "#64748b",
+                          padding: "2px 8px",
+                          borderRadius: 999,
+                          fontSize: 11,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {tab.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Activity Content Area */}
+                <div
+                  style={{
+                    background: "#ffffff",
+                    borderRadius: "0 0 16px 16px",
+                    padding: 20,
+                    minHeight: 400,
+                    boxShadow: "0 4px 12px rgba(15,23,42,0.08)",
+                  }}
+                >
+                  {activityLoading || chatRequestsLoading ? (
+                    <div style={{ padding: 24, textAlign: "center", color: "#64748b" }}>
+                      Loading...
+                    </div>
+                  ) : (
+                    <>
+                      {/* Lost Pets Tab */}
+                      {activitySubTab === "lost" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                          {activityLostFiltered.length === 0 ? (
+                            <div style={{ padding: 40, textAlign: "center", color: "#94a3b8" }}>
+                              <div style={{ fontSize: 48, marginBottom: 12 }}>🐕</div>
+                              <div style={{ fontWeight: 600 }}>No lost pet reports yet</div>
+                              <div style={{ fontSize: 13, marginTop: 4 }}>Report a lost pet to see it here</div>
+                            </div>
+                          ) : (
+                            activityLostFiltered.map((r: any) => (
+                              <div
+                                key={`lost-${r.id}`}
                                 style={{
-                                  padding: "2px 8px",
-                                  borderRadius: 999,
-                                  background: "#fee2e2",
-                                  color: "#b91c1c",
-                                  fontSize: 12,
-                                  fontWeight: 800,
+                                  background: "#fafafa",
+                                  border: "1px solid #f1f5f9",
+                                  borderRadius: 16,
+                                  padding: 16,
+                                  display: "grid",
+                                  gridTemplateColumns: "80px 1fr auto",
+                                  gap: 16,
                                 }}
                               >
-                                LOST
-                              </span>
-                              {(() => {
-                                const badge = getStatusBadge(r.status);
-                                return (
-                                  <span
-                                    style={{
-                                      padding: "2px 10px",
-                                      borderRadius: 999,
-                                      background: badge.bg,
-                                      color: badge.color,
-                                      fontSize: 12,
-                                      fontWeight: 700,
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: 4,
-                                    }}
-                                  >
-                                    <span>{badge.icon}</span>
-                                    <span>{badge.text}</span>
-                                  </span>
-                                );
-                              })()}
-                            </div>
-                            <div style={{ fontSize: 16, fontWeight: 800 }}>{r.pet_name || r.pet_type || "Pet"}</div>
-                          <div style={{ fontSize: 12, color: "#64748b" }}>{r.city}{r.state ? ", " + r.state : ""}</div>
-                          <div style={{ fontSize: 12, color: "#374151", marginTop: 4 }}>Last seen: {r.city}{r.state ? ", " + r.state : ""}</div>
-                          {activityExpanded === `lost-${r.id}` && (
-                            <div style={{ fontSize: 12, color: "#000000", marginTop: 6 }}>
-                              {r.pet_name && (
-                                <div>
-                                  <strong>Pet name:</strong> {r.pet_name}
-                                </div>
-                              )}
-                              <div>
-                                <strong>Pet type:</strong> {r.pet_type}
-                              </div>
-                              {r.breed && (
-                                <div>
-                                  <strong>Breed:</strong> {r.breed}
-                                </div>
-                              )}
-                              {r.color && (
-                                <div>
-                                  <strong>Color:</strong> {r.color}
-                                </div>
-                              )}
-                              {r.weight && (
-                                <div>
-                                  <strong>Weight:</strong> {r.weight}
-                                </div>
-                              )}
-                              {r.vaccinated && (
-                                <div>
-                                  <strong>Vaccinated:</strong> {r.vaccinated}
-                                </div>
-                              )}
-                              {r.age && (
-                                <div>
-                                  <strong>Age:</strong> {r.age}
-                                </div>
-                              )}
-                              {r.pincode && (
-                                <div>
-                                  <strong>Pincode:</strong> {r.pincode}
-                                </div>
-                              )}
-                              {r.location_url && (
-                                <div>
-                                  <strong>Location:</strong>{" "}
-                                  <a
-                                    href={String(r.location_url).startsWith("http")
-                                      ? String(r.location_url)
-                                      : `https://www.google.com/maps?q=${encodeURIComponent(String(r.location_url))}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    style={{ color: "#2563eb" }}
-                                  >
-                                    Open in Google Maps
-                                  </a>
-                                </div>
-                              )}
-                              <div>
-                                <strong>Description:</strong> {r.description || "No additional details"}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        <div style={{ alignSelf: "center", color: "#64748b", fontSize: 12 }}>
-                          {new Date(r.created_at).toLocaleString()}
-                          {r.lost_time && (
-                            <div style={{ marginTop: 4 }}>
-                              Lost time: {new Date(r.lost_time).toLocaleString()}
-                            </div>
-                          )}
-                          <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-                            <button
-                              onClick={() =>
-                                navigate(`/user/lost/${r.id}?mode=view`)
-                              }
-                              style={{
-                                padding: "6px 12px",
-                                borderRadius: 999,
-                                border: "1px solid #4b5563",
-                                background: "#111827",
-                                color: "#f9fafb",
-                                cursor: "pointer",
-                                fontWeight: 600,
-                                fontSize: 12,
-                              }}
-                            >
-                              View Details
-                            </button>
-                            <button
-                              onClick={() =>
-                                navigate(`/user/lost/${r.id}?mode=edit`)
-                              }
-                              style={{
-                                padding: "6px 12px",
-                                borderRadius: 999,
-                                border: "1px solid #1d4ed8",
-                                background: "#2563eb",
-                                color: "white",
-                                cursor: "pointer",
-                                fontWeight: 600,
-                                fontSize: 12,
-                              }}
-                            >
-                              Update
-                            </button>
-                          </div>
-                        </div>
-                        </div>
-                      ))
-                        )}
-                      </>
-                    )}
-
-                    {/* Found reports section (respect category filter) */}
-                    {(selectedCategory === "All pets" ||
-                      selectedCategory === "Found pet") && (
-                      <>
-                        <div style={{ fontSize: 18, fontWeight: 800, marginTop: 8 }}>
-                          Found Pet Reports
-                        </div>
-                        {activityFoundFiltered.length === 0 ? (
-                          <div style={{ padding: 12, color: "#64748b" }}>
-                            No found reports yet.
-                          </div>
-                        ) : (
-                          activityFoundFiltered.map((r: any) => (
-                        <div key={`found-${r.id}`} style={{ background: "white", border: "1px solid #f1f5f9", borderRadius: 16, padding: 16, display: "grid", gridTemplateColumns: "100px 1fr auto", gap: 16 }}>
                           {(() => {
                             const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
                             const origin = /^https?:/.test(apiBase) ? new URL(apiBase).origin : "http://localhost:8000";
                             const raw = r.photo_url || r.photo;
                             const src = raw ? (String(raw).startsWith("http") ? String(raw) : (String(raw).startsWith("/") ? origin + String(raw) : origin + "/media/" + String(raw))) : null;
                             return src ? (
-                              <img src={src} alt={r.pet_type || r.pet_name || "Pet"} style={{ width: 100, height: 100, borderRadius: 12, objectFit: "cover" }} />
+                              <img src={src} alt={r.pet_name || r.pet_type || "Pet"} style={{ width: 80, height: 80, borderRadius: 12, objectFit: "cover" }} />
                             ) : (
-                              <div style={{ width: 100, height: 100, borderRadius: 12, background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center" }}>🐾</div>
+                              <div style={{ width: 80, height: 80, borderRadius: 12, background: "#fee2e2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🐾</div>
                             );
                           })()}
-                          <div>
+                          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
                             <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-                              <span style={{ padding: "2px 8px", borderRadius: 999, background: "#dbeafe", color: "#1d4ed8", fontSize: 12, fontWeight: 800 }}>FOUND</span>
+                              <span style={{ padding: "2px 8px", borderRadius: 999, background: "#fee2e2", color: "#b91c1c", fontSize: 11, fontWeight: 800 }}>LOST</span>
                               {(() => {
                                 const badge = getStatusBadge(r.status);
                                 return (
-                                  <span
-                                    style={{
-                                      padding: "2px 10px",
-                                      borderRadius: 999,
-                                      background: badge.bg,
-                                      color: badge.color,
-                                      fontSize: 12,
-                                      fontWeight: 700,
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: 4,
-                                    }}
-                                  >
+                                  <span style={{ padding: "2px 8px", borderRadius: 999, background: badge.bg, color: badge.color, fontSize: 11, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4 }}>
                                     <span>{badge.icon}</span>
                                     <span>{badge.text}</span>
                                   </span>
                                 );
                               })()}
                             </div>
-                            <div style={{ fontSize: 16, fontWeight: 800 }}>{r.pet_type || r.pet_name || "Pet"}</div>
-                          <div style={{ fontSize: 12, color: "#64748b" }}>{r.found_city}{r.state ? ", " + r.state : ""}</div>
-                          <div style={{ fontSize: 12, color: "#374151", marginTop: 4 }}>Last seen: {r.found_city}{r.state ? ", " + r.state : ""}</div>
-                          {activityExpanded === `found-${r.id}` && (
-                            <div style={{ fontSize: 12, color: "#000000", marginTop: 6 }}>
-                              <div>
-                                <strong>Pet type:</strong> {r.pet_type}
-                              </div>
-                              {r.breed && (
-                                <div>
-                                  <strong>Breed:</strong> {r.breed}
-                                </div>
-                              )}
-                              {r.color && (
-                                <div>
-                                  <strong>Color:</strong> {r.color}
-                                </div>
-                              )}
-                              {r.estimated_age && (
-                                <div>
-                                  <strong>Estimated age:</strong> {r.estimated_age}
-                                </div>
-                              )}
-                              {r.weight && (
-                                <div>
-                                  <strong>Weight:</strong> {r.weight}
-                                </div>
-                              )}
-                              {r.pincode && (
-                                <div>
-                                  <strong>Pincode:</strong> {r.pincode}
-                                </div>
-                              )}
-                              <div>
-                                <strong>Description:</strong> {r.description || "No additional details"}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        <div style={{ alignSelf: "center", color: "#64748b", fontSize: 12 }}>
-                          {new Date(r.created_at).toLocaleString()}
-                          {r.found_time && (
-                            <div style={{ marginTop: 4 }}>
-                              Found time: {new Date(r.found_time).toLocaleString()}
-                            </div>
-                          )}
-                          <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-                            <button
-                              onClick={() =>
-                                navigate(`/user/found/${r.id}`, {
-                                  state: { report: r },
-                                })
-                              }
-                              style={{
-                                padding: "6px 12px",
-                                borderRadius: 999,
-                                border: "1px solid #4b5563",
-                                background: "#111827",
-                                color: "#f9fafb",
-                                cursor: "pointer",
-                                fontWeight: 600,
-                                fontSize: 12,
-                              }}
-                            >
-                              View Details
-                            </button>
-                            <button
-                              onClick={async () => {
-                                const current = r.description || "";
-                                const next = window.prompt(
-                                  "Update description for this found pet report",
-                                  current,
-                                );
-                                if (next == null || next === current) return;
-                                setUpdatingReportId(`found-${r.id}`);
-                                try {
-                                  const res = await updateMyFoundReport(r.id, {
-                                    description: next,
-                                  });
-                                  if (res.ok) {
-                                    const refreshed = await fetchMyActivity();
-                                    if (refreshed.ok) setActivity(refreshed.data);
-                                  } else {
-                                    setToast({
-                                      isVisible: true,
-                                      type: "error",
-                                      title: "Error",
-                                      message: res.error || "Failed to update report"
-                                    });
-                                  }
-                                } finally {
-                                  setUpdatingReportId(null);
-                                }
-                              }}
-                              disabled={updatingReportId === `found-${r.id}`}
-                              style={{
-                                padding: "6px 12px",
-                                borderRadius: 999,
-                                border: "1px solid #1d4ed8",
-                                background:
-                                  updatingReportId === `found-${r.id}`
-                                    ? "#bfdbfe"
-                                    : "#2563eb",
-                                color: "white",
-                                cursor:
-                                  updatingReportId === `found-${r.id}`
-                                    ? "not-allowed"
-                                    : "pointer",
-                                fontWeight: 600,
-                                fontSize: 12,
-                              }}
-                            >
-                              {updatingReportId === `found-${r.id}`
-                                ? "Saving..."
-                                : "Update"}
-                            </button>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>{r.pet_name || r.pet_type || "Pet"}</div>
+                            <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{r.city}{r.state ? ", " + r.state : ""}</div>
                           </div>
-                        </div>
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center", gap: 8 }}>
+                            <div style={{ fontSize: 11, color: "#9ca3af" }}>{new Date(r.created_at).toLocaleDateString()}</div>
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <button onClick={() => navigate(`/user/lost/${r.id}?mode=view`)} style={{ padding: "6px 12px", borderRadius: 999, border: "none", background: "#111827", color: "#f9fafb", cursor: "pointer", fontWeight: 600, fontSize: 11 }}>View</button>
+                              <button onClick={() => navigate(`/user/lost/${r.id}?mode=edit`)} style={{ padding: "6px 12px", borderRadius: 999, border: "none", background: "#2563eb", color: "white", cursor: "pointer", fontWeight: 600, fontSize: 11 }}>Update</button>
+                            </div>
+                          </div>
                         </div>
                       ))
                         )}
-                      </>
-                    )}
-
-                    {/* Adoption section (respect category filter) */}
-                    {(selectedCategory === "All pets" ||
-                      selectedCategory === "Adoption pet") && (
-                      <>
-                        <div style={{ fontSize: 18, fontWeight: 800, marginTop: 8 }}>
-                          Adoption Requests
                         </div>
-                        {activityAdoptionsFiltered.length === 0 ? (
-                          <div style={{ padding: 12, color: "#64748b" }}>
-                            No adoption requests yet.
+                      )}
+
+                      {/* Found Pets Tab */}
+                      {activitySubTab === "found" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                          {activityFoundFiltered.length === 0 ? (
+                            <div style={{ padding: 40, textAlign: "center", color: "#94a3b8" }}>
+                              <div style={{ fontSize: 48, marginBottom: 12 }}>🔍</div>
+                              <div style={{ fontWeight: 600 }}>No found pet reports yet</div>
+                              <div style={{ fontSize: 13, marginTop: 4 }}>Report a found pet to see it here</div>
+                            </div>
+                          ) : (
+                            activityFoundFiltered.map((r: any) => (
+                              <div key={`found-${r.id}`} style={{ background: "#fafafa", border: "1px solid #f1f5f9", borderRadius: 16, padding: 16, display: "grid", gridTemplateColumns: "80px 1fr auto", gap: 16 }}>
+                          {(() => {
+                            const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
+                            const origin = /^https?:/.test(apiBase) ? new URL(apiBase).origin : "http://localhost:8000";
+                            const raw = r.photo_url || r.photo;
+                            const src = raw ? (String(raw).startsWith("http") ? String(raw) : (String(raw).startsWith("/") ? origin + String(raw) : origin + "/media/" + String(raw))) : null;
+                            return src ? (
+                              <img src={src} alt={r.pet_type || r.pet_name || "Pet"} style={{ width: 80, height: 80, borderRadius: 12, objectFit: "cover" }} />
+                            ) : (
+                              <div style={{ width: 80, height: 80, borderRadius: 12, background: "#dbeafe", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🐾</div>
+                            );
+                          })()}
+                          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                            <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                              <span style={{ padding: "2px 8px", borderRadius: 999, background: "#dbeafe", color: "#1d4ed8", fontSize: 11, fontWeight: 800 }}>FOUND</span>
+                              {(() => {
+                                const badge = getStatusBadge(r.status);
+                                return (
+                                  <span style={{ padding: "2px 8px", borderRadius: 999, background: badge.bg, color: badge.color, fontSize: 11, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                    <span>{badge.icon}</span>
+                                    <span>{badge.text}</span>
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>{r.pet_type || r.pet_name || "Pet"}</div>
+                            <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{r.found_city}{r.state ? ", " + r.state : ""}</div>
                           </div>
-                        ) : (
-                          activityAdoptionsFiltered.map((a: any) => (
-                        <div key={`adopt-${a.id}`} style={{ background: "white", border: "1px solid #f1f5f9", borderRadius: 16, padding: 16, display: "grid", gridTemplateColumns: "100px 1fr auto", gap: 16 }}>
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center", gap: 8 }}>
+                            <div style={{ fontSize: 11, color: "#9ca3af" }}>{new Date(r.created_at).toLocaleDateString()}</div>
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <button onClick={() => navigate(`/user/found/${r.id}`, { state: { report: r } })} style={{ padding: "6px 12px", borderRadius: 999, border: "none", background: "#111827", color: "#f9fafb", cursor: "pointer", fontWeight: 600, fontSize: 11 }}>View</button>
+                              <button
+                                onClick={async () => {
+                                  const current = r.description || "";
+                                  const next = window.prompt("Update description", current);
+                                  if (next == null || next === current) return;
+                                  setUpdatingReportId(`found-${r.id}`);
+                                  try {
+                                    const res = await updateMyFoundReport(r.id, { description: next });
+                                    if (res.ok) {
+                                      const refreshed = await fetchMyActivity();
+                                      if (refreshed.ok) setActivity(refreshed.data);
+                                    } else {
+                                      setToast({ isVisible: true, type: "error", title: "Error", message: res.error || "Failed to update" });
+                                    }
+                                  } finally {
+                                    setUpdatingReportId(null);
+                                  }
+                                }}
+                                disabled={updatingReportId === `found-${r.id}`}
+                                style={{ padding: "6px 12px", borderRadius: 999, border: "none", background: updatingReportId === `found-${r.id}` ? "#bfdbfe" : "#2563eb", color: "white", cursor: updatingReportId === `found-${r.id}` ? "not-allowed" : "pointer", fontWeight: 600, fontSize: 11 }}
+                              >
+                                {updatingReportId === `found-${r.id}` ? "..." : "Update"}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                        )}
+                        </div>
+                      )}
+
+                      {/* Adoptions Tab */}
+                      {activitySubTab === "adoption" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                          {activityAdoptionsFiltered.length === 0 ? (
+                            <div style={{ padding: 40, textAlign: "center", color: "#94a3b8" }}>
+                              <div style={{ fontSize: 48, marginBottom: 12 }}>🏠</div>
+                              <div style={{ fontWeight: 600 }}>No adoption requests yet</div>
+                              <div style={{ fontSize: 13, marginTop: 4 }}>Apply to adopt a pet to see it here</div>
+                            </div>
+                          ) : (
+                            activityAdoptionsFiltered.map((a: any) => (
+                              <div key={`adopt-${a.id}`} style={{ background: "#fafafa", border: "1px solid #f1f5f9", borderRadius: 16, padding: 16, display: "grid", gridTemplateColumns: "80px 1fr auto", gap: 16 }}>
                           {(() => {
                             const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
                             const origin = /^https?:/.test(apiBase) ? new URL(apiBase).origin : "http://localhost:8000";
                             const raw = a.pet?.photos;
                             const src = raw ? (String(raw).startsWith("http") ? String(raw) : (String(raw).startsWith("/") ? origin + String(raw) : origin + "/media/" + String(raw))) : null;
                             return src ? (
-                              <img src={src} alt={a.pet?.name || "Pet"} style={{ width: 100, height: 100, borderRadius: 12, objectFit: "cover" }} />
+                              <img src={src} alt={a.pet?.name || "Pet"} style={{ width: 80, height: 80, borderRadius: 12, objectFit: "cover" }} />
                             ) : (
-                              <div style={{ width: 100, height: 100, borderRadius: 12, background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center" }}>🐾</div>
+                              <div style={{ width: 80, height: 80, borderRadius: 12, background: "#ede9fe", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🐾</div>
                             );
                           })()}
-                          <div>
+                          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
                             <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-                              <span style={{ padding: "2px 8px", borderRadius: 999, background: "#ede9fe", color: "#6d28d9", fontSize: 12, fontWeight: 800 }}>ADOPTION</span>
+                              <span style={{ padding: "2px 8px", borderRadius: 999, background: "#ede9fe", color: "#6d28d9", fontSize: 11, fontWeight: 800 }}>ADOPTION</span>
                               {(() => {
                                 const badge = getStatusBadge(a.status);
                                 return (
-                                  <span
-                                    style={{
-                                      padding: "2px 10px",
-                                      borderRadius: 999,
-                                      background: badge.bg,
-                                      color: badge.color,
-                                      fontSize: 12,
-                                      fontWeight: 700,
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: 4,
-                                    }}
-                                  >
+                                  <span style={{ padding: "2px 8px", borderRadius: 999, background: badge.bg, color: badge.color, fontSize: 11, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4 }}>
                                     <span>{badge.icon}</span>
                                     <span>{badge.text}</span>
                                   </span>
                                 );
                               })()}
                             </div>
-                            <div style={{ fontSize: 16, fontWeight: 800 }}>{a.pet?.name || "Pet"}</div>
-                          <div style={{ fontSize: 12, color: "#64748b" }}>{a.pet?.location_city}{a.pet?.location_state ? ", " + a.pet?.location_state : ""}</div>
-                          {activityExpanded === `adopt-${a.id}` && (
-                            <div style={{ fontSize: 12, color: "#374151", marginTop: 6 }}>{a.pet?.description || "No additional details"}</div>
-                          )}
-                        </div>
-                        <div style={{ alignSelf: "center", color: "#64748b", fontSize: 12 }}>
-                          {new Date(a.created_at).toLocaleString()}
-                          <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-                            <button onClick={() => setActivityExpanded(activityExpanded === `adopt-${a.id}` ? null : `adopt-${a.id}`)} style={{ padding: "6px 10px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#f9fafb", cursor: "pointer" }}>View Details</button>
-                            <button onClick={() => navigate("/user/profile")} style={{ padding: "6px 10px", borderRadius: 999, border: "1px solid #e5e7eb", background: "#eef2ff", cursor: "pointer" }}>Update</button>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>{a.pet?.name || "Pet"}</div>
+                            <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{a.pet?.location_city}{a.pet?.location_state ? ", " + a.pet?.location_state : ""}</div>
                           </div>
-                        </div>
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center", gap: 8 }}>
+                            <div style={{ fontSize: 11, color: "#9ca3af" }}>{new Date(a.created_at).toLocaleDateString()}</div>
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <button onClick={() => setActivityExpanded(activityExpanded === `adopt-${a.id}` ? null : `adopt-${a.id}`)} style={{ padding: "6px 12px", borderRadius: 999, border: "none", background: "#111827", color: "#f9fafb", cursor: "pointer", fontWeight: 600, fontSize: 11 }}>Details</button>
+                            </div>
+                          </div>
                         </div>
                       ))
                         )}
-                      </>
-                    )}
-                    
-                    {/* My Chat Requests section */}
-                    <div style={{ fontSize: 18, fontWeight: 800, marginTop: 16 }}>
-                      My Chat Requests
-                    </div>
-                    {chatRequestsLoading ? (
-                      <div style={{ padding: 12, color: "#64748b" }}>
-                        Loading chat requests...
-                      </div>
-                    ) : chatRequests.length === 0 ? (
-                      <div style={{ padding: 12, color: "#64748b" }}>
-                        No chat requests yet.
-                      </div>
-                    ) : (
-                      chatRequests.map((req: any) => {
-                        const isExpanded = activityExpanded === `chat-req-${req.id}`;
-                        return (
-                          <div
-                            key={`chat-req-${req.id}`}
-                            style={{
-                              background: "white",
-                              border: "1px solid #f1f5f9",
-                              borderRadius: 16,
-                              padding: 16,
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 12,
-                            }}
-                          >
-                            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                              <div
-                                style={{
-                                  width: 48,
-                                  height: 48,
-                                  borderRadius: "50%",
-                                  background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  color: "white",
-                                  fontWeight: 700,
-                                  fontSize: 20,
-                                }}
-                              >
-                                💬
-                              </div>
-                              <div style={{ flex: 1 }}>
-                                <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-                                  {/* Dynamic status badge based on actual conversation status */}
-                                  {(() => {
-                                    const status = (req.status || 'requested').toLowerCase();
-                                    let badgeStyle = { bg: '#fef3c7', color: '#92400e', text: 'PENDING' };
-                                    
-                                    if (status === 'active' || status === 'pending_user') {
-                                      badgeStyle = { bg: '#d1fae5', color: '#065f46', text: 'ACCEPTED' };
-                                    } else if (status === 'closed') {
-                                      badgeStyle = { bg: '#fee2e2', color: '#991b1b', text: 'REJECTED' };
-                                    } else if (status === 'read_only') {
-                                      badgeStyle = { bg: '#fef3c7', color: '#92400e', text: 'WAITING' };
-                                    }
-                                    
-                                    return (
-                                      <span
-                                        style={{
-                                          padding: "2px 8px",
-                                          borderRadius: 999,
-                                          background: badgeStyle.bg,
-                                          color: badgeStyle.color,
-                                          fontSize: 12,
-                                          fontWeight: 800,
-                                        }}
-                                      >
-                                        {badgeStyle.text}
-                                      </span>
-                                    );
-                                  })()}
-                                  {req.pet_kind && (
-                                    <span
-                                      style={{
-                                        padding: "2px 8px",
-                                        borderRadius: 999,
-                                        background: req.pet_kind === "found" ? "#dbeafe" : "#fee2e2",
-                                        color: req.pet_kind === "found" ? "#1e40af" : "#991b1b",
-                                        fontSize: 12,
-                                        fontWeight: 700,
-                                      }}
-                                    >
-                                      {req.pet_kind.toUpperCase()} PET
-                                    </span>
-                                  )}
-                                </div>
-                                <div style={{ fontSize: 16, fontWeight: 800 }}>
-                                  Chat Request - {req.pet_name || req.pet_unique_id || `Pet #${req.pet_id}`}
-                                </div>
-                                <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
-                                  {(() => {
-                                    const status = (req.status || 'requested').toLowerCase();
-                                    if (status === 'active' || status === 'pending_user') {
-                                      return req.topic || "Chat request accepted - go to Chat tab to message";
-                                    } else if (status === 'closed') {
-                                      return "This chat request was rejected by admin";
-                                    } else if (status === 'read_only') {
-                                      return "Waiting for admin response";
-                                    } else {
-                                      return req.topic || "Waiting for admin approval";
-                                    }
-                                  })()}
+                        </div>
+                      )}
+
+                      {/* Chat Requests Tab */}
+                      {activitySubTab === "chat" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                          {chatRequests.length === 0 ? (
+                            <div style={{ padding: 40, textAlign: "center", color: "#94a3b8" }}>
+                              <div style={{ fontSize: 48, marginBottom: 12 }}>💬</div>
+                              <div style={{ fontWeight: 600 }}>No chat requests yet</div>
+                              <div style={{ fontSize: 13, marginTop: 4 }}>Request to chat about a pet to see it here</div>
+                            </div>
+                          ) : (
+                            chatRequests.map((req: any) => (
+                              <div key={`chat-req-${req.id}`} style={{ background: "#fafafa", border: "1px solid #f1f5f9", borderRadius: 16, padding: 16, display: "grid", gridTemplateColumns: "48px 1fr auto", gap: 16 }}>
+                                <div style={{ width: 48, height: 48, borderRadius: "50%", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 18 }}>💬</div>
+                                <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                                  <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                                    {(() => {
+                                      const status = (req.status || 'requested').toLowerCase();
+                                      let badgeStyle = { bg: '#fef3c7', color: '#92400e', text: 'PENDING' };
+                                      if (status === 'active' || status === 'pending_user') badgeStyle = { bg: '#d1fae5', color: '#065f46', text: 'ACCEPTED' };
+                                      else if (status === 'closed') badgeStyle = { bg: '#fee2e2', color: '#991b1b', text: 'CLOSED' };
+                                      else if (status === 'read_only') badgeStyle = { bg: '#fef3c7', color: '#92400e', text: 'WAITING' };
+                                      return <span style={{ padding: "2px 8px", borderRadius: 999, background: badgeStyle.bg, color: badgeStyle.color, fontSize: 11, fontWeight: 800 }}>{badgeStyle.text}</span>;
+                                    })()}
+                                    {req.pet_kind && <span style={{ padding: "2px 8px", borderRadius: 999, background: req.pet_kind === "found" ? "#dbeafe" : "#fee2e2", color: req.pet_kind === "found" ? "#1e40af" : "#991b1b", fontSize: 11, fontWeight: 700 }}>{req.pet_kind.toUpperCase()}</span>}
+                                  </div>
+                                  <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>{req.pet_name || req.pet_unique_id || `Pet #${req.pet_id}`}</div>
+                                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                                    {(() => {
+                                      const status = (req.status || 'requested').toLowerCase();
+                                      if (status === 'active' || status === 'pending_user') return "Chat accepted - go to Chat tab";
+                                      if (status === 'closed') return "Chat closed by admin";
+                                      return "Waiting for admin approval";
+                                    })()}
                                 </div>
                               </div>
-                              <div
-                                style={{
-                                  display: "flex",
-                                  flexDirection: "column",
-                                  alignItems: "flex-end",
-                                  gap: 8,
-                                }}
-                              >
-                                <div style={{ fontSize: 11, color: "#9ca3af" }}>
-                                  {req.created_at
-                                    ? new Date(req.created_at).toLocaleString()
-                                    : ""}
-                                </div>
-                                <button
-                                  onClick={() => {
-                                    setActivityExpanded(isExpanded ? null : `chat-req-${req.id}`);
-                                  }}
-                                  style={{
-                                    padding: "6px 12px",
-                                    borderRadius: 999,
-                                    border: "1px solid #e5e7eb",
-                                    background: "#eef2ff",
-                                    color: "#4f46e5",
-                                    cursor: "pointer",
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  {isExpanded ? "Hide Details" : "View Request"}
-                                </button>
+                              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center", gap: 8 }}>
+                                <div style={{ fontSize: 11, color: "#9ca3af" }}>{req.created_at ? new Date(req.created_at).toLocaleDateString() : ""}</div>
+                                <button onClick={() => setPageTab("chat")} style={{ padding: "6px 12px", borderRadius: 999, border: "none", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", color: "white", cursor: "pointer", fontWeight: 600, fontSize: 11 }}>Go to Chat</button>
                               </div>
                             </div>
-                            
-                            {/* Expanded Details */}
-                            {isExpanded && (
-                              <div
-                                style={{
-                                  marginTop: 8,
-                                  padding: 12,
-                                  background: "#f9fafb",
-                                  borderRadius: 12,
-                                  fontSize: 12,
-                                  color: "#374151",
-                                }}
-                              >
-                                <div style={{ fontWeight: 700, marginBottom: 8, color: "#0f172a" }}>
-                                  Request Details
-                                </div>
-                                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                  {req.pet_unique_id && (
-                                    <div>
-                                      <strong>Pet ID:</strong> {req.pet_unique_id}
-                                    </div>
-                                  )}
-                                  {req.pet_name && (
-                                    <div>
-                                      <strong>Pet Name:</strong> {req.pet_name}
-                                    </div>
-                                  )}
-                                  {req.pet_kind && (
-                                    <div>
-                                      <strong>Pet Type:</strong> {req.pet_kind === "found" ? "Found Pet" : "Lost Pet"}
-                                    </div>
-                                  )}
-                                  {req.status && (
-                                    <div>
-                                      <strong>Status:</strong> {req.status}
-                                    </div>
-                                  )}
-                                  {req.created_at && (
-                                    <div>
-                                      <strong>Requested On:</strong> {new Date(req.created_at).toLocaleString()}
-                                    </div>
-                                  )}
-                                  {req.updated_at && (
-                                    <div>
-                                      <strong>Last Updated:</strong> {new Date(req.updated_at).toLocaleString()}
-                                    </div>
-                                  )}
-                                  {req.last_message_preview && (
-                                    <div>
-                                      <strong>Your Message:</strong>
-                                      <div
-                                        style={{
-                                          marginTop: 4,
-                                          padding: 8,
-                                          background: "#ffffff",
-                                          borderRadius: 8,
-                                          fontStyle: "italic",
-                                        }}
-                                      >
-                                        "{req.last_message_preview}"
-                                      </div>
-                                    </div>
-                                  )}
-                                  {req.topic && (
-                                    <div>
-                                      <strong>Topic:</strong> {req.topic}
-                                    </div>
-                                  )}
-                                </div>
-                                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #e5e7eb" }}>
-                                  <button
-                                    onClick={() => setPageTab("chat")}
-                                    style={{
-                                      padding: "8px 16px",
-                                      borderRadius: 999,
-                                      border: "none",
-                                      background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-                                      color: "white",
-                                      cursor: "pointer",
-                                      fontSize: 12,
-                                      fontWeight: 600,
-                                      width: "100%",
-                                    }}
-                                  >
-                                    Go to Chat
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })
-                    )}
-                    
-                    {/* Chatroom Invitations section */}
-                    <div style={{ fontSize: 18, fontWeight: 800, marginTop: 16 }}>
-                      Chatroom Invitations
-                    </div>
-                    {chatroomRequestsLoading ? (
-                      <div style={{ padding: 12, color: "#64748b" }}>
-                        Loading chatroom invitations...
-                      </div>
-                    ) : chatroomRequests.filter((req: any) => req.status === 'pending').length === 0 ? (
-                      <div style={{ padding: 12, color: "#64748b" }}>
-                        No pending chatroom invitations.
-                      </div>
-                    ) : (
-                      chatroomRequests.filter((req: any) => req.status === 'pending').map((req: any) => {
-                        const isExpanded = activityExpanded === `chatroom-req-${req.id}`;
-                        return (
-                          <div
-                            key={`chatroom-req-${req.id}`}
-                            style={{
-                              background: "white",
-                              border: "1px solid #f1f5f9",
-                              borderRadius: 16,
-                              padding: 16,
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 12,
-                            }}
-                          >
-                            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                              <div
-                                style={{
-                                  width: 48,
-                                  height: 48,
-                                  borderRadius: "50%",
-                                  background: "linear-gradient(135deg, #10b981, #059669)",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  color: "white",
-                                  fontWeight: 700,
-                                  fontSize: 20,
-                                }}
-                              >
-                                👥
-                              </div>
-                              <div style={{ flex: 1 }}>
-                                <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-                                  <span
-                                    style={{
-                                      padding: "2px 8px",
-                                      borderRadius: 999,
-                                      background: "#fef3c7",
-                                      color: "#92400e",
-                                      fontSize: 12,
-                                      fontWeight: 800,
-                                    }}
-                                  >
-                                    PENDING
-                                  </span>
-                                  <span
-                                    style={{
-                                      padding: "2px 8px",
-                                      borderRadius: 999,
-                                      background: "#d1fae5",
-                                      color: "#065f46",
-                                      fontSize: 12,
-                                      fontWeight: 700,
-                                    }}
-                                  >
-                                    CHATROOM
-                                  </span>
-                                </div>
-                                <div style={{ fontSize: 16, fontWeight: 800 }}>
-                                  {req.chatroom?.name || "Chatroom Invitation"}
-                                </div>
-                                <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
-                                  Invited by: {req.added_by?.full_name || req.added_by?.username || "Admin"}
-                                </div>
-                              </div>
-                              <div
-                                style={{
-                                  display: "flex",
-                                  flexDirection: "column",
-                                  alignItems: "flex-end",
-                                  gap: 8,
-                                }}
-                              >
-                                <div style={{ fontSize: 11, color: "#9ca3af" }}>
-                                  {req.created_at
-                                    ? new Date(req.created_at).toLocaleString()
-                                    : ""}
-                                </div>
-                                <button
-                                  onClick={() => {
-                                    setActivityExpanded(isExpanded ? null : `chatroom-req-${req.id}`);
-                                  }}
-                                  style={{
-                                    padding: "6px 12px",
-                                    borderRadius: 999,
-                                    border: "1px solid #e5e7eb",
-                                    background: "#eef2ff",
-                                    color: "#4f46e5",
-                                    cursor: "pointer",
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  {isExpanded ? "Hide Details" : "View Details"}
-                                </button>
-                              </div>
-                            </div>
-                            
-                            {/* Expanded Details */}
-                            {isExpanded && (
-                              <div
-                                style={{
-                                  marginTop: 8,
-                                  padding: 12,
-                                  background: "#f9fafb",
-                                  borderRadius: 12,
-                                  fontSize: 12,
-                                  color: "#374151",
-                                }}
-                              >
-                                <div style={{ fontWeight: 700, marginBottom: 8, color: "#0f172a" }}>
-                                  Invitation Details
-                                </div>
-                                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                  {req.chatroom?.name && (
-                                    <div>
-                                      <strong>Chatroom:</strong> {req.chatroom.name}
-                                    </div>
-                                  )}
-                                  {req.chatroom?.purpose && (
-                                    <div>
-                                      <strong>Purpose:</strong> {req.chatroom.purpose}
-                                    </div>
-                                  )}
-                                  {req.pet_unique_id && (
-                                    <div>
-                                      <strong>Pet ID:</strong> {req.pet_unique_id}
-                                    </div>
-                                  )}
-                                  {req.role && (
-                                    <div>
-                                      <strong>Your Role:</strong> {req.role.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
-                                    </div>
-                                  )}
-                                  {req.created_at && (
-                                    <div>
-                                      <strong>Invited On:</strong> {new Date(req.created_at).toLocaleString()}
-                                    </div>
-                                  )}
-                                </div>
-                                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #e5e7eb", display: "flex", gap: 8 }}>
-                                  <button
-                                    onClick={async () => {
-                                      const res = await acceptChatroomAccessRequest(req.id);
-                                      if (res.ok) {
-                                        setToast({
-                                          isVisible: true,
-                                          type: "success",
-                                          title: "Success",
-                                          message: "Chatroom invitation accepted! You can now access it in the Chat section."
-                                        });
-                                        // Reload chatroom requests
-                                        const refreshed = await fetchChatroomAccessRequests();
-                                        if (refreshed.ok && Array.isArray(refreshed.data)) {
-                                          setChatroomRequests(refreshed.data);
-                                        }
-                                      } else {
-                                        setToast({
-                                          isVisible: true,
-                                          type: "error",
-                                          title: "Error",
-                                          message: res.error || "Failed to accept invitation"
-                                        });
-                                      }
-                                    }}
-                                    style={{
-                                      flex: 1,
-                                      padding: "8px 16px",
-                                      borderRadius: 999,
-                                      border: "none",
-                                      background: "#10b981",
-                                      color: "white",
-                                      cursor: "pointer",
-                                      fontSize: 12,
-                                      fontWeight: 600,
-                                    }}
-                                  >
-                                    ✓ Accept
-                                  </button>
-                                  <button
-                                    onClick={async () => {
-                                      if (!confirm("Are you sure you want to reject this chatroom invitation?")) {
-                                        return;
-                                      }
-                                      const res = await rejectChatroomAccessRequest(req.id);
-                                      if (res.ok) {
-                                        setToast({
-                                          isVisible: true,
-                                          type: "success",
-                                          title: "Success",
-                                          message: "Chatroom invitation rejected."
-                                        });
-                                        // Reload chatroom requests
-                                        const refreshed = await fetchChatroomAccessRequests();
-                                        if (refreshed.ok && Array.isArray(refreshed.data)) {
-                                          setChatroomRequests(refreshed.data);
-                                        }
-                                      } else {
-                                        setToast({
-                                          isVisible: true,
-                                          type: "error",
-                                          title: "Error",
-                                          message: res.error || "Failed to reject invitation"
-                                        });
-                                      }
-                                    }}
-                                    style={{
-                                      flex: 1,
-                                      padding: "8px 16px",
-                                      borderRadius: 999,
-                                      border: "1px solid #e5e7eb",
-                                      background: "#ffffff",
-                                      color: "#ef4444",
-                                      cursor: "pointer",
-                                      fontSize: 12,
-                                      fontWeight: 600,
-                                    }}
-                                  >
-                                    ✗ Reject
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })
-                    )}
-                  </>
-                )}
+                          ))
+                        )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             ) : petsLoading ? (
               <div

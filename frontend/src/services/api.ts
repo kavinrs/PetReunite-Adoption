@@ -361,6 +361,15 @@ export async function fetchAdminUsers(): Promise<ApiResult> {
   return { ok: false, status: resp.status, error: message, data };
 }
 
+export async function deleteAdminUser(userId: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/users/${userId}/`;
+  const resp = await fetchWithAuth(url, { method: "DELETE" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to delete user";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
 export async function fetchStaffUsers(): Promise<ApiResult> {
   const url = `${PETS_BASE}/admin/staff/`;
   const resp = await fetchWithAuth(url, { method: "GET" });
@@ -438,6 +447,26 @@ export async function deleteAdminLostReport(id: number): Promise<ApiResult> {
   if (resp.ok) return { ok: true, status: resp.status, data };
   const message =
     extractErrorMessage(data) ?? "Failed to delete lost report";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+// Fetch found pets eligible for adoption (approved, older than 20 days, not converted)
+export async function fetchEligibleForAdoption(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/adoption/eligible-pets/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to load eligible pets";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+// Convert a found pet to an adoption listing
+export async function convertToAdoption(foundPetId: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/adoption/convert/${foundPetId}/`;
+  const resp = await fetchWithAuth(url, { method: "POST" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) return { ok: true, status: resp.status, data };
+  const message = extractErrorMessage(data) ?? "Failed to convert pet to adoption";
   return { ok: false, status: resp.status, error: message, data };
 }
 
@@ -1503,7 +1532,7 @@ export async function createAdminChatroom(payload: {
 }
 
 /**
- * Admin: Invite a user to join a chatroom (creates pending access request)
+ * Admin: Invite a user to join a chatroom (directly adds user as active member)
  */
 export async function inviteUserToChatroom(
   chatroomId: number,
@@ -1522,7 +1551,7 @@ export async function inviteUserToChatroom(
 }
 
 /**
- * Admin: Create a chatroom creation invitation (chatroom will be created on user acceptance)
+ * Admin: Create a chatroom and add user directly (no pending approval needed)
  */
 export async function createChatroomInvitation(payload: {
   user_id: number;
@@ -1694,4 +1723,32 @@ export async function deleteChatroomMessageForEveryone(
   if (resp.ok) return { ok: true, status: resp.status, data };
   const message = extractErrorMessage(data) ?? "Failed to delete message";
   return { ok: false, status: resp.status, error: message, data };
+}
+
+/**
+ * Approve a lost pet report (admin only)
+ */
+export async function approveLostPet(id: number): Promise<ApiResult> {
+  return updateAdminLostReport(id, { status: "approved" });
+}
+
+/**
+ * Reject a lost pet report (admin only)
+ */
+export async function rejectLostPet(id: number): Promise<ApiResult> {
+  return updateAdminLostReport(id, { status: "rejected" });
+}
+
+/**
+ * Approve a found pet report (admin only)
+ */
+export async function approveFoundPet(id: number): Promise<ApiResult> {
+  return updateAdminFoundReport(id, { status: "approved" });
+}
+
+/**
+ * Reject a found pet report (admin only)
+ */
+export async function rejectFoundPet(id: number): Promise<ApiResult> {
+  return updateAdminFoundReport(id, { status: "rejected" });
 }

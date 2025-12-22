@@ -474,6 +474,7 @@ function AboutSection() {
 }
 
 function HowWeHelpSection() {
+  const navigate = useNavigate();
   const cards = [
     {
       title: "Search Missing Pets",
@@ -607,7 +608,12 @@ function HowWeHelpSection() {
               </div>
               <h3 className="help-card-title">{card.title}</h3>
               <p className="help-card-text">{card.body}</p>
-              <button type="button" className="help-card-link">
+              <button
+                type="button"
+                className="help-card-link"
+                onClick={() => navigate("/login")}
+                style={{ cursor: "pointer" }}
+              >
                 {card.link}
               </button>
             </article>
@@ -879,13 +885,14 @@ function SiteFooter() {
           <section className="site-footer__brand">
             <div className="footer-logo-row">
               <img
-                src="/mnt/data/3e836c9d-cf7a-4d38-ac7c-b7be511b4f29.png"
-                alt="PetRescue logo"
+                src="/pawreunite-logo.svg"
+                alt="PetReunite logo"
                 loading="lazy"
                 className="footer-logo-image"
+                style={{ width: 40, height: 40 }}
               />
               <span id="footer-heading" className="footer-brand-name">
-                PetRescue
+                PetReunite
               </span>
             </div>
             <p className="footer-blurb">

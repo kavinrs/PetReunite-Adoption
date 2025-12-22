@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
-import { fetchAdminLostReports } from "../services/api";
+import { fetchAdminLostReports, approveLostPet, rejectLostPet } from "../services/api";
+import Toast from "../components/Toast";
 
 export default function AdminLostReportDetail() {
   useViewportStandardization();
@@ -12,6 +13,8 @@ export default function AdminLostReportDetail() {
   const [report, setReport] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error"; title: string } | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -51,6 +54,34 @@ export default function AdminLostReportDetail() {
       navigate("/admin?tab=pets", { replace: true });
     } else {
       navigate("/admin?tab=lost", { replace: true });
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!report || actionLoading) return;
+    setActionLoading(true);
+    const res = await approveLostPet(report.id);
+    setActionLoading(false);
+    if (res.ok) {
+      setToast({ message: "Pet report has been approved and is now visible to users.", type: "success", title: "Approved!" });
+      setReport({ ...report, status: "approved" });
+      setTimeout(() => handleBack(), 1500);
+    } else {
+      setToast({ message: res.error || "Failed to approve report", type: "error", title: "Error" });
+    }
+  };
+
+  const handleReject = async () => {
+    if (!report || actionLoading) return;
+    setActionLoading(true);
+    const res = await rejectLostPet(report.id);
+    setActionLoading(false);
+    if (res.ok) {
+      setToast({ message: "Pet report has been rejected.", type: "success", title: "Rejected" });
+      setReport({ ...report, status: "rejected" });
+      setTimeout(() => handleBack(), 1500);
+    } else {
+      setToast({ message: res.error || "Failed to reject report", type: "error", title: "Error" });
     }
   };
 
@@ -121,9 +152,9 @@ export default function AdminLostReportDetail() {
     ["Breed", report.breed],
     ["Gender", report.gender],
     ["Color", report.color],
-    ["Weight", report.weight],
+    ["Weight", report.weight ? `${report.weight}kg` : null],
     ["Vaccinated", report.vaccinated],
-    ["Age (years)", report.age],
+    ["Age (years)", report.age ? `${report.age} years` : null],
     ["City", report.city],
     ["State", report.state],
     ["Pincode", report.pincode],
@@ -141,6 +172,15 @@ export default function AdminLostReportDetail() {
         boxSizing: "border-box",
       }}
     >
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          title={toast.title}
+          isVisible={!!toast}
+          onClose={() => setToast(null)}
+        />
+      )}
       <button
         type="button"
         onClick={handleBack}
@@ -669,6 +709,57 @@ export default function AdminLostReportDetail() {
               </div>
             </div>
           </div>
+
+          {/* Accept/Reject Buttons - Only show for pending status */}
+          {report.status === "pending" && (
+            <div
+              style={{
+                marginTop: 16,
+                display: "flex",
+                gap: 12,
+                justifyContent: "flex-start",
+              }}
+            >
+              <button
+                type="button"
+                onClick={handleApprove}
+                disabled={actionLoading}
+                style={{
+                  padding: "12px 32px",
+                  borderRadius: 12,
+                  border: "none",
+                  background: actionLoading ? "#9ca3af" : "#16a34a",
+                  color: "white",
+                  fontWeight: 700,
+                  fontSize: 14,
+                  cursor: actionLoading ? "not-allowed" : "pointer",
+                  boxShadow: "0 4px 12px rgba(22,163,74,0.3)",
+                  transition: "all 0.2s",
+                }}
+              >
+                {actionLoading ? "Processing..." : "✓ Accept"}
+              </button>
+              <button
+                type="button"
+                onClick={handleReject}
+                disabled={actionLoading}
+                style={{
+                  padding: "12px 32px",
+                  borderRadius: 12,
+                  border: "none",
+                  background: actionLoading ? "#9ca3af" : "#dc2626",
+                  color: "white",
+                  fontWeight: 700,
+                  fontSize: 14,
+                  cursor: actionLoading ? "not-allowed" : "pointer",
+                  boxShadow: "0 4px 12px rgba(220,38,38,0.3)",
+                  transition: "all 0.2s",
+                }}
+              >
+                {actionLoading ? "Processing..." : "✗ Reject"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -557,9 +557,20 @@ export default function UserHome() {
     }
   }
 
-  // Derived activity lists respecting species + sort filters
+  // Derived activity lists respecting search + species + sort filters
   const activityLostFiltered = useMemo(() => {
     let items = (activity.lost ?? []) as any[];
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      items = items.filter((r) =>
+        (r.pet_name || "").toLowerCase().includes(query) ||
+        (r.pet_type || "").toLowerCase().includes(query) ||
+        (r.breed || "").toLowerCase().includes(query) ||
+        (r.description || "").toLowerCase().includes(query) ||
+        (r.city || "").toLowerCase().includes(query)
+      );
+    }
     if (selectedSpecies !== "All Species") {
       const sp = selectedSpecies.toLowerCase();
       items = items.filter((r) => (r.pet_type || "").toLowerCase() === sp);
@@ -575,10 +586,21 @@ export default function UserHome() {
       );
     }
     return items;
-  }, [activity.lost, selectedSpecies, sortBy]);
+  }, [activity.lost, searchQuery, selectedSpecies, sortBy]);
 
   const activityFoundFiltered = useMemo(() => {
     let items = (activity.found ?? []) as any[];
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      items = items.filter((r) =>
+        (r.pet_name || "").toLowerCase().includes(query) ||
+        (r.pet_type || "").toLowerCase().includes(query) ||
+        (r.breed || "").toLowerCase().includes(query) ||
+        (r.description || "").toLowerCase().includes(query) ||
+        (r.found_city || "").toLowerCase().includes(query)
+      );
+    }
     if (selectedSpecies !== "All Species") {
       const sp = selectedSpecies.toLowerCase();
       items = items.filter((r) => (r.pet_type || "").toLowerCase() === sp);
@@ -594,10 +616,20 @@ export default function UserHome() {
       );
     }
     return items;
-  }, [activity.found, selectedSpecies, sortBy]);
+  }, [activity.found, searchQuery, selectedSpecies, sortBy]);
 
   const activityAdoptionsFiltered = useMemo(() => {
     let items = (activity.adoptions ?? []) as any[];
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      items = items.filter((a) =>
+        (a.pet?.name || "").toLowerCase().includes(query) ||
+        (a.pet?.species || "").toLowerCase().includes(query) ||
+        (a.pet?.breed || "").toLowerCase().includes(query) ||
+        (a.pet?.description || "").toLowerCase().includes(query)
+      );
+    }
     if (selectedSpecies !== "All Species") {
       const sp = selectedSpecies.toLowerCase();
       items = items.filter(
@@ -615,7 +647,7 @@ export default function UserHome() {
       );
     }
     return items;
-  }, [activity.adoptions, selectedSpecies, sortBy]);
+  }, [activity.adoptions, searchQuery, selectedSpecies, sortBy]);
 
   if (loading) return <div style={{ padding: 40 }}>Loading home...</div>;
 
@@ -1200,182 +1232,201 @@ export default function UserHome() {
                 position: "relative",
               }}
             >
-            {/* Header */}
-            <div style={{ marginBottom: 24 }}>
-              <div
-                style={{
-                  fontSize: 24,
-                  fontWeight: 800,
-                  color: "#0f172a",
-                  marginBottom: 6,
-                }}
-              >
-                Discover Pets Looking for Loving Homes
-              </div>
-              <div style={{ color: "rgba(15,23,42,0.6)", fontSize: 14 }}>
-                Discover pets ready for adoption and help lost pets find their
-                way home
-              </div>
-            </div>
-
-            {/* Search and Filters */}
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 16,
-                marginBottom: 12,
-              }}
-            >
-                {/* Search Bar */}
-                <div style={{ marginBottom: 16 }}>
-                  <input
-                    type="text"
-                    placeholder="Search by name or breed..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+            {/* Header and Filters - only show on Home tab */}
+            {pageTab === "home" && (
+              <>
+                <div style={{ marginBottom: 24 }}>
+                  <div
                     style={{
-                      width: "100%",
-                      padding: "6px 10px",
-                      borderRadius: 6,
-                      border: "1px solid rgba(15,23,42,0.15)",
-                      fontSize: 12,
+                      fontSize: 24,
+                      fontWeight: 800,
                       color: "#0f172a",
-                      background: "rgba(15,23,42,0.02)",
-                      boxSizing: "border-box",
+                      marginBottom: 6,
                     }}
-                  />
+                  >
+                    Discover Pets Looking for Loving Homes
+                  </div>
+                  <div style={{ color: "rgba(15,23,42,0.6)", fontSize: 14 }}>
+                    Discover pets ready for adoption and help lost pets find their
+                    way home
+                  </div>
                 </div>
 
-                {/* Filter Row */}
+                {/* Search and Filters */}
                 <div
                   style={{
                     display: "flex",
+                    flexDirection: "column",
                     gap: 16,
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                    marginBottom: 16,
-                    position: "relative",
-                    zIndex: 1000,
-                    overflow: "visible",
+                    marginBottom: 12,
                   }}
                 >
-                  {/* Category Filter Buttons */}
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {["All pets", "Lost pet", "Found pet", "Adoption pet"].map((category) => (
-                      <button
-                        key={category}
-                        onClick={() => setSelectedCategory(category)}
-                        style={{
-                          padding: "8px 16px",
-                          borderRadius: 20,
-                          border:
-                            selectedCategory === category
-                              ? "2px solid #ff8a00"
-                              : "1px solid rgba(15,23,42,0.15)",
-                          background:
-                            selectedCategory === category
-                              ? "rgba(255,138,0,0.1)"
-                              : "white",
-                          color:
-                            selectedCategory === category
-                              ? "#ff8a00"
-                              : "rgba(15,23,42,0.8)",
-                          cursor: "pointer",
-                          fontWeight: selectedCategory === category ? 700 : 500,
-                          fontSize: 12,
-                        }}
-                      >
-                        {category}
-                      </button>
-                    ))}
+                  {/* Search Bar */}
+                  <div style={{ marginBottom: 16 }}>
+                    <input
+                      type="text"
+                      placeholder="Search by name or breed..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "6px 10px",
+                        borderRadius: 6,
+                        border: "1px solid rgba(15,23,42,0.15)",
+                        fontSize: 12,
+                        color: "#0f172a",
+                        background: "rgba(15,23,42,0.02)",
+                        boxSizing: "border-box",
+                      }}
+                    />
                   </div>
 
-                  {/* Species Dropdown */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 12, color: "rgba(15,23,42,0.6)" }}>
-                      Species:
-                    </span>
-                    <div style={{ position: "relative", zIndex: 1001 }}>
+                  {/* Filter Row */}
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 16,
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      marginBottom: 16,
+                      position: "relative",
+                      zIndex: 1000,
+                      overflow: "visible",
+                    }}
+                  >
+                    {/* Category Filter Buttons */}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {["All pets", "Lost pet", "Found pet", "Adoption pet"].map((category) => (
+                        <button
+                          key={category}
+                          onClick={() => setSelectedCategory(category)}
+                          style={{
+                            padding: "8px 16px",
+                            borderRadius: 20,
+                            border:
+                              selectedCategory === category
+                                ? "2px solid #ff8a00"
+                                : "1px solid rgba(15,23,42,0.15)",
+                            background:
+                              selectedCategory === category
+                                ? "rgba(255,138,0,0.1)"
+                                : "white",
+                            color:
+                              selectedCategory === category
+                                ? "#ff8a00"
+                                : "rgba(15,23,42,0.8)",
+                            cursor: "pointer",
+                            fontWeight: selectedCategory === category ? 700 : 500,
+                            fontSize: 12,
+                          }}
+                        >
+                          {category}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Species Dropdown */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 12, color: "rgba(15,23,42,0.6)" }}>
+                        Species:
+                      </span>
+                      <div style={{ position: "relative", zIndex: 1001 }}>
+                        <select
+                          value={selectedSpecies}
+                          onChange={(e) => setSelectedSpecies(e.target.value)}
+                          style={{
+                            padding: "12px 16px",
+                            borderRadius: 12,
+                            border: "1px solid rgba(15,23,42,0.25)",
+                            background: "#ffffff",
+                            fontSize: 12,
+                            cursor: "pointer",
+                            minWidth: "140px",
+                            position: "relative",
+                            zIndex: 1002,
+                            color: "#0f172a",
+                            fontWeight: 600,
+                          }}
+                        >
+                          <option value="All Species">All Species</option>
+                          <option value="Dog">Dogs</option>
+                          <option value="Cat">Cats</option>
+                          <option value="Rabbit">Rabbits</option>
+                          <option value="Bird">Birds</option>
+                          <option value="Cow">Cows</option>
+                          <option value="Goat">Goats</option>
+                          <option value="Duck">Ducks</option>
+                          <option value="Horse">Horses</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Sort Dropdown */}
+                    <div
+                      style={{
+                        marginLeft: "auto",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        position: "relative",
+                        zIndex: 1001,
+                      }}
+                    >
+                      <span style={{ fontSize: 12, color: "rgba(15,23,42,0.6)" }}>
+                        Sort by:
+                      </span>
                       <select
-                        value={selectedSpecies}
-                        onChange={(e) => setSelectedSpecies(e.target.value)}
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value)}
                         style={{
-                          padding: "12px 16px",
-                          borderRadius: 12,
+                          padding: "8px 12px",
+                          borderRadius: 8,
                           border: "1px solid rgba(15,23,42,0.25)",
                           background: "#ffffff",
                           fontSize: 12,
                           cursor: "pointer",
-                          minWidth: "140px",
+                          minWidth: "120px",
                           position: "relative",
                           zIndex: 1002,
                           color: "#0f172a",
                           fontWeight: 600,
                         }}
                       >
-                        <option value="All Species">All Species</option>
-                        <option value="Dog">Dogs</option>
-                        <option value="Cat">Cats</option>
-                        <option value="Rabbit">Rabbits</option>
-                        <option value="Bird">Birds</option>
-                        <option value="Cow">Cows</option>
-                        <option value="Goat">Goats</option>
-                        <option value="Duck">Ducks</option>
-                        <option value="Horse">Horses</option>
+                        <option value="Most Recent">Most Recent</option>
+                        <option value="Alphabetical">Alphabetical</option>
                       </select>
                     </div>
                   </div>
 
-                  {/* Sort Dropdown */}
-                  <div
-                    style={{
-                      marginLeft: "auto",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      position: "relative",
-                      zIndex: 1001,
-                    }}
-                  >
-                    <span style={{ fontSize: 12, color: "rgba(15,23,42,0.6)" }}>
-                      Sort by:
-                    </span>
-                    <select
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value)}
-                      style={{
-                        padding: "8px 12px",
-                        borderRadius: 8,
-                        border: "1px solid rgba(15,23,42,0.25)",
-                        background: "#ffffff",
-                        fontSize: 12,
-                        cursor: "pointer",
-                        minWidth: "120px",
-                        position: "relative",
-                        zIndex: 1002,
-                        color: "#0f172a",
-                        fontWeight: 600,
-                      }}
-                    >
-                      <option value="Most Recent">Most Recent</option>
-                      <option value="Alphabetical">Alphabetical</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Results Count (only show on Dashboard view, not My Activity) */}
-                {pageTab !== "activity" && (
+                  {/* Results Count */}
                   <div style={{ fontSize: 16, fontWeight: 600, color: "#0f172a" }}>
                     {filteredPets.length} Pet
                     {filteredPets.length !== 1 ? "s" : ""} Available
                   </div>
-                )}
-              </div>
+                </div>
+              </>
+            )}
 
             {/* Main content: Activity or Dashboard cards (chat rendered separately) */}
             {pageTab === "activity" ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                {/* My Activity Header */}
+                <div style={{ marginBottom: 20 }}>
+                  <div
+                    style={{
+                      fontSize: 24,
+                      fontWeight: 800,
+                      color: "#0f172a",
+                      marginBottom: 6,
+                    }}
+                  >
+                    My Activity
+                  </div>
+                  <div style={{ color: "rgba(15,23,42,0.6)", fontSize: 14 }}>
+                    Track your pet reports, adoption requests, and chat conversations
+                  </div>
+                </div>
+
                 {/* Activity Sub-tabs */}
                 <div
                   style={{
@@ -1403,7 +1454,7 @@ export default function UserHome() {
                         border: "none",
                         borderRadius: 12,
                         background: activitySubTab === tab.id
-                          ? "linear-gradient(135deg, #ff8a00, #ff2fab)"
+                          ? "linear-gradient(135deg, #0d9488, #0891b2)"
                           : "transparent",
                         color: activitySubTab === tab.id ? "white" : "#64748b",
                         fontWeight: 700,
@@ -1415,7 +1466,7 @@ export default function UserHome() {
                         gap: 8,
                         transition: "all 0.2s ease",
                         boxShadow: activitySubTab === tab.id
-                          ? "0 4px 12px rgba(255,138,0,0.3)"
+                          ? "0 4px 12px rgba(13,148,136,0.3)"
                           : "none",
                       }}
                     >
@@ -1449,6 +1500,32 @@ export default function UserHome() {
                     boxShadow: "0 4px 12px rgba(15,23,42,0.08)",
                   }}
                 >
+                  {/* Search bar - only show for lost, found, adoption tabs, not chat */}
+                  {activitySubTab !== "chat" && (
+                    <div style={{ marginBottom: 16 }}>
+                      <input
+                        type="text"
+                        placeholder={
+                          activitySubTab === "lost" ? "Search lost pets..." :
+                          activitySubTab === "found" ? "Search found pets..." :
+                          "Search adoptions..."
+                        }
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "12px 16px",
+                          borderRadius: 12,
+                          border: "1px solid #e2e8f0",
+                          background: "#f8fafc",
+                          fontSize: 14,
+                          color: "#374151",
+                          outline: "none",
+                        }}
+                      />
+                    </div>
+                  )}
+                  
                   {activityLoading || chatRequestsLoading ? (
                     <div style={{ padding: 24, textAlign: "center", color: "#64748b" }}>
                       Loading...

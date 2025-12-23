@@ -288,18 +288,25 @@ class AdoptionRequestListSerializer(serializers.ModelSerializer):
     """Serializer for admin view of adoption requests"""
 
     requester = UserSummarySerializer(read_only=True)
-    pet_name = serializers.CharField(source="pet.name", read_only=True)
-    pet_species = serializers.CharField(source="pet.species", read_only=True)
+    pet = PetSerializer(read_only=True)
 
     class Meta:
         model = AdoptionRequest
         fields = (
             "id",
-            "pet_name",
-            "pet_species",
+            "pet",
             "requester",
             "phone",
+            "address",
+            "household_info",
+            "experience_with_pets",
+            "reason_for_adopting",
+            "has_other_pets",
+            "other_pets_details",
+            "home_ownership",
+            "preferred_meeting",
             "status",
+            "admin_notes",
             "created_at",
             "updated_at",
         )

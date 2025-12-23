@@ -455,7 +455,8 @@ import {
   deleteAdoptionRequest,
   fetchAdminUsers,
   deleteAdminUser,
-  fetchAvailablePets,
+  fetchAdminPets,
+  deleteAdminPet,
   fetchAdminVolunteerRequests,
   updateAdminVolunteerRequest,
   deleteAdminVolunteerRequest,
@@ -464,7 +465,7 @@ import {
   convertToAdoption,
 } from "../services/api";
 import AdminChat from "./AdminChat";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
 import { CITY_COORDS, STATE_COORDS } from "../utils/mapCoordinates";
 import Toast from "../components/Toast";
@@ -515,16 +516,26 @@ function AdminHome() {
   // Apply viewport standardization to ensure consistent 100% scaling
   useViewportStandardization();
 
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Read initial state from URL query parameters
+  const validTabs: TabKey[] = ["dashboard", "found", "lost", "adoptions", "pets", "users", "volunteers", "stats", "chat"];
+  const initialTab = (searchParams.get("tab") as TabKey) || "dashboard";
+  const initialSubTab = (searchParams.get("subtab") as "requests" | "eligible") || "requests";
+
   const [profile, setProfile] = useState<any>(null);
   const [summary, setSummary] = useState<any | null>(null);
   const [foundReports, setFoundReports] = useState<any[]>([]);
   const [lostReports, setLostReports] = useState<any[]>([]);
   const [adoptionRequests, setAdoptionRequests] = useState<any[]>([]);
+  const [adoptionPets, setAdoptionPets] = useState<any[]>([]);
   const [eligibleForAdoption, setEligibleForAdoption] = useState<any[]>([]);
-  const [adoptionSubTab, setAdoptionSubTab] = useState<"requests" | "eligible">("requests");
+  const [adoptionSubTab, setAdoptionSubTab] = useState<"requests" | "eligible">(initialSubTab);
   const [volunteerRequests, setVolunteerRequests] = useState<any[]>([]);
   const [adminUsers, setAdminUsers] = useState<any[]>([]);
-  const [tab, setTab] = useState<TabKey>("dashboard");
+  const [tab, setTab] = useState<TabKey>(validTabs.includes(initialTab) ? initialTab : "dashboard");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [petsSearch, setPetsSearch] = useState("");
@@ -560,14 +571,29 @@ function AdminHome() {
 
   const [error, setError] = useState<string | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [toast, setToast] = useState<{
     isVisible: boolean;
     type: "success" | "error";
     title: string;
     message: string;
   } | null>(null);
-  const navigate = useNavigate();
-  const location = useLocation();
+
+  // Update URL when tab or adoptionSubTab changes
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (tab !== "dashboard") {
+      params.set("tab", tab);
+    }
+    if (tab === "adoptions" && adoptionSubTab !== "requests") {
+      params.set("subtab", adoptionSubTab);
+    }
+    const newSearch = params.toString();
+    const currentSearch = searchParams.toString();
+    if (newSearch !== currentSearch) {
+      setSearchParams(params, { replace: true });
+    }
+  }, [tab, adoptionSubTab]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -625,13 +651,15 @@ function AdminHome() {
       }
       setProfile(profileRes.data);
 
-      const [summaryRes, foundRes, lostRes, adoptionRes, volunteersRes, notificationsRes] = await Promise.all([
+      const [summaryRes, foundRes, lostRes, adoptionRes, adoptionPetsRes, volunteersRes, notificationsRes, eligibleRes] = await Promise.all([
         fetchAdminSummary(),
         fetchAdminFoundReports(),
         fetchAdminLostReports(),
         fetchAllAdoptionRequests(),
+        fetchAdminPets(),
         fetchAdminVolunteerRequests(),
         fetchNotifications(),
+        fetchEligibleForAdoption(),
       ]);
       if (!mounted) return;
 
@@ -639,7 +667,9 @@ function AdminHome() {
       if (foundRes.ok) setFoundReports(foundRes.data ?? []);
       if (lostRes.ok) setLostReports(lostRes.data ?? []);
       if (adoptionRes.ok) setAdoptionRequests(adoptionRes.data ?? []);
+      if (adoptionPetsRes.ok) setAdoptionPets(adoptionPetsRes.data ?? []);
       if (volunteersRes.ok) setVolunteerRequests(volunteersRes.data ?? []);
+      if (eligibleRes.ok) setEligibleForAdoption(eligibleRes.data ?? []);
       if (notificationsRes.ok) {
         // Filter for chat-related notifications
         const chatNotifs = (notificationsRes.data ?? []).filter((n: any) => 
@@ -648,13 +678,15 @@ function AdminHome() {
         setChatNotifications(chatNotifs);
       }
 
-      if (!summaryRes.ok || !foundRes.ok || !lostRes.ok || !adoptionRes.ok || !volunteersRes.ok) {
+      if (!summaryRes.ok || !foundRes.ok || !lostRes.ok || !adoptionRes.ok || !adoptionPetsRes.ok || !volunteersRes.ok || !eligibleRes.ok) {
         const msg =
           summaryRes.error ||
           foundRes.error ||
           lostRes.error ||
           adoptionRes.error ||
-          volunteersRes.error;
+          adoptionPetsRes.error ||
+          volunteersRes.error ||
+          eligibleRes.error;
         if (msg) setError(msg);
       }
 
@@ -744,11 +776,8 @@ function AdminHome() {
         fetchEligibleForAdoption()
       ]);
       if (reqRes.ok) {
-        const filtered =
-          nextStatus === "all"
-            ? (reqRes.data ?? [])
-            : (reqRes.data ?? []).filter((req: any) => req.status === nextStatus);
-        setAdoptionRequests(filtered);
+        // Store all requests, filtering will be done by filteredRows useMemo
+        setAdoptionRequests(reqRes.data ?? []);
       } else if (reqRes.error) setError(reqRes.error);
       if (eligibleRes.ok) {
         setEligibleForAdoption(eligibleRes.data ?? []);
@@ -797,7 +826,7 @@ function AdminHome() {
   async function loadRecentPets() {
     setTableLoading(true);
     setError(null);
-    const res = await fetchAvailablePets();
+    const res = await fetchAdminPets();
     if (res.ok) {
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
@@ -996,10 +1025,24 @@ function AdminHome() {
   }
 
   async function reloadPets() {
-    // Pets tab reuses the reports already loaded into state for
-    // lostReports, foundReports, and adoptionRequests.
-    // Avoid extra network calls here so switching to Pets feels instant.
-    setTableLoading(false);
+    // Load all pets data for the Pets tab
+    setTableLoading(true);
+    setError(null);
+    try {
+      const [lostRes, foundRes, adoptionRes] = await Promise.all([
+        fetchAdminLostReports("approved"),
+        fetchAdminFoundReports("approved"),
+        fetchAdminPets(),
+      ]);
+      if (lostRes.ok) setLostReports(lostRes.data ?? []);
+      else if (lostRes.error) setError(lostRes.error);
+      if (foundRes.ok) setFoundReports(foundRes.data ?? []);
+      else if (foundRes.error) setError(foundRes.error);
+      if (adoptionRes.ok) setAdoptionPets(adoptionRes.data ?? []);
+      else if (adoptionRes.error) setError(adoptionRes.error);
+    } finally {
+      setTableLoading(false);
+    }
   }
 
   function renderStatusBadge(status: string) {
@@ -1240,16 +1283,16 @@ function AdminHome() {
               Promise.all([
                 fetchAdminLostReports("approved"),
                 fetchAdminFoundReports("approved"),
-                fetchAllAdoptionRequests(),
+                fetchAdminPets(),
               ])
-                .then(([lostRes, foundRes, adoptionRes]) => {
+                .then(([lostRes, foundRes, adoptionPetsRes]) => {
                   if (lostRes.ok) setLostReports(lostRes.data ?? []);
                   else if (lostRes.error) setError(lostRes.error);
                   if (foundRes.ok) setFoundReports(foundRes.data ?? []);
                   else if (foundRes.error) setError(foundRes.error);
-                  if (adoptionRes.ok)
-                    setAdoptionRequests(adoptionRes.data ?? []);
-                  else if (adoptionRes.error) setError(adoptionRes.error);
+                  if (adoptionPetsRes.ok)
+                    setAdoptionPets(adoptionPetsRes.data ?? []);
+                  else if (adoptionPetsRes.error) setError(adoptionPetsRes.error);
                 })
                 .finally(() => setTableLoading(false));
             }}
@@ -1312,10 +1355,10 @@ function AdminHome() {
             .filter((r: any) => r.status === "approved")
             .map((r: any) => ({ ...r, __kind: "lost" }));
           const foundRows = foundReports
-            .filter((r: any) => r.status === "approved")
+            .filter((r: any) => r.status === "approved" && !r.converted_to_adoption)
             .map((r: any) => ({ ...r, __kind: "found" }));
-          const adoptionRows = adoptionRequests
-            .filter((r: any) => r.status === "approved")
+          const adoptionRows = adoptionPets
+            .filter((r: any) => r.is_active !== false)
             .map((r: any) => ({ ...r, __kind: "adoption" }));
           const allRows: any[] = [...lostRows, ...foundRows, ...adoptionRows];
 
@@ -1326,7 +1369,7 @@ function AdminHome() {
           // Mix lost/found/adoption by shuffling the rows so types are interleaved
           rows = [...rows].sort(() => Math.random() - 0.5);
           if (petsStatusFilter === "approved") {
-            rows = rows.filter((r) => r.status === "approved");
+            rows = rows.filter((r) => r.__kind === "adoption" ? r.is_active !== false : r.status === "approved");
           }
           const q = petsSearch.trim().toLowerCase();
           if (q) {
@@ -1335,16 +1378,15 @@ function AdminHome() {
                 r.pet_name,
                 r.pet_type,
                 r.breed,
-                r.pet?.species,
-                r.pet?.breed,
+                r.name,
+                r.species,
                 r.city,
                 r.found_city,
                 r.state,
-                r.pet?.location_city,
-                r.pet?.location_state,
+                r.location_city,
+                r.location_state,
                 r.status,
                 r.description,
-                r.pet?.description,
               ]
                 .filter(Boolean)
                 .join(" ")
@@ -1371,17 +1413,22 @@ function AdminHome() {
               {rows.map((r: any) => {
                 const isLost = r.__kind === "lost";
                 const isFound = r.__kind === "found";
-                const title = isLost
-                  ? `${r.pet_name || r.pet_type || "Pet"}`
-                  : `${r.pet_type || r.pet_name || "Pet"}`;
-                const locationText = isLost
-                  ? `${r.location || r.city || r.found_city || ""}${r.state ? ", " + r.state : ""}`
-                  : `${r.found_city || r.city || ""}${r.state ? ", " + r.state : ""}`;
+                const isAdoption = r.__kind === "adoption";
+                const title = isAdoption
+                  ? `${r.name || r.species || "Pet"}`
+                  : isLost
+                    ? `${r.pet_name || r.pet_type || "Pet"}`
+                    : `${r.pet_type || r.pet_name || "Pet"}`;
+                const locationText = isAdoption
+                  ? `${r.location_city || ""}${r.location_state ? ", " + r.location_state : ""}`
+                  : isLost
+                    ? `${r.location || r.city || r.found_city || ""}${r.state ? ", " + r.state : ""}`
+                    : `${r.found_city || r.city || ""}${r.state ? ", " + r.state : ""}`;
                 const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
                 const origin = /^https?:/.test(apiBase)
                   ? new URL(apiBase).origin
                   : "http://localhost:8000";
-                const raw = r.photo_url || r.photo;
+                const raw = isAdoption ? r.photos : (r.photo_url || r.photo);
                 const src = raw
                   ? (() => {
                       const u = String(raw);
@@ -1443,13 +1490,13 @@ function AdminHome() {
                             style={{
                               padding: "4px 10px",
                               borderRadius: 999,
-                              background: isLost ? "#fee2e2" : isFound ? "#dbeafe" : "#ede9fe",
-                              color: isLost ? "#b91c1c" : isFound ? "#1d4ed8" : "#6d28d9",
+                              background: isAdoption ? "#ede9fe" : isLost ? "#fee2e2" : "#dbeafe",
+                              color: isAdoption ? "#6d28d9" : isLost ? "#b91c1c" : "#1d4ed8",
                               fontSize: 12,
                               fontWeight: 700,
                             }}
                           >
-                            {isLost ? "LOST" : isFound ? "FOUND" : "ADOPTION"}
+                            {isAdoption ? "ADOPTION" : isLost ? "LOST" : "FOUND"}
                           </span>
                           <span
                             style={{
@@ -1462,23 +1509,25 @@ function AdminHome() {
                               border: "1px solid #e5e7eb",
                             }}
                           >
-                            {r.status}
+                            {isAdoption ? (r.is_active ? "available" : "adopted") : r.status}
                           </span>
                         </div>
                         <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>{title}</div>
                         <div style={{ fontSize: 13, color: "#374151", marginTop: 4 }}>
-                          {isLost ? `Breed: ${r.breed || "—"}` : isFound ? `Breed: ${r.breed || "—"}` : `${r.pet?.species || "Pet"} • ${r.pet?.breed || "—"}`}
+                          {isAdoption
+                            ? `${r.species || "Pet"} • ${r.breed || "—"}`
+                            : `Breed: ${r.breed || "—"}`}
                         </div>
                         <div style={{ fontSize: 12, color: "#64748b", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {r.description || r.pet?.description || ""}
+                          {r.description || ""}
                         </div>
                       </div>
                       <div>
-                        <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600 }}>Last Seen Location:</div>
+                        <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600 }}>{isAdoption ? "Location:" : "Last Seen Location:"}</div>
                         <div style={{ fontSize: 13, color: "#374151" }}>{locationText || "—"}</div>
-                        <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600, marginTop: 8 }}>Reported by:</div>
-                        <div style={{ fontSize: 13, color: "#374151" }}>{r.reporter?.username || r.requester?.username || "—"}</div>
-                        <div style={{ fontSize: 12, color: "#64748b" }}>{r.reporter?.email || r.requester?.email || ""}</div>
+                        <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600, marginTop: 8 }}>{isAdoption ? "Posted by:" : "Reported by:"}</div>
+                        <div style={{ fontSize: 13, color: "#374151" }}>{r.reporter?.username || r.posted_by?.username || "—"}</div>
+                        <div style={{ fontSize: 12, color: "#64748b" }}>{r.reporter?.email || r.posted_by?.email || ""}</div>
                       </div>
                       <div
                         style={{
@@ -1489,18 +1538,20 @@ function AdminHome() {
                           marginTop: 8,
                         }}
                       >
-                        <div>{renderStatusBadge(r.status)}</div>
+                        <div>{isAdoption ? renderStatusBadge(r.is_active ? "approved" : "closed") : renderStatusBadge(r.status)}</div>
                         <button
                           onClick={() => {
-                            if ((r as any).pet?.id) {
-                              // From the Pets tab, viewing an adoption pet
-                              navigate(`/pets/${(r as any).pet.id}`, {
-                                state: { from: "pets" },
+                            if (isAdoption) {
+                              navigate(`/admin/pets/${r.id}`, {
+                                state: { from: "dashboard" },
                               });
                             } else if (isLost) {
-                              // From the Pets tab, viewing a lost report
                               navigate(`/admin/lost/${r.id}`, {
-                                state: { from: "pets" },
+                                state: { from: "dashboard" },
+                              });
+                            } else if (isFound) {
+                              navigate(`/admin/found/${r.id}`, {
+                                state: { from: "dashboard" },
                               });
                             }
                           }}
@@ -1530,6 +1581,29 @@ function AdminHome() {
   }
 
   const filteredRows = useMemo(() => {
+    // For adoptions tab with "all" filter, show adoption pets instead of requests
+    if (tab === "adoptions" && statusFilter === "all") {
+      const pets = adoptionPets.filter((p: any) => p.is_active !== false);
+      const q = search.trim().toLowerCase();
+      if (!q) return pets;
+      return pets.filter((p: any) => {
+        const text = [
+          p.name,
+          p.species,
+          p.breed,
+          p.description,
+          p.location_city,
+          p.location_state,
+          p.posted_by?.username,
+          p.posted_by?.email,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return text.includes(q);
+      });
+    }
+
     const rows =
       tab === "adoptions"
         ? adoptionRequests
@@ -1551,6 +1625,19 @@ function AdminHome() {
                 r.state,
                 r.skills,
                 r.experience_level,
+              ]
+            : tab === "adoptions"
+            ? [
+                r.pet?.name,
+                r.pet?.species,
+                r.pet?.breed,
+                r.pet?.description,
+                r.pet?.location_city,
+                r.pet?.location_state,
+                r.requester?.username,
+                r.requester?.email,
+                r.admin_notes,
+                r.reason_for_adopting,
               ]
             : [
                 r.pet_name,
@@ -1584,7 +1671,7 @@ function AdminHome() {
     }
 
     return bySearch.filter((r: any) => r.status === statusFilter);
-  }, [tab, adoptionRequests, foundReports, lostReports, volunteerRequests, search, statusFilter]);
+  }, [tab, adoptionRequests, adoptionPets, foundReports, lostReports, volunteerRequests, search, statusFilter]);
 
   async function handleChangeStatus(kind: TabKey, id: number, status: string) {
     setError(null);
@@ -1703,16 +1790,23 @@ function AdminHome() {
   function renderSummaryCards() {
     if (!summary) return null;
 
-    // Always show all 4 dashboard cards for professional look
-    const totalLost = (summary?.lost_total ?? summary?.lost_today ?? 0) as number;
-    const totalFound = (summary?.found_total ?? summary?.found_today ?? 0) as number;
-    const adoptionTotal = Array.isArray(adoptionRequests)
-      ? adoptionRequests.length
+    // Calculate counts from actual data, excluding converted pets
+    const totalLost = Array.isArray(lostReports)
+      ? lostReports.filter((r: any) => r.status === "approved").length
+      : ((summary?.lost_total ?? 0) as number);
+    const totalFound = Array.isArray(foundReports)
+      ? foundReports.filter((r: any) => r.status === "approved" && !r.converted_to_adoption).length
+      : ((summary?.found_total ?? 0) as number);
+    const adoptionsCount = Array.isArray(adoptionPets)
+      ? adoptionPets.filter((r: any) => r.is_active !== false).length
       : ((summary?.adoption_total ?? 0) as number);
     const pendingApprovals = (() => {
-      const sb = summary?.status_breakdown;
-      const lostPending = sb?.lost?.pending ?? 0;
-      const foundPending = sb?.found?.pending ?? 0;
+      const lostPending = Array.isArray(lostReports)
+        ? lostReports.filter((r: any) => r.status === "pending").length
+        : (summary?.status_breakdown?.lost?.pending ?? 0);
+      const foundPending = Array.isArray(foundReports)
+        ? foundReports.filter((r: any) => r.status === "pending").length
+        : (summary?.status_breakdown?.found?.pending ?? 0);
       const adoptionPending = Array.isArray(adoptionRequests)
         ? adoptionRequests.filter((r: any) => r.status === "pending").length
         : 0;
@@ -1735,8 +1829,8 @@ function AdminHome() {
         background: "linear-gradient(135deg, #d1fae5, #a7f3d0)",
       },
       {
-        title: "Adoption Requests",
-        value: adoptionTotal,
+        title: "Adoptions",
+        value: adoptionsCount,
         icon: "💙",
         accent: "#3b82f6",
         background: "linear-gradient(135deg, #dbeafe, #bfdbfe)",
@@ -2076,14 +2170,22 @@ function AdminHome() {
 
   function renderSummaryTiles() {
     if (!summary) return null;
-    const totalLost = (summary?.lost_total ?? summary?.lost_today ?? 0) as number;
-    const totalFound = (summary?.found_total ?? summary?.found_today ?? 0) as number;
-    const adoptionTotal = Array.isArray(adoptionRequests)
-      ? adoptionRequests.length
+    // Calculate counts from actual data, excluding converted pets
+    const totalLost = Array.isArray(lostReports)
+      ? lostReports.filter((r: any) => r.status === "approved").length
+      : ((summary?.lost_total ?? 0) as number);
+    const totalFound = Array.isArray(foundReports)
+      ? foundReports.filter((r: any) => r.status === "approved" && !r.converted_to_adoption).length
+      : ((summary?.found_total ?? 0) as number);
+    const adoptionsCount = Array.isArray(adoptionPets)
+      ? adoptionPets.filter((r: any) => r.is_active !== false).length
       : ((summary?.adoption_total ?? 0) as number);
-    const sb = summary?.status_breakdown;
-    const lostPending = sb?.lost?.pending ?? 0;
-    const foundPending = sb?.found?.pending ?? 0;
+    const lostPending = Array.isArray(lostReports)
+      ? lostReports.filter((r: any) => r.status === "pending").length
+      : (summary?.status_breakdown?.lost?.pending ?? 0);
+    const foundPending = Array.isArray(foundReports)
+      ? foundReports.filter((r: any) => r.status === "pending").length
+      : (summary?.status_breakdown?.found?.pending ?? 0);
     const adoptionPending = Array.isArray(adoptionRequests)
       ? adoptionRequests.filter((r: any) => r.status === "pending").length
       : 0;
@@ -2092,7 +2194,7 @@ function AdminHome() {
       { title: "Pending Approvals", value: pendingApprovals, icon: "⏰", accent: "#f59e0b", background: "linear-gradient(135deg, #fef3c7, #fde68a)" },
       { title: "Total Lost Pets", value: totalLost, icon: "🚨", accent: "#ef4444", background: "linear-gradient(135deg, #fee2e2, #fecaca)" },
       { title: "Total Found Pets", value: totalFound, icon: "🎉", accent: "#10b981", background: "linear-gradient(135deg, #d1fae5, #a7f3d0)" },
-      { title: "Adoption Requests", value: adoptionTotal, icon: "💙", accent: "#3b82f6", background: "linear-gradient(135deg, #dbeafe, #bfdbfe)" },
+      { title: "Adoptions", value: adoptionsCount, icon: "💙", accent: "#3b82f6", background: "linear-gradient(135deg, #dbeafe, #bfdbfe)" },
     ];
     return (
       <div style={{ marginBottom: 24 }}>
@@ -2114,20 +2216,20 @@ function AdminHome() {
                 if (idx === 0) {
                   navigate("/admin/pending-approvals", { replace: true });
                 } else if (idx === 1) {
-                  setTab("found");
-                  setStatusFilter("all");
-                  navigate("/admin?tab=found", { replace: true });
-                  reloadTable("found", "all");
-                } else if (idx === 2) {
-                  setTab("adoptions");
-                  setStatusFilter("all");
-                  navigate("/admin?tab=adoptions", { replace: true });
-                  reloadTable("adoptions", "all");
-                } else if (idx === 3) {
                   setTab("lost");
                   setStatusFilter("all");
                   navigate("/admin?tab=lost", { replace: true });
                   reloadTable("lost", "all");
+                } else if (idx === 2) {
+                  setTab("found");
+                  setStatusFilter("all");
+                  navigate("/admin?tab=found", { replace: true });
+                  reloadTable("found", "all");
+                } else if (idx === 3) {
+                  setTab("adoptions");
+                  setStatusFilter("all");
+                  navigate("/admin?tab=adoptions", { replace: true });
+                  reloadTable("adoptions", "all");
                 }
               }}
             >
@@ -2195,12 +2297,18 @@ function AdminHome() {
               {
                 key: "total-pets" as const,
                 label: "Total Pets",
-                value:
-                  (summary?.lost_total ?? summary?.lost_today ?? 0) +
-                  (summary?.found_total ?? summary?.found_today ?? 0) +
-                  (Array.isArray(adoptionRequests)
-                    ? adoptionRequests.length
-                    : (summary?.adoption_total ?? 0)),
+                value: (() => {
+                  const lostCount = Array.isArray(lostReports)
+                    ? lostReports.filter((r: any) => r.status === "approved").length
+                    : (summary?.lost_total ?? 0);
+                  const foundCount = Array.isArray(foundReports)
+                    ? foundReports.filter((r: any) => r.status === "approved" && !r.converted_to_adoption).length
+                    : (summary?.found_total ?? 0);
+                  const adoptionCount = Array.isArray(adoptionPets)
+                    ? adoptionPets.filter((r: any) => r.is_active !== false).length
+                    : (summary?.adoption_total ?? 0);
+                  return lostCount + foundCount + adoptionCount;
+                })(),
               },
               {
                 key: "total-users" as const,
@@ -2935,7 +3043,7 @@ function AdminHome() {
           : "http://localhost:8000";
         const lostRes = await fetchAdminLostReports("all");
         const foundRes = await fetchAdminFoundReports("all");
-        const adoptRes = await fetchAvailablePets();
+        const adoptRes = await fetchAdminPets();
 
         const next: Array<{
           id: number;
@@ -3188,6 +3296,9 @@ function AdminHome() {
       );
     }
 
+    // Check if we're showing adoption pets (when "All" filter is selected in adoptions tab)
+    const isShowingAdoptionPets = tab === "adoptions" && statusFilter === "all";
+
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {rows.map((r: any) => {
@@ -3196,32 +3307,43 @@ function AdminHome() {
           const isAdoption = tab === "adoptions";
           const isVolunteers = tab === "volunteers";
           const isPetsTab = tab === "pets";
+          
+          // Handle title based on whether we're showing adoption pets or requests
           const title = isVolunteers
             ? r.full_name || "Volunteer"
             : isLost
               ? `${r.pet_name || r.pet_type || "Pet"}`
               : isFound
                 ? `${r.pet_type || r.pet_name || "Pet"}`
-                : r.pet?.name || "Adoption Request";
+                : isShowingAdoptionPets
+                  ? r.name || r.species || "Adoption Pet"
+                  : r.pet?.name || "Adoption Request";
+          
+          // Handle location based on whether we're showing adoption pets or requests
           const locationText = isVolunteers
             ? `${r.city || ""}${r.state ? ", " + r.state : ""}`
             : isLost
               ? `${r.location || r.city || r.found_city || ""}${r.state ? ", " + r.state : ""}`
               : isFound
                 ? `${r.found_city || r.city || ""}${r.state ? ", " + r.state : ""}`
-                : `${r.pet?.location_city || ""}${r.pet?.location_state ? ", " + r.pet?.location_state : ""}`;
+                : isShowingAdoptionPets
+                  ? `${r.location_city || ""}${r.location_state ? ", " + r.location_state : ""}`
+                  : `${r.pet?.location_city || ""}${r.pet?.location_state ? ", " + r.pet?.location_state : ""}`;
 
           const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
           const origin = /^https?:/.test(apiBase)
             ? new URL(apiBase).origin
             : "http://localhost:8000";
+          // For adoption pets (All filter), use r.photos; for adoption requests, use r.pet?.photos
           const rawDetail = isVolunteers
             ? r.profile_photo || r.id_proof_document
             : isLost
               ? r.photo_url || r.photo
               : isFound
                 ? r.photo_url || r.photo
-                : r.pet?.photos;
+                : isShowingAdoptionPets
+                  ? r.photos
+                  : r.pet?.photos;
           const detailSrc = (() => {
             if (!rawDetail) return null;
             const u = String(rawDetail);
@@ -3267,13 +3389,16 @@ function AdminHome() {
                   {(() => {
                     const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
                     const origin = /^https?:/.test(apiBase) ? new URL(apiBase).origin : "http://localhost:8000";
+                    // For adoption pets (All filter), use r.photos; for adoption requests, use r.pet?.photos
                     const raw = isVolunteers
                       ? r.profile_photo || r.id_proof_document
                       : isLost
                         ? r.photo_url || r.photo
                         : isFound
                           ? r.photo_url || r.photo
-                          : r.pet?.photos;
+                          : isShowingAdoptionPets
+                            ? r.photos
+                            : r.pet?.photos;
                     const src = (() => {
                       if (!raw) return null;
                       const u = String(raw);
@@ -3326,17 +3451,27 @@ function AdminHome() {
                         border: "1px solid #e5e7eb",
                       }}
                     >
-                      {r.status}
+                      {isShowingAdoptionPets 
+                        ? (r.is_active ? "Available" : "Adopted")
+                        : r.status}
                     </span>
                   </div>
                   <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>{title}</div>
                   {!isVolunteers && (
                     <>
                       <div style={{ fontSize: 13, color: "#374151", marginTop: 4 }}>
-                        {isLost ? `Breed: ${r.breed || "—"}` : isFound ? `Breed: ${r.breed || "—"}` : `${r.pet?.species || "Pet"} • ${r.pet?.breed || "—"}`}
+                        {isLost 
+                          ? `Breed: ${r.breed || "—"}` 
+                          : isFound 
+                            ? `Breed: ${r.breed || "—"}` 
+                            : isShowingAdoptionPets
+                              ? `${r.species || "Pet"} • ${r.breed || "—"}`
+                              : `${r.pet?.species || "Pet"} • ${r.pet?.breed || "—"}`}
                       </div>
                       <div style={{ fontSize: 12, color: "#64748b", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {r.description || r.pet?.description || ""}
+                        {isShowingAdoptionPets 
+                          ? (r.description || "")
+                          : (r.description || r.pet?.description || "")}
                       </div>
                     </>
                   )}
@@ -3352,17 +3487,21 @@ function AdminHome() {
                   </div>
                   <div style={{ fontSize: 13, color: "#374151" }}>{locationText || "—"}</div>
                   <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600, marginTop: 8 }}>
-                    {isVolunteers ? "Submitted by:" : "Reported by:"}
+                    {isVolunteers ? "Submitted by:" : isShowingAdoptionPets ? "Posted by:" : "Reported by:"}
                   </div>
                   <div style={{ fontSize: 13, color: "#374151" }}>
                     {isVolunteers
                       ? r.user?.username || "—"
-                      : r.reporter?.username || r.requester?.username || "—"}
+                      : isShowingAdoptionPets
+                        ? r.posted_by?.username || "—"
+                        : r.reporter?.username || r.requester?.username || "—"}
                   </div>
                   <div style={{ fontSize: 12, color: "#64748b" }}>
                     {isVolunteers
                       ? r.user?.email || r.email || ""
-                      : r.reporter?.email || r.requester?.email || ""}
+                      : isShowingAdoptionPets
+                        ? r.posted_by?.email || ""
+                        : r.reporter?.email || r.requester?.email || ""}
                   </div>
                 </div>
                   <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
@@ -3376,6 +3515,14 @@ function AdminHome() {
                           navigate(`/admin/found/${r.id}`, { state: { from: "admin-found" } });
                         } else if (isVolunteers) {
                           navigate(`/admin/volunteers/${r.id}`);
+                        } else if (isAdoption) {
+                          // For adoption pets (All filter), navigate to pet details
+                          // For adoption requests (Pending/Approved/Rejected), navigate to request details
+                          if (isShowingAdoptionPets) {
+                            navigate(`/admin/pets/${r.id}`, { state: { from: "admin-adoptions" } });
+                          } else {
+                            navigate(`/admin/adoption-request/${r.id}`, { state: { request: r, isAdmin: true } });
+                          }
                         } else {
                           setExpandedId((prev) => (prev === r.id ? null : r.id));
                         }
@@ -3397,7 +3544,10 @@ function AdminHome() {
                   <div
                     style={{ display: "flex", gap: 8, alignItems: "center" }}
                   >
-                    {renderStatusBadge(r.status)}
+                    {/* For adoption pets, show availability status; for requests, show request status */}
+                    {isShowingAdoptionPets 
+                      ? renderStatusBadge(r.is_active ? "approved" : "closed")
+                      : renderStatusBadge(r.status)}
                     {/* Delete button for Lost reports (not pending) */}
                     {isLost && r.status !== "pending" && (
                       <button
@@ -3478,8 +3628,8 @@ function AdminHome() {
                         Delete
                       </button>
                     )}
-                    {/* Delete button for Adoption requests (not pending) */}
-                    {isAdoption && r.status !== "pending" && (
+                    {/* Delete button for Adoption requests (not pending) - only for requests, not pets */}
+                    {isAdoption && !isShowingAdoptionPets && r.status !== "pending" && (
                       <button
                         onClick={async () => {
                           const ok = window.confirm("Delete this adoption request?");
@@ -3501,6 +3651,46 @@ function AdminHome() {
                               type: "error",
                               title: "Error",
                               message: res.error || "Failed to delete request"
+                            });
+                          }
+                        }}
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: 999,
+                          border: "1px solid #ef4444",
+                          background: "#ffffff",
+                          color: "#b91c1c",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Delete
+                      </button>
+                    )}
+                    {/* Delete button for Adoption pets (when showing All filter) */}
+                    {isAdoption && isShowingAdoptionPets && (
+                      <button
+                        onClick={async () => {
+                          const ok = window.confirm("Delete this adoption pet? This action cannot be undone.");
+                          if (!ok) return;
+                          const res = await deleteAdminPet(r.id);
+                          if (res.ok) {
+                            setAdoptionPets((prev) =>
+                              prev.filter((v: any) => v.id !== r.id),
+                            );
+                            setToast({
+                              isVisible: true,
+                              type: "success",
+                              title: "Pet Deleted",
+                              message: "Adoption pet has been deleted successfully."
+                            });
+                          } else {
+                            setToast({
+                              isVisible: true,
+                              type: "error",
+                              title: "Error",
+                              message: res.error || "Failed to delete pet"
                             });
                           }
                         }}
@@ -3846,13 +4036,15 @@ function AdminHome() {
       {/* Sidebar */}
       <div
         style={{
-          width: "280px",
+          width: sidebarOpen ? "280px" : 0,
           background: "white",
-          padding: "24px",
+          padding: sidebarOpen ? "24px" : 0,
           borderRight: "1px solid #e2e8f0",
           display: "flex",
           flexDirection: "column",
           boxShadow: "4px 0 24px rgba(0, 0, 0, 0.04)",
+          transition: "all 0.3s ease",
+          overflow: "hidden",
         }}
       >
         <div style={{ marginBottom: "32px" }}>
@@ -4140,6 +4332,40 @@ function AdminHome() {
           </div>
         </nav>
       </div>
+
+      {/* Toggle Sidebar Button */}
+      <button
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        style={{
+          position: "fixed",
+          top: 20,
+          left: sidebarOpen ? 260 : 20,
+          zIndex: 1000,
+          background: "linear-gradient(135deg, #3b82f6, #8b5cf6)",
+          border: "none",
+          borderRadius: "50%",
+          width: 44,
+          height: 44,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          boxShadow: "0 8px 20px rgba(59,130,246,0.35)",
+          transition: "all 0.3s ease",
+          color: "white",
+          fontSize: 16,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = "scale(1.1)";
+          e.currentTarget.style.boxShadow = "0 12px 25px rgba(59,130,246,0.45)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = "scale(1)";
+          e.currentTarget.style.boxShadow = "0 8px 20px rgba(59,130,246,0.35)";
+        }}
+      >
+        {sidebarOpen ? "◀" : "▶"}
+      </button>
 
       <div style={{ flex: 1, padding: 28, boxSizing: "border-box" }}>
         <div style={{ maxWidth: 1220, margin: "0 auto" }}>
@@ -4872,7 +5098,7 @@ function AdminHome() {
                     Promise.all([
                       fetchAdminLostReports("approved"),
                       fetchAdminFoundReports("approved"),
-                      fetchAllAdoptionRequests(),
+                      fetchAdminPets(),
                     ])
                       .then(([lostRes, foundRes, adoptionRes]) => {
                         if (lostRes.ok) setLostReports(lostRes.data ?? []);
@@ -4880,7 +5106,7 @@ function AdminHome() {
                         if (foundRes.ok) setFoundReports(foundRes.data ?? []);
                         else if (foundRes.error) setError(foundRes.error);
                         if (adoptionRes.ok)
-                          setAdoptionRequests(adoptionRes.data ?? []);
+                          setAdoptionPets(adoptionRes.data ?? []);
                         else if (adoptionRes.error) setError(adoptionRes.error);
                       })
                       .finally(() => setTableLoading(false));
@@ -4956,15 +5182,15 @@ function AdminHome() {
               </div>
 
               {(() => {
-                // Include approved lost, found, and adoption items in one mixed list.
+                // Include approved lost, found, and adoption pets in one mixed list.
                 const lostRows = lostReports
                   .filter((r: any) => r.status === "approved")
                   .map((r: any) => ({ ...r, __kind: "lost" }));
                 const foundRows = foundReports
-                  .filter((r: any) => r.status === "approved")
+                  .filter((r: any) => r.status === "approved" && !r.converted_to_adoption)
                   .map((r: any) => ({ ...r, __kind: "found" }));
-                const adoptionRows = adoptionRequests
-                  .filter((r: any) => r.status === "approved")
+                const adoptionRows = adoptionPets
+                  .filter((r: any) => r.is_active !== false)
                   .map((r: any) => ({ ...r, __kind: "adoption" }));
                 const allRows: any[] = [...lostRows, ...foundRows, ...adoptionRows];
 
@@ -4976,7 +5202,7 @@ function AdminHome() {
 
                 // apply status filter (currently mostly approved only)
                 if (petsStatusFilter === "approved") {
-                  rows = rows.filter((r) => r.status === "approved");
+                  rows = rows.filter((r) => r.__kind === "adoption" ? r.is_active !== false : r.status === "approved");
                 }
 
                 // Shuffle so LOST / FOUND / ADOPTION appear visually mixed
@@ -4990,16 +5216,15 @@ function AdminHome() {
                       r.pet_name,
                       r.pet_type,
                       r.breed,
-                      r.pet?.species,
-                      r.pet?.breed,
+                      r.name,
+                      r.species,
                       r.city,
                       r.found_city,
                       r.state,
-                      r.pet?.location_city,
-                      r.pet?.location_state,
+                      r.location_city,
+                      r.location_state,
                       r.status,
                       r.description,
-                      r.pet?.description,
                     ]
                       .filter(Boolean)
                       .join(" ")
@@ -5027,17 +5252,21 @@ function AdminHome() {
                       const isLost = r.__kind === "lost";
                       const isFound = r.__kind === "found";
                       const isAdoption = r.__kind === "adoption";
-                      const title = isLost
-                        ? `${r.pet_name || r.pet_type || "Pet"}`
-                        : `${r.pet_type || r.pet_name || "Pet"}`;
-                      const locationText = isLost
-                        ? `${r.location || r.city || r.found_city || ""}${r.state ? ", " + r.state : ""}`
-                        : `${r.found_city || r.city || ""}${r.state ? ", " + r.state : ""}`;
+                      const title = isAdoption
+                        ? `${r.name || r.species || "Pet"}`
+                        : isLost
+                          ? `${r.pet_name || r.pet_type || "Pet"}`
+                          : `${r.pet_type || r.pet_name || "Pet"}`;
+                      const locationText = isAdoption
+                        ? `${r.location_city || ""}${r.location_state ? ", " + r.location_state : ""}`
+                        : isLost
+                          ? `${r.location || r.city || r.found_city || ""}${r.state ? ", " + r.state : ""}`
+                          : `${r.found_city || r.city || ""}${r.state ? ", " + r.state : ""}`;
                       const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
                       const origin = /^https?:/.test(apiBase)
                         ? new URL(apiBase).origin
                         : "http://localhost:8000";
-                      const raw = r.photo_url || r.photo || r.pet?.photos;
+                      const raw = isAdoption ? r.photos : (r.photo_url || r.photo);
                       const src = raw
                         ? (() => {
                             const u = String(raw);
@@ -5120,14 +5349,14 @@ function AdminHome() {
                                   border: "1px solid #e5e7eb",
                                 }}
                               >
-                                {r.status}
+                                {isAdoption ? (r.is_active ? "available" : "adopted") : r.status}
                               </span>
                             </div>
                             <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>{title}</div>
                             <div style={{ fontSize: 13, color: "#374151", marginTop: 4 }}>
                               {isAdoption
-                                ? `${r.pet?.species || "Pet"} • ${r.pet?.breed || "—"}` : isLost
-                                  ? `Breed: ${r.breed || "—"}` : `Breed: ${r.breed || "—"}`}
+                                ? `${r.species || "Pet"} • ${r.breed || "—"}`
+                                : `Breed: ${r.breed || "—"}`}
                             </div>
                             <div
                               style={{
@@ -5139,16 +5368,16 @@ function AdminHome() {
                                 textOverflow: "ellipsis",
                               }}
                             >
-                              {r.description || r.pet?.description || ""}
+                              {r.description || ""}
                             </div>
                           </div>
 
                           <div>
-                            <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600 }}>Last Seen Location:</div>
+                            <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600 }}>{isAdoption ? "Location:" : "Last Seen Location:"}</div>
                             <div style={{ fontSize: 13, color: "#374151" }}>{locationText || "—"}</div>
-                            <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600, marginTop: 8 }}>Reported by:</div>
-                            <div style={{ fontSize: 13, color: "#374151" }}>{r.reporter?.username || r.requester?.username || "—"}</div>
-                            <div style={{ fontSize: 12, color: "#64748b" }}>{r.reporter?.email || r.requester?.email || ""}</div>
+                            <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600, marginTop: 8 }}>{isAdoption ? "Posted by:" : "Reported by:"}</div>
+                            <div style={{ fontSize: 13, color: "#374151" }}>{r.reporter?.username || r.posted_by?.username || "—"}</div>
+                            <div style={{ fontSize: 12, color: "#64748b" }}>{r.reporter?.email || r.posted_by?.email || ""}</div>
                           </div>
 
                           <div
@@ -5160,12 +5389,12 @@ function AdminHome() {
                               marginTop: 8,
                             }}
                           >
-                            <div>{renderStatusBadge(r.status)}</div>
+                            <div>{isAdoption ? renderStatusBadge(r.is_active ? "approved" : "closed") : renderStatusBadge(r.status)}</div>
                             <div style={{ display: "flex", gap: 8 }}>
                               <button
                                 onClick={() => {
-                                  if ((r as any).pet?.id) {
-                                    navigate(`/pets/${(r as any).pet.id}`, {
+                                  if (isAdoption) {
+                                    navigate(`/admin/pets/${r.id}`, {
                                       state: { from: "pets" },
                                     });
                                   } else if (isLost) {

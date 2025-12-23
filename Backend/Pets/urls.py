@@ -12,6 +12,9 @@ from .views import (
     AdminFoundPetListView,
     AdminLostPetDetailView,
     AdminLostPetListView,
+    AdminPetDetailView,
+    AdminPetDeleteView,
+    AdminPetListView,
     AdminReportSummaryView,
     AdminUpdateAdoptionRequestView,
     AdminUserListView,
@@ -118,6 +121,10 @@ urlpatterns = [
     # Adoption feature endpoints
     path("pets/", PetListView.as_view(), name="pets-list"),
     path("pets/<int:pk>/", PetDetailView.as_view(), name="pets-detail"),
+    # Admin pet endpoints (can view all pets including inactive)
+    path("admin/pets/", AdminPetListView.as_view(), name="admin-pets-list"),
+    path("admin/pets/<int:pk>/", AdminPetDetailView.as_view(), name="admin-pets-detail"),
+    path("admin/pets/<int:pk>/delete/", AdminPetDeleteView.as_view(), name="admin-pets-delete"),
     path(
         "pets/<int:pet_id>/adoption-requests/",
         CreateAdoptionRequestView.as_view(),

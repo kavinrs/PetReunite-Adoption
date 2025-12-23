@@ -17,7 +17,7 @@ import {
 } from "../services/api";
 import Toast from "../components/Toast";
 import RoomsPage from "../chat/RoomsPage";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
 
 type Tab = "owner" | "rescuer" | "adopter";
@@ -55,11 +55,19 @@ export default function UserHome() {
   // Apply viewport standardization to ensure consistent 100% scaling
   useViewportStandardization();
 
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Read initial state from URL query parameters
+  const initialPageTab = (searchParams.get("tab") as UserPageTab) || "home";
+  const initialActivitySubTab = (searchParams.get("subtab") as "lost" | "found" | "adoption" | "chat") || "lost";
+
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("owner");
-  const [pageTab, setPageTab] = useState<UserPageTab>("home");
+  const [pageTab, setPageTab] = useState<UserPageTab>(initialPageTab);
   const [allPets, setAllPets] = useState<any[]>([]);
   const [filteredPets, setFilteredPets] = useState<any[]>([]);
   const [petsLoading, setPetsLoading] = useState(false);
@@ -71,8 +79,6 @@ export default function UserHome() {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const notifRef = useRef<HTMLDivElement | null>(null);
   const hasLoadedDismissedUserNotificationsRef = useRef(false);
-  const navigate = useNavigate();
-  const location = useLocation();
   const [activity, setActivity] = useState<{ lost: any[]; found: any[]; adoptions: any[] }>({ lost: [], found: [], adoptions: [] });
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityExpanded, setActivityExpanded] = useState<string | null>(null);
@@ -81,7 +87,7 @@ export default function UserHome() {
   const [chatRequestsLoading, setChatRequestsLoading] = useState(false);
   const [chatroomRequests, setChatroomRequests] = useState<any[]>([]);
   const [chatroomRequestsLoading, setChatroomRequestsLoading] = useState(false);
-  const [activitySubTab, setActivitySubTab] = useState<"lost" | "found" | "adoption" | "chat">("lost");
+  const [activitySubTab, setActivitySubTab] = useState<"lost" | "found" | "adoption" | "chat">(initialActivitySubTab);
   const [userHasNotification, setUserHasNotification] = useState(false);
   const [userNotificationOpen, setUserNotificationOpen] = useState(false);
   const [dismissedUserNotifications, setDismissedUserNotifications] = useState<string[]>([]);
@@ -92,6 +98,22 @@ export default function UserHome() {
     title: string;
     message: string;
   } | null>(null);
+
+  // Update URL when pageTab or activitySubTab changes
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (pageTab !== "home") {
+      params.set("tab", pageTab);
+    }
+    if (pageTab === "activity" && activitySubTab !== "lost") {
+      params.set("subtab", activitySubTab);
+    }
+    const newSearch = params.toString();
+    const currentSearch = searchParams.toString();
+    if (newSearch !== currentSearch) {
+      setSearchParams(params, { replace: true });
+    }
+  }, [pageTab, activitySubTab]);
 
   // Function to get sample pet images
   const getSamplePetImage = (petType: string, index: number): string => {
@@ -182,6 +204,10 @@ export default function UserHome() {
     const state = (location.state || {}) as any;
     if (state && state.tab === "activity") {
       setPageTab("activity");
+      // Also set the subtab if provided in state
+      if (state.subtab && ["lost", "found", "adoption", "chat"].includes(state.subtab)) {
+        setActivitySubTab(state.subtab);
+      }
       return;
     }
 
@@ -544,16 +570,16 @@ export default function UserHome() {
       return;
     }
 
-    // Always switch the main section to My Activity for other notifications
+    // Switch to My Activity tab and set the appropriate sub-tab
     setPageTab("activity");
-
-    // Deep-link to the appropriate detail page for this notification
-    if (item.tab === "lost" && item.rowId) {
-      navigate(`/user/lost/${item.rowId}`);
-    } else if (item.tab === "found" && item.rowId) {
-      navigate(`/user/found/${item.rowId}`);
+    
+    // Set the correct sub-tab based on notification type
+    if (item.tab === "lost") {
+      setActivitySubTab("lost");
+    } else if (item.tab === "found") {
+      setActivitySubTab("found");
     } else if (item.tab === "adoption") {
-      navigate("/user/adoption-requests");
+      setActivitySubTab("adoption");
     }
   }
 
@@ -1423,7 +1449,7 @@ export default function UserHome() {
                     My Activity
                   </div>
                   <div style={{ color: "rgba(15,23,42,0.6)", fontSize: 14 }}>
-                    Track your pet reports, adoption requests, and chat conversations
+                    Track your pet reports, updation requests, and chat conversations
                   </div>
                 </div>
 
@@ -1442,7 +1468,7 @@ export default function UserHome() {
                   {[
                     { id: "lost" as const, label: "Lost Pets", icon: "🔴", count: activityLostFiltered.length },
                     { id: "found" as const, label: "Found Pets", icon: "🔵", count: activityFoundFiltered.length },
-                    { id: "adoption" as const, label: "Adoptions", icon: "💜", count: activityAdoptionsFiltered.length },
+                    { id: "adoption" as const, label: "Updation Requests", icon: "💜", count: activityAdoptionsFiltered.length },
                     { id: "chat" as const, label: "Chat Requests", icon: "💬", count: chatRequests.length },
                   ].map((tab) => (
                     <button
@@ -1675,7 +1701,7 @@ export default function UserHome() {
                           {activityAdoptionsFiltered.length === 0 ? (
                             <div style={{ padding: 40, textAlign: "center", color: "#94a3b8" }}>
                               <div style={{ fontSize: 48, marginBottom: 12 }}>🏠</div>
-                              <div style={{ fontWeight: 600 }}>No adoption requests yet</div>
+                              <div style={{ fontWeight: 600 }}>No updation requests yet</div>
                               <div style={{ fontSize: 13, marginTop: 4 }}>Apply to adopt a pet to see it here</div>
                             </div>
                           ) : (
@@ -1684,7 +1710,7 @@ export default function UserHome() {
                           {(() => {
                             const apiBase = (import.meta as any).env?.VITE_API_BASE ?? "/api";
                             const origin = /^https?:/.test(apiBase) ? new URL(apiBase).origin : "http://localhost:8000";
-                            const raw = a.pet?.photos;
+                            const raw = a.pet?.photos || a.pet?.photo || a.pet?.photo_url;
                             const src = raw ? (String(raw).startsWith("http") ? String(raw) : (String(raw).startsWith("/") ? origin + String(raw) : origin + "/media/" + String(raw))) : null;
                             return src ? (
                               <img src={src} alt={a.pet?.name || "Pet"} style={{ width: 80, height: 80, borderRadius: 12, objectFit: "cover" }} />
@@ -1705,13 +1731,26 @@ export default function UserHome() {
                                 );
                               })()}
                             </div>
-                            <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>{a.pet?.name || "Pet"}</div>
-                            <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{a.pet?.location_city}{a.pet?.location_state ? ", " + a.pet?.location_state : ""}</div>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>Adoption Request</div>
+                            <div style={{ fontSize: 13, color: "#374151", marginTop: 2 }}>Pet • {a.pet?.name || "—"}</div>
                           </div>
                           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center", gap: 8 }}>
-                            <div style={{ fontSize: 11, color: "#9ca3af" }}>{new Date(a.created_at).toLocaleDateString()}</div>
-                            <div style={{ display: "flex", gap: 6 }}>
-                              <button onClick={() => setActivityExpanded(activityExpanded === `adopt-${a.id}` ? null : `adopt-${a.id}`)} style={{ padding: "6px 12px", borderRadius: 999, border: "none", background: "#111827", color: "#f9fafb", cursor: "pointer", fontWeight: 600, fontSize: 11 }}>Details</button>
+                            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                              <div style={{ fontSize: 12, color: "#64748b" }}>Last Seen Location:</div>
+                              <div style={{ fontSize: 12, color: "#374151" }}>{a.pet?.location_city || "—"}</div>
+                            </div>
+                            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                              <div style={{ fontSize: 12, color: "#64748b" }}>Reported by:</div>
+                              <div style={{ fontSize: 12, color: "#374151" }}>{a.requester?.username || "—"}</div>
+                            </div>
+                            <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                              <button onClick={() => navigate(`/user/adoption-request/${a.id}`, { state: { request: a, isAdmin: false } })} style={{ padding: "6px 12px", borderRadius: 999, border: "none", background: "#111827", color: "#f9fafb", cursor: "pointer", fontWeight: 600, fontSize: 11 }}>View Details</button>
+                              {(() => {
+                                const badge = getStatusBadge(a.status);
+                                return (
+                                  <span style={{ padding: "6px 12px", borderRadius: 999, background: badge.bg, color: badge.color, fontSize: 11, fontWeight: 700 }}>{badge.text}</span>
+                                );
+                              })()}
                             </div>
                           </div>
                         </div>

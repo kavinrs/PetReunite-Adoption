@@ -567,7 +567,9 @@ export default function PendingApprovals() {
                                 state: { from: "pending-approvals" },
                               });
                             } else {
-                              navigate("/admin?tab=adoptions", { replace: true });
+                              navigate(`/admin/adoption-request/${n.id}`, {
+                                state: { from: "pending-approvals" },
+                              });
                             }
                             setNotificationOpen(false);
                           }}
@@ -914,25 +916,27 @@ export default function PendingApprovals() {
                     </Typography>
                   </Box>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                    {(r.kind === "lost" || r.kind === "found") && (
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={() => {
-                          if (r.kind === "lost")
-                            navigate(`/admin/lost/${r.id}`, {
-                              state: { from: "pending-approvals" },
-                            });
-                          else
-                            navigate(`/admin/found/${r.id}`, {
-                              state: { from: "pending-approvals" },
-                            });
-                        }}
-                        sx={{ textTransform: "none", borderRadius: 999 }}
-                      >
-                        View
-                      </Button>
-                    )}
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => {
+                        if (r.kind === "lost")
+                          navigate(`/admin/lost/${r.id}`, {
+                            state: { from: "pending-approvals" },
+                          });
+                        else if (r.kind === "found")
+                          navigate(`/admin/found/${r.id}`, {
+                            state: { from: "pending-approvals" },
+                          });
+                        else
+                          navigate(`/admin/adoption-request/${r.id}`, {
+                            state: { from: "pending-approvals" },
+                          });
+                      }}
+                      sx={{ textTransform: "none", borderRadius: 999 }}
+                    >
+                      View
+                    </Button>
                   </Box>
                 </Paper>
               ))}

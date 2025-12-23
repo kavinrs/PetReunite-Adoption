@@ -822,6 +822,30 @@ export async function fetchAvailablePets(): Promise<ApiResult> {
   return { ok: false, status: resp.status, error: message, data };
 }
 
+/* Admin: Fetch all pets (including inactive) */
+export async function fetchAdminPets(): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/pets/`;
+  const resp = await fetchWithAuth(url, { method: "GET" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to load pets";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+/* Admin: Delete a pet */
+export async function deleteAdminPet(petId: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/admin/pets/${petId}/delete/`;
+  const resp = await fetchWithAuth(url, { method: "DELETE" });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to delete pet";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
 /* Submit adoption request */
 export async function submitAdoptionRequest(
   petId: number,

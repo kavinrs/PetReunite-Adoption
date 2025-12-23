@@ -17,7 +17,7 @@ export default function FoundReportDetail() {
     if (fromHome) {
       navigate("/user");
     } else {
-      navigate("/user", { state: { tab: "activity" } });
+      navigate("/user", { state: { tab: "activity", subtab: "found" } });
     }
   };
 

@@ -881,6 +881,8 @@ export default function PetDetailsPage() {
                       borderRadius: 8,
                       fontSize: 14,
                       boxSizing: "border-box",
+                      background: "#ffffff",
+                      color: "#374151",
                     }}
                     placeholder="+91-XXXXXXXXXX"
                   />
@@ -912,6 +914,8 @@ export default function PetDetailsPage() {
                       fontSize: 14,
                       boxSizing: "border-box",
                       resize: "vertical",
+                      background: "#ffffff",
+                      color: "#374151",
                     }}
                     placeholder="Your full address"
                   />
@@ -986,6 +990,8 @@ export default function PetDetailsPage() {
                       borderRadius: 8,
                       fontSize: 14,
                       boxSizing: "border-box",
+                      background: "#ffffff",
+                      color: "#374151",
                     }}
                     placeholder="e.g., 2 adults, 1 child"
                   />
@@ -1027,6 +1033,8 @@ export default function PetDetailsPage() {
                         boxSizing: "border-box",
                         marginTop: 8,
                         resize: "vertical",
+                        background: "#ffffff",
+                        color: "#374151",
                       }}
                       placeholder="Please describe your other pets"
                     />
@@ -1059,6 +1067,8 @@ export default function PetDetailsPage() {
                       fontSize: 14,
                       boxSizing: "border-box",
                       resize: "vertical",
+                      background: "#ffffff",
+                      color: "#374151",
                     }}
                     placeholder="Tell us about your experience with pets"
                   />
@@ -1090,6 +1100,8 @@ export default function PetDetailsPage() {
                       fontSize: 14,
                       boxSizing: "border-box",
                       resize: "vertical",
+                      background: "#ffffff",
+                      color: "#374151",
                     }}
                     placeholder="Tell us why you'd like to adopt this pet"
                   />
@@ -1120,6 +1132,8 @@ export default function PetDetailsPage() {
                       fontSize: 14,
                       boxSizing: "border-box",
                       resize: "vertical",
+                      background: "#ffffff",
+                      color: "#374151",
                     }}
                     placeholder="When would you prefer to meet/pick up the pet?"
                   />

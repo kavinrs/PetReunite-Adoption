@@ -103,7 +103,9 @@ class LostPetReportDetailView(generics.RetrieveUpdateAPIView):
                     "pincode": instance.pincode,
                     "description": instance.description,
                 }
+                instance.save(update_fields=["previous_snapshot"])
             instance.has_user_update = True
+            instance.save(update_fields=["has_user_update"])
 
         serializer.save()
 
@@ -129,16 +131,21 @@ class FoundPetReportDetailView(generics.RetrieveUpdateAPIView):
         if instance.status != "pending":
             if not instance.previous_snapshot:
                 instance.previous_snapshot = {
+                    "pet_name": instance.pet_name,
                     "pet_type": instance.pet_type,
                     "breed": instance.breed,
                     "color": instance.color,
+                    "weight": instance.weight,
                     "estimated_age": instance.estimated_age,
                     "found_city": instance.found_city,
                     "state": instance.state,
+                    "pincode": instance.pincode,
                     "location_url": instance.location_url,
                     "description": instance.description,
                 }
+                instance.save(update_fields=["previous_snapshot"])
             instance.has_user_update = True
+            instance.save(update_fields=["has_user_update"])
 
         serializer.save()
 
@@ -163,9 +170,11 @@ class AllReportsView(APIView):
 
     def get(self, request):
         # Show all approved pets for public viewing in dashboard
+        # Exclude found pets that have been converted to adoption to avoid duplicates
         found = FoundPetReportSerializer(
             FoundPetReport.objects.filter(
-                status__in=["approved", "investigating", "matched"]
+                status__in=["approved", "investigating", "matched"],
+                converted_to_adoption=False
             ).order_by("-created_at"),
             many=True,
         ).data
@@ -200,6 +209,7 @@ class PublicFoundPetsView(generics.ListAPIView):
 
     Only shows approved found pet reports to regular users.
     Pending reports are only visible to admins in the admin panel.
+    Excludes found pets that have been converted to adoption.
     """
 
     serializer_class = FoundPetReportSerializer
@@ -207,8 +217,10 @@ class PublicFoundPetsView(generics.ListAPIView):
 
     def get_queryset(self):
         # Show latest 20 approved found reports only
+        # Exclude pets that have been converted to adoption to avoid duplicates
         return FoundPetReport.objects.filter(
-            status="approved"
+            status="approved",
+            converted_to_adoption=False
         ).order_by("-created_at")[:20]
 
 
@@ -544,6 +556,39 @@ class PetDetailView(generics.RetrieveAPIView):
     queryset = Pet.objects.filter(is_active=True).select_related("posted_by")
 
 
+class AdminPetDetailView(generics.RetrieveAPIView):
+    """Admin view to get any pet details (including inactive)"""
+
+    serializer_class = PetSerializer
+    permission_classes = [IsAdminOrStaff]
+    queryset = Pet.objects.all().select_related("posted_by")
+
+
+class AdminPetDeleteView(generics.DestroyAPIView):
+    """Admin view to delete a pet"""
+
+    serializer_class = PetSerializer
+    permission_classes = [IsAdminOrStaff]
+    queryset = Pet.objects.all()
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        pet_name = instance.name
+        self.perform_destroy(instance)
+        return Response(
+            {"message": f"Pet '{pet_name}' has been deleted successfully."},
+            status=status.HTTP_200_OK,
+        )
+
+
+class AdminPetListView(generics.ListAPIView):
+    """Admin view to list all pets (including inactive)"""
+
+    serializer_class = PetSerializer
+    permission_classes = [IsAdminOrStaff]
+    queryset = Pet.objects.all().select_related("posted_by")
+
+
 class PetListView(generics.ListAPIView):
     """List all available pets for adoption"""
 
@@ -626,8 +671,8 @@ class AdoptionRequestListView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
         if user.is_staff or user.is_superuser:
-            return AdoptionRequest.objects.select_related("pet", "requester").all()
-        return AdoptionRequest.objects.filter(requester=user).select_related("pet")
+            return AdoptionRequest.objects.select_related("pet", "pet__posted_by", "requester").all()
+        return AdoptionRequest.objects.filter(requester=user).select_related("pet", "pet__posted_by")
 
 
 class AdoptionRequestDetailView(generics.RetrieveAPIView):
@@ -639,8 +684,8 @@ class AdoptionRequestDetailView(generics.RetrieveAPIView):
     def get_queryset(self):
         user = self.request.user
         if user.is_staff or user.is_superuser:
-            return AdoptionRequest.objects.select_related("pet", "requester").all()
-        return AdoptionRequest.objects.filter(requester=user).select_related("pet")
+            return AdoptionRequest.objects.select_related("pet", "pet__posted_by", "requester").all()
+        return AdoptionRequest.objects.filter(requester=user).select_related("pet", "pet__posted_by")
 
 
 class AdminUpdateAdoptionRequestView(generics.RetrieveUpdateDestroyAPIView):
@@ -655,6 +700,13 @@ class AdminUpdateAdoptionRequestView(generics.RetrieveUpdateDestroyAPIView):
         old_status = adoption_request.status
 
         instance = serializer.save()
+
+        # If approved, mark the pet as inactive (adopted) so it doesn't show in listings
+        if instance.status == "approved" and old_status != "approved":
+            pet = instance.pet
+            if pet:
+                pet.is_active = False
+                pet.save()
 
         # Send email notification if status changed
         if old_status != instance.status:
@@ -1265,7 +1317,7 @@ class MyActivityView(APIView):
             many=True,
         ).data
         adoptions = AdoptionRequestSerializer(
-            AdoptionRequest.objects.filter(requester=user).select_related("pet").order_by("-created_at"),
+            AdoptionRequest.objects.filter(requester=user).select_related("pet", "pet__posted_by", "requester").order_by("-created_at"),
             many=True,
         ).data
         return Response(

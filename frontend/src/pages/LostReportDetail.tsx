@@ -85,7 +85,7 @@ export default function LostReportDetail() {
     if (!res.ok) {
       setError(res.error || "Failed to update report");
     } else {
-      navigate("/user", { state: { tab: "activity" } });
+      navigate("/user", { state: { tab: "activity", subtab: "lost" } });
     }
     setSaving(false);
   };
@@ -94,7 +94,7 @@ export default function LostReportDetail() {
     if (fromHome) {
       navigate("/user");
     } else {
-      navigate("/user", { state: { tab: "activity" } });
+      navigate("/user", { state: { tab: "activity", subtab: "lost" } });
     }
   };
 
@@ -457,6 +457,8 @@ export default function LostReportDetail() {
                             borderRadius: 10,
                             border: "1px solid #e5e7eb",
                             fontSize: 12,
+                            background: "#ffffff",
+                            color: "#0f172a",
                           }}
                         />
                       ) : (
@@ -470,6 +472,8 @@ export default function LostReportDetail() {
                             borderRadius: 10,
                             border: "1px solid #e5e7eb",
                             fontSize: 12,
+                            background: "#ffffff",
+                            color: "#0f172a",
                           }}
                         />
                       )}
@@ -516,7 +520,8 @@ export default function LostReportDetail() {
                     border: "1px solid #e5e7eb",
                     fontSize: 12,
                     resize: "vertical",
-                    background: "rgba(248,250,252,0.9)",
+                    background: "#ffffff",
+                    color: "#0f172a",
                   }}
                 />
               )}

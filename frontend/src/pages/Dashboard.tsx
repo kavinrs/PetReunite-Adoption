@@ -369,17 +369,19 @@ export default function Dashboard() {
     overflow: "hidden",
     margin: "0 auto",
     minHeight: "400px",
-    maxHeight: "480px",
+    maxHeight: "90vh",
   };
 
   const leftPane: React.CSSProperties = {
     display: "flex",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "center",
     padding: 24,
     background: "#ffffff",
     borderTopLeftRadius: 18,
     borderBottomLeftRadius: 18,
+    overflowY: "auto",
+    maxHeight: "90vh",
   };
 
   const rightPane: React.CSSProperties = {
@@ -413,12 +415,13 @@ export default function Dashboard() {
     width: "100%",
     maxWidth: 400,
     background: "white",
-    padding: 32,
+    padding: 24,
     borderRadius: 18,
     boxShadow: "0 18px 45px rgba(15,23,42,0.12)",
     color: "#0f172a",
     zIndex: 2,
     border: "1px solid #e5e7eb",
+    margin: "16px 0",
   };
 
   const titleStyle: React.CSSProperties = {
@@ -1005,7 +1008,7 @@ export default function Dashboard() {
                     )}
                     <label style={label}>Address</label>
                     <textarea
-                      style={{ ...input, height: 100 }}
+                      style={{ ...input, height: 60 }}
                       placeholder="address"
                       value={reg.address}
                       onChange={(e) =>
@@ -1235,7 +1238,7 @@ export default function Dashboard() {
                           <div style={{ gridColumn: "1 / -1" }}>
                             <label style={label}>Address</label>
                             <textarea
-                              style={{ ...input, height: 100 }}
+                              style={{ ...input, height: 60 }}
                               placeholder="address"
                               value={adminReg.address}
                               onChange={(e) =>

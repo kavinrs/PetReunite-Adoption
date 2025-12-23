@@ -57,12 +57,29 @@ export default function ReportFoundPet() {
         const url = `https://www.google.com/maps?q=${latitude},${longitude}`;
         setForm((prev) => ({ ...prev, location_url: url }));
         setLocating(false);
+        setLocError(null);
       },
       (err) => {
         setLocating(false);
-        setLocError(err.message || "Unable to fetch current location.");
+        let errorMessage = "Unable to fetch current location.";
+        switch (err.code) {
+          case err.PERMISSION_DENIED:
+            errorMessage = "Location permission denied. Please allow location access in your browser settings.";
+            break;
+          case err.POSITION_UNAVAILABLE:
+            errorMessage = "Location information is unavailable. Please try again or enter manually.";
+            break;
+          case err.TIMEOUT:
+            errorMessage = "Location request timed out. Please try again or enter the location manually.";
+            break;
+        }
+        setLocError(errorMessage);
       },
-      { enableHighAccuracy: true, timeout: 10000 },
+      { 
+        enableHighAccuracy: false, // Set to false for faster response
+        timeout: 30000, // Increased to 30 seconds
+        maximumAge: 60000 // Allow cached position up to 1 minute old
+      },
     );
   }
 

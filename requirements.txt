@@ -10,3 +10,4 @@ whitenoise==6.6.0
 channels
 daphne
 setuptools
+dj-database-url

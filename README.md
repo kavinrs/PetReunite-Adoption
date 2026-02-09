@@ -157,4 +157,5 @@ The remaining steps we will implement **one by one**:
 8. **Client pages, services, and WebSocket integration**
 9. **Sanity report and example curl/WebSocket flows**
 
-We will fill these pieces in sequentially so that the project remains consistent and buildable at each major step.
+HI hello okay bye
+

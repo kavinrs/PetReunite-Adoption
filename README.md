@@ -141,7 +141,7 @@ __pycache__/
 
 ## Next Steps (Planned Scaffold)
 
-The remaining steps we will implement **one by one**:
+The remaining steps we will implement one by one :
 
 1. **Server env & setup**
    - `server/.env.example`

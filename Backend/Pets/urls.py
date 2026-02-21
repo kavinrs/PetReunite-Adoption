@@ -72,6 +72,14 @@ from .views import (
 
 from .ml_views import CheckImageAuthenticityView
 
+from .photo_views import (
+    UploadFoundPetPhotosView,
+    UploadLostPetPhotosView,
+    DeleteFoundPetPhotoView,
+    DeleteLostPetPhotoView,
+    ReorderPhotosView,
+)
+
 urlpatterns = [
     # User-facing report endpoints
     path("reports/found/", FoundPetReportView.as_view(), name="pets-found-report"),
@@ -362,5 +370,32 @@ urlpatterns = [
         "check-image-authenticity/",
         CheckImageAuthenticityView.as_view(),
         name="check-image-authenticity",
+    ),
+    
+    # Multiple Photos Management
+    path(
+        "reports/found/<int:report_id>/photos/",
+        UploadFoundPetPhotosView.as_view(),
+        name="upload-found-pet-photos",
+    ),
+    path(
+        "reports/lost/<int:report_id>/photos/",
+        UploadLostPetPhotosView.as_view(),
+        name="upload-lost-pet-photos",
+    ),
+    path(
+        "photos/found/<int:photo_id>/",
+        DeleteFoundPetPhotoView.as_view(),
+        name="delete-found-pet-photo",
+    ),
+    path(
+        "photos/lost/<int:photo_id>/",
+        DeleteLostPetPhotoView.as_view(),
+        name="delete-lost-pet-photo",
+    ),
+    path(
+        "reports/<str:report_type>/<int:report_id>/photos/reorder/",
+        ReorderPhotosView.as_view(),
+        name="reorder-photos",
     ),
 ]

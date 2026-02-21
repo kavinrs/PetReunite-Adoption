@@ -678,3 +678,104 @@ class ChatroomMessage(models.Model):
     
     def __str__(self):
         return f"ChatroomMessage in {self.chatroom.name} from {self.sender.username}"
+
+
+
+class FoundPetPhoto(models.Model):
+    """Additional photos for Found Pet Reports with individual verification"""
+    
+    IMAGE_VERIFICATION_CHOICES = [
+        ('verified', 'Verified'),
+        ('fake_detected', 'Fake Detected'),
+        ('uncertain', 'Uncertain'),
+        ('not_checked', 'Not Checked'),
+    ]
+    
+    report = models.ForeignKey(
+        FoundPetReport,
+        on_delete=models.CASCADE,
+        related_name='additional_photos'
+    )
+    photo = models.ImageField(
+        upload_to="found_pets/%Y/%m/%d/",
+        help_text="Additional photo of the found pet"
+    )
+    image_verification_status = models.CharField(
+        max_length=20,
+        choices=IMAGE_VERIFICATION_CHOICES,
+        default='not_checked',
+        help_text='AI-based verification status of this photo'
+    )
+    verification_confidence = models.FloatField(
+        null=True,
+        blank=True,
+        help_text='Confidence score from AI verification (0-1)'
+    )
+    verification_raw_score = models.FloatField(
+        null=True,
+        blank=True,
+        help_text='Raw score from AI model'
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text='Display order of the photo'
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['order', 'uploaded_at']
+        verbose_name = 'Found Pet Photo'
+        verbose_name_plural = 'Found Pet Photos'
+    
+    def __str__(self):
+        return f"Photo for {self.report.pet_unique_id} - {self.image_verification_status}"
+
+
+class LostPetPhoto(models.Model):
+    """Additional photos for Lost Pet Reports with individual verification"""
+    
+    IMAGE_VERIFICATION_CHOICES = [
+        ('verified', 'Verified'),
+        ('fake_detected', 'Fake Detected'),
+        ('uncertain', 'Uncertain'),
+        ('not_checked', 'Not Checked'),
+    ]
+    
+    report = models.ForeignKey(
+        LostPetReport,
+        on_delete=models.CASCADE,
+        related_name='additional_photos'
+    )
+    photo = models.ImageField(
+        upload_to="lost_pets/%Y/%m/%d/",
+        help_text="Additional photo of the lost pet"
+    )
+    image_verification_status = models.CharField(
+        max_length=20,
+        choices=IMAGE_VERIFICATION_CHOICES,
+        default='not_checked',
+        help_text='AI-based verification status of this photo'
+    )
+    verification_confidence = models.FloatField(
+        null=True,
+        blank=True,
+        help_text='Confidence score from AI verification (0-1)'
+    )
+    verification_raw_score = models.FloatField(
+        null=True,
+        blank=True,
+        help_text='Raw score from AI model'
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text='Display order of the photo'
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['order', 'uploaded_at']
+        verbose_name = 'Lost Pet Photo'
+        verbose_name_plural = 'Lost Pet Photos'
+    
+    def __str__(self):
+        return f"Photo for {self.report.pet_unique_id} - {self.image_verification_status}"

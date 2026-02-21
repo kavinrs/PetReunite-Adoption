@@ -6,7 +6,9 @@ from .models import (
     ChatMessage,
     Conversation,
     FoundPetReport,
+    FoundPetPhoto,
     LostPetReport,
+    LostPetPhoto,
     Message,
     Pet,
     Notification,
@@ -40,9 +42,65 @@ class UserSummarySerializer(serializers.ModelSerializer):
         return None
 
 
+# Photo serializers - must be defined before report serializers
+class FoundPetPhotoSerializer(serializers.ModelSerializer):
+    """Serializer for Found Pet additional photos"""
+    photo_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = FoundPetPhoto
+        fields = (
+            'id',
+            'photo',
+            'photo_url',
+            'image_verification_status',
+            'verification_confidence',
+            'verification_raw_score',
+            'order',
+            'uploaded_at',
+        )
+        read_only_fields = ('id', 'uploaded_at')
+    
+    def get_photo_url(self, obj):
+        if obj.photo:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.photo.url)
+            return obj.photo.url
+        return None
+
+
+class LostPetPhotoSerializer(serializers.ModelSerializer):
+    """Serializer for Lost Pet additional photos"""
+    photo_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = LostPetPhoto
+        fields = (
+            'id',
+            'photo',
+            'photo_url',
+            'image_verification_status',
+            'verification_confidence',
+            'verification_raw_score',
+            'order',
+            'uploaded_at',
+        )
+        read_only_fields = ('id', 'uploaded_at')
+    
+    def get_photo_url(self, obj):
+        if obj.photo:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.photo.url)
+            return obj.photo.url
+        return None
+
+
 class FoundPetReportSerializer(serializers.ModelSerializer):
     reporter = UserSummarySerializer(read_only=True)
     photo_url = serializers.SerializerMethodField()
+    additional_photos = FoundPetPhotoSerializer(many=True, read_only=True)
 
     class Meta:
         model = FoundPetReport
@@ -65,6 +123,7 @@ class FoundPetReportSerializer(serializers.ModelSerializer):
             "description",
             "photo",
             "photo_url",
+            "additional_photos",
             "has_tag",
             "image_verification_status",
             "status",
@@ -105,6 +164,7 @@ class LostPetReportSerializer(serializers.ModelSerializer):
     reporter = UserSummarySerializer(read_only=True)
     photo_url = serializers.SerializerMethodField()
     public_id = serializers.SerializerMethodField()
+    additional_photos = LostPetPhotoSerializer(many=True, read_only=True)
 
     class Meta:
         model = LostPetReport
@@ -128,6 +188,7 @@ class LostPetReportSerializer(serializers.ModelSerializer):
             "description",
             "photo",
             "photo_url",
+            "additional_photos",
             "image_verification_status",
             "status",
             "admin_notes",
@@ -1013,3 +1074,4 @@ class ChatroomMessageSerializer(serializers.ModelSerializer):
         elif data.get('is_deleted'):
             data['text'] = 'Message deleted'
         return data
+

@@ -6,6 +6,8 @@ import { useImageVerification } from "../hooks/useImageVerification";
 import Toast from "../components/Toast";
 import ImageVerificationBadge from "../components/ImageVerificationBadge";
 import FakeImageAlert from "../components/FakeImageAlert";
+import MultiImageUpload from "../components/MultiImageUpload";
+import type { ImageWithVerification } from "../components/MultiImageUpload";
 
 type Feedback = { type: "success" | "error"; message: string } | null;
 
@@ -31,6 +33,7 @@ export default function ReportFoundPet() {
   useViewportStandardization();
   const [form, setForm] = useState(initialForm);
   const [photo, setPhoto] = useState<File | null>(null);
+  const [additionalImages, setAdditionalImages] = useState<ImageWithVerification[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [toast, setToast] = useState<{
@@ -53,12 +56,39 @@ export default function ReportFoundPet() {
     clearVerification,
   } = useImageVerification();
 
-  // Show alert when fake image is detected
+  // Show/hide alert based on presence of fake images
+  // Alert stays visible until ALL fake images are removed
   useEffect(() => {
-    if (verificationResult && verificationResult.label === 'Fake') {
+    const mainPhotoIsFake = verificationResult && verificationResult.label === 'Fake';
+    
+    // Only count additional images that have completed verification (not still verifying)
+    const additionalFakeImages = additionalImages.filter(img => 
+      img.verificationStatus === 'fake_detected' && 
+      img.verificationLabel === 'Fake'
+    );
+    const additionalFakeCount = additionalFakeImages.length;
+    const totalFakeCount = (mainPhotoIsFake ? 1 : 0) + additionalFakeCount;
+    
+    console.log('Fake count check:', {
+      mainPhotoIsFake,
+      additionalFakeCount,
+      totalFakeCount,
+      additionalImages: additionalImages.map(img => ({
+        status: img.verificationStatus,
+        label: img.verificationLabel
+      }))
+    });
+    
+    // Show alert if there are ANY fake images
+    // Hide alert automatically when all fake images are removed
+    if (totalFakeCount > 0) {
+      console.log('Fake images present, showing alert. Count:', totalFakeCount);
       setShowFakeAlert(true);
+    } else {
+      console.log('No fake images, hiding alert');
+      setShowFakeAlert(false);
     }
-  }, [verificationResult]);
+  }, [verificationResult, additionalImages]);
 
   function handleChange(field: keyof typeof initialForm, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -117,22 +147,70 @@ export default function ReportFoundPet() {
       return;
     }
     
+    // Check if any image (main or additional) is fake
+    const mainPhotoIsFake = verificationResult?.label === 'Fake';
+    const additionalPhotoIsFake = additionalImages.some(img => img.verificationStatus === 'fake_detected');
+    
+    if (mainPhotoIsFake || additionalPhotoIsFake) {
+      setToast({
+        isVisible: true,
+        type: "error",
+        title: "Fake Image Detected",
+        message: "Please remove all AI-generated images before submitting."
+      });
+      return;
+    }
+    
     setSubmitting(true);
     setFeedback(null);
+    
+    // First, submit the main report
     const res = await reportFoundPet({
       ...form,
       location_url: form.location_url,
       photo,
     });
+    
     if (res.ok) {
-      setToast({
-        isVisible: true,
-        type: "success",
-        title: "Success",
-        message: "Found pet report submitted successfully! Awaiting admin approval."
-      });
+      // If there are additional images, upload them
+      if (additionalImages.length > 0 && res.data?.id) {
+        const reportId = res.data.id;
+        const additionalFiles = additionalImages.map(img => img.file);
+        
+        const { uploadFoundPetPhotos } = await import('../services/api');
+        const uploadRes = await uploadFoundPetPhotos(reportId, additionalFiles);
+        
+        if (!uploadRes.ok) {
+          console.error('Failed to upload additional photos:', uploadRes.error);
+          // Still show success for main report, but warn about photos
+          setToast({
+            isVisible: true,
+            type: "success",
+            title: "Report Submitted",
+            message: "Found pet report submitted successfully, but some additional photos failed to upload. Awaiting admin approval."
+          });
+        } else {
+          setToast({
+            isVisible: true,
+            type: "success",
+            title: "Success",
+            message: "Found pet report submitted successfully! Awaiting admin approval."
+          });
+        }
+      } else {
+        setToast({
+          isVisible: true,
+          type: "success",
+          title: "Success",
+          message: "Found pet report submitted successfully! Awaiting admin approval."
+        });
+      }
+      
+      // Reset form
       setForm(initialForm);
       setPhoto(null);
+      setAdditionalImages([]);
+      clearVerification();
     } else {
       setToast({
         isVisible: true,
@@ -165,10 +243,11 @@ export default function ReportFoundPet() {
       )}
       
       {/* Fake Image Alert - Top notification */}
-      {showFakeAlert && verificationResult && (
+      {/* Alert stays visible until all fake images are removed */}
+      {showFakeAlert && (
         <FakeImageAlert
           show={showFakeAlert}
-          onClose={() => setShowFakeAlert(false)}
+          onClose={() => {}} // No manual close - alert hides automatically when fakes are removed
         />
       )}
       
@@ -427,7 +506,6 @@ export default function ReportFoundPet() {
                       const file = e.target.files?.[0] ?? null;
                       setPhoto(file);
                       clearVerification();
-                      setShowFakeAlert(false);
                       
                       // Automatically verify image when uploaded
                       if (file) {
@@ -437,9 +515,58 @@ export default function ReportFoundPet() {
                     style={{ display: "none" }}
                   />
                 </label>
-                <span style={{ fontSize: 13, color: photo ? "#16a34a" : "#9ca3af", fontWeight: photo ? 500 : 400 }}>
-                  {photo ? photo.name : "No file chosen"}
-                </span>
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 8,
+                  flex: 1,
+                  minWidth: 0,
+                }}>
+                  <span style={{ 
+                    fontSize: 13, 
+                    color: photo ? "#16a34a" : "#9ca3af", 
+                    fontWeight: photo ? 500 : 400,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {photo ? photo.name : "No file chosen"}
+                  </span>
+                  {photo && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPhoto(null);
+                        clearVerification();
+                      }}
+                      style={{
+                        background: '#ef4444',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: 4,
+                        width: 24,
+                        height: 24,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        fontSize: 16,
+                        fontWeight: 'bold',
+                        flexShrink: 0,
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#dc2626';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#ef4444';
+                      }}
+                      title="Remove image"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
               </div>
               
               {/* Image verification status */}
@@ -463,6 +590,23 @@ export default function ReportFoundPet() {
                 />
               )}
             </div>
+            
+            {/* Additional Images Section */}
+            <div>
+              <label style={labelStyle}>
+                Additional Images (Optional)
+              </label>
+              <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 12 }}>
+                Upload up to 5 additional photos to help identify the pet. Each image will be verified for authenticity.
+              </p>
+              <MultiImageUpload
+                images={additionalImages}
+                onImagesChange={setAdditionalImages}
+                maxImages={5}
+                disabled={submitting}
+              />
+            </div>
+            
             <div>
               <label style={labelStyle}>
                 Found Time<span style={{ color: "#f97316" }}> *</span>
@@ -566,23 +710,47 @@ export default function ReportFoundPet() {
             </button>
             <button
               type="submit"
-              disabled={submitting || (verificationResult?.label === 'Fake')}
+              disabled={
+                submitting || 
+                (verificationResult?.label === 'Fake') || 
+                additionalImages.some(img => img.verificationStatus === 'fake_detected') ||
+                additionalImages.some(img => img.verificationStatus === 'verifying')
+              }
               style={{
                 flex: "1 1 260px",
                 border: "none",
                 borderRadius: 999,
                 padding: "14px 18px",
-                background: (submitting || verificationResult?.label === 'Fake')
+                background: (
+                  submitting || 
+                  verificationResult?.label === 'Fake' || 
+                  additionalImages.some(img => img.verificationStatus === 'fake_detected') ||
+                  additionalImages.some(img => img.verificationStatus === 'verifying')
+                )
                   ? "rgba(16,185,129,0.6)"
                   : "linear-gradient(90deg,#16a34a,#22c55e)",
                 color: "white",
                 fontWeight: 700,
-                cursor: (submitting || verificationResult?.label === 'Fake') ? "not-allowed" : "pointer",
+                cursor: (
+                  submitting || 
+                  verificationResult?.label === 'Fake' || 
+                  additionalImages.some(img => img.verificationStatus === 'fake_detected') ||
+                  additionalImages.some(img => img.verificationStatus === 'verifying')
+                ) ? "not-allowed" : "pointer",
                 boxShadow: "0 12px 30px rgba(34,197,94,0.35)",
-                opacity: verificationResult?.label === 'Fake' ? 0.5 : 1,
+                opacity: (
+                  verificationResult?.label === 'Fake' || 
+                  additionalImages.some(img => img.verificationStatus === 'fake_detected')
+                ) ? 0.5 : 1,
               }}
             >
-              {submitting ? "Submitting..." : verificationResult?.label === 'Fake' ? "Cannot Submit - Fake Image" : "Report Found Pet"}
+              {submitting 
+                ? "Submitting..." 
+                : additionalImages.some(img => img.verificationStatus === 'verifying')
+                  ? "Verifying Images..."
+                  : (verificationResult?.label === 'Fake' || additionalImages.some(img => img.verificationStatus === 'fake_detected'))
+                    ? "Cannot Submit - Fake Image" 
+                    : "Report Found Pet"}
             </button>
           </div>
         </form>

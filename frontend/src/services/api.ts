@@ -815,6 +815,74 @@ export async function checkImageAuthenticity(imageFile: File): Promise<ApiResult
   return { ok: false, status: resp.status, error: message, data };
 }
 
+// ===== MULTIPLE PHOTOS API FUNCTIONS =====
+
+export async function uploadLostPetPhotos(reportId: number, photos: File[]): Promise<ApiResult> {
+  const url = `${PETS_BASE}/reports/lost/${reportId}/photos/`;
+  const formData = new FormData();
+  
+  photos.forEach((photo) => {
+    formData.append("photos", photo);
+  });
+
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: formData,
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to upload photos";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function uploadFoundPetPhotos(reportId: number, photos: File[]): Promise<ApiResult> {
+  const url = `${PETS_BASE}/reports/found/${reportId}/photos/`;
+  const formData = new FormData();
+  
+  photos.forEach((photo) => {
+    formData.append("photos", photo);
+  });
+
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: formData,
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to upload photos";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function deleteLostPetPhoto(photoId: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/photos/lost/${photoId}/`;
+  const resp = await fetchWithAuth(url, {
+    method: "DELETE",
+  });
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data: null };
+  }
+  const data = await parseJSONSafe(resp);
+  const message = extractErrorMessage(data) ?? "Failed to delete photo";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
+export async function deleteFoundPetPhoto(photoId: number): Promise<ApiResult> {
+  const url = `${PETS_BASE}/photos/found/${photoId}/`;
+  const resp = await fetchWithAuth(url, {
+    method: "DELETE",
+  });
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data: null };
+  }
+  const data = await parseJSONSafe(resp);
+  const message = extractErrorMessage(data) ?? "Failed to delete photo";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
 // ===== ADOPTION FEATURE API FUNCTIONS =====
 
 /* Fetch pet details for adoption */

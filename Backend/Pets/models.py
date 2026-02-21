@@ -23,6 +23,13 @@ class FoundPetReport(models.Model):
         ('not_present', 'Not Present'),
     ]
     
+    IMAGE_VERIFICATION_CHOICES = [
+        ('verified', 'Verified'),
+        ('fake_detected', 'Fake Detected'),
+        ('uncertain', 'Uncertain'),
+        ('not_checked', 'Not Checked'),
+    ]
+    
     reporter = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="petsapp_found_reports"
     )
@@ -45,6 +52,12 @@ class FoundPetReport(models.Model):
         null=True,
     )
     has_tag = models.CharField(max_length=20, choices=TAG_CHOICES, default='not_present', blank=True)
+    image_verification_status = models.CharField(
+        max_length=20,
+        choices=IMAGE_VERIFICATION_CHOICES,
+        default='not_checked',
+        help_text='AI-based verification status of the uploaded pet image'
+    )
     status = models.CharField(max_length=32, choices=STATUS_CHOICES, default="pending")
     admin_notes = models.TextField(blank=True)
     has_user_update = models.BooleanField(default=False)
@@ -90,6 +103,13 @@ class FoundPetReport(models.Model):
 
 
 class LostPetReport(models.Model):
+    IMAGE_VERIFICATION_CHOICES = [
+        ('verified', 'Verified'),
+        ('fake_detected', 'Fake Detected'),
+        ('uncertain', 'Uncertain'),
+        ('not_checked', 'Not Checked'),
+    ]
+    
     reporter = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="petsapp_lost_reports"
     )
@@ -111,6 +131,12 @@ class LostPetReport(models.Model):
         upload_to="lost_pets/%Y/%m/%d/",
         blank=True,
         null=True,
+    )
+    image_verification_status = models.CharField(
+        max_length=20,
+        choices=IMAGE_VERIFICATION_CHOICES,
+        default='not_checked',
+        help_text='AI-based verification status of the uploaded pet image'
     )
     status = models.CharField(max_length=32, choices=STATUS_CHOICES, default="pending")
     admin_notes = models.TextField(blank=True)

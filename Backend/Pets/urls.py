@@ -70,6 +70,8 @@ from .views import (
     ConvertToAdoptionView,
 )
 
+from .ml_views import CheckImageAuthenticityView
+
 urlpatterns = [
     # User-facing report endpoints
     path("reports/found/", FoundPetReportView.as_view(), name="pets-found-report"),
@@ -354,5 +356,11 @@ urlpatterns = [
         "admin/adoption/convert/<int:pk>/",
         ConvertToAdoptionView.as_view(),
         name="convert-to-adoption",
+    ),
+    # ML-based Image Verification
+    path(
+        "check-image-authenticity/",
+        CheckImageAuthenticityView.as_view(),
+        name="check-image-authenticity",
     ),
 ]

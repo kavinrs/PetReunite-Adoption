@@ -796,6 +796,25 @@ export async function reportLostPet(payload: {
   return { ok: false, status: resp.status, error: message, data };
 }
 
+// ===== IMAGE VERIFICATION API FUNCTION =====
+
+export async function checkImageAuthenticity(imageFile: File): Promise<ApiResult> {
+  const url = `${PETS_BASE}/check-image-authenticity/`;
+  const formData = new FormData();
+  formData.append("image", imageFile);
+
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: formData,
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to verify image";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
 // ===== ADOPTION FEATURE API FUNCTIONS =====
 
 /* Fetch pet details for adoption */

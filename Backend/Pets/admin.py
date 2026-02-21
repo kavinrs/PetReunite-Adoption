@@ -6,7 +6,7 @@ from .models import AdoptionRequest, FoundPetReport, LostPetReport, Message, Pet
 
 @admin.register(FoundPetReport)
 class PetsFoundPetAdmin(admin.ModelAdmin):
-    list_display = ("id", "pet_type", "found_city", "state", "reporter", "created_at")
+    list_display = ("id", "pet_type", "found_city", "state", "reporter", "verification_badge", "created_at")
     search_fields = (
         "pet_type",
         "breed",
@@ -16,12 +16,36 @@ class PetsFoundPetAdmin(admin.ModelAdmin):
         "description",
         "reporter__username",
     )
-    list_filter = ("state", "found_city", "pet_type")
+    list_filter = ("state", "found_city", "pet_type", "image_verification_status")
+    
+    def verification_badge(self, obj):
+        colors = {
+            "verified": "#10b981",  # green
+            "fake_detected": "#ef4444",  # red
+            "uncertain": "#fbbf24",  # yellow
+            "not_checked": "#6b7280",  # gray
+        }
+        icons = {
+            "verified": "✓",
+            "fake_detected": "✗",
+            "uncertain": "?",
+            "not_checked": "—",
+        }
+        color = colors.get(obj.image_verification_status, "#6b7280")
+        icon = icons.get(obj.image_verification_status, "—")
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">{} {}</span>',
+            color,
+            icon,
+            obj.get_image_verification_status_display(),
+        )
+    
+    verification_badge.short_description = "Image Status"
 
 
 @admin.register(LostPetReport)
 class PetsLostPetAdmin(admin.ModelAdmin):
-    list_display = ("id", "pet_type", "city", "state", "reporter", "created_at")
+    list_display = ("id", "pet_type", "city", "state", "reporter", "verification_badge", "created_at")
     search_fields = (
         "pet_name",
         "pet_type",
@@ -32,7 +56,31 @@ class PetsLostPetAdmin(admin.ModelAdmin):
         "description",
         "reporter__username",
     )
-    list_filter = ("state", "city", "pet_type")
+    list_filter = ("state", "city", "pet_type", "image_verification_status")
+    
+    def verification_badge(self, obj):
+        colors = {
+            "verified": "#10b981",  # green
+            "fake_detected": "#ef4444",  # red
+            "uncertain": "#fbbf24",  # yellow
+            "not_checked": "#6b7280",  # gray
+        }
+        icons = {
+            "verified": "✓",
+            "fake_detected": "✗",
+            "uncertain": "?",
+            "not_checked": "—",
+        }
+        color = colors.get(obj.image_verification_status, "#6b7280")
+        icon = icons.get(obj.image_verification_status, "—")
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">{} {}</span>',
+            color,
+            icon,
+            obj.get_image_verification_status_display(),
+        )
+    
+    verification_badge.short_description = "Image Status"
 
 
 @admin.register(Pet)

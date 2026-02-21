@@ -1,8 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { reportFoundPet } from "../services/api";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
+import { useImageVerification } from "../hooks/useImageVerification";
 import Toast from "../components/Toast";
+import ImageVerificationBadge from "../components/ImageVerificationBadge";
+import FakeImageAlert from "../components/FakeImageAlert";
 
 type Feedback = { type: "success" | "error"; message: string } | null;
 
@@ -38,7 +41,24 @@ export default function ReportFoundPet() {
   } | null>(null);
   const [locating, setLocating] = useState(false);
   const [locError, setLocError] = useState<string | null>(null);
+  const [showFakeAlert, setShowFakeAlert] = useState(false);
   const navigate = useNavigate();
+
+  // Image verification hook
+  const {
+    verificationResult,
+    isVerifying,
+    verificationError,
+    verifyImage,
+    clearVerification,
+  } = useImageVerification();
+
+  // Show alert when fake image is detected
+  useEffect(() => {
+    if (verificationResult && verificationResult.label === 'Fake') {
+      setShowFakeAlert(true);
+    }
+  }, [verificationResult]);
 
   function handleChange(field: keyof typeof initialForm, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -143,6 +163,15 @@ export default function ReportFoundPet() {
           onClose={() => setToast(null)}
         />
       )}
+      
+      {/* Fake Image Alert - Top notification */}
+      {showFakeAlert && verificationResult && (
+        <FakeImageAlert
+          show={showFakeAlert}
+          onClose={() => setShowFakeAlert(false)}
+        />
+      )}
+      
       <div
         style={{
           maxWidth: 940,
@@ -394,7 +423,17 @@ export default function ReportFoundPet() {
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      setPhoto(file);
+                      clearVerification();
+                      setShowFakeAlert(false);
+                      
+                      // Automatically verify image when uploaded
+                      if (file) {
+                        await verifyImage(file);
+                      }
+                    }}
                     style={{ display: "none" }}
                   />
                 </label>
@@ -402,6 +441,27 @@ export default function ReportFoundPet() {
                   {photo ? photo.name : "No file chosen"}
                 </span>
               </div>
+              
+              {/* Image verification status */}
+              {isVerifying && (
+                <div style={{ marginTop: 8, fontSize: 13, color: "#6b7280" }}>
+                  🔍 Verifying image authenticity...
+                </div>
+              )}
+              
+              {verificationError && (
+                <div style={{ marginTop: 8, fontSize: 13, color: "#dc2626" }}>
+                  ⚠️ {verificationError}
+                </div>
+              )}
+              
+              {verificationResult && (
+                <ImageVerificationBadge
+                  label={verificationResult.label}
+                  confidence={verificationResult.confidence}
+                  warning={verificationResult.warning}
+                />
+              )}
             </div>
             <div>
               <label style={labelStyle}>
@@ -506,22 +566,23 @@ export default function ReportFoundPet() {
             </button>
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || (verificationResult?.label === 'Fake')}
               style={{
                 flex: "1 1 260px",
                 border: "none",
                 borderRadius: 999,
                 padding: "14px 18px",
-                background: submitting
+                background: (submitting || verificationResult?.label === 'Fake')
                   ? "rgba(16,185,129,0.6)"
                   : "linear-gradient(90deg,#16a34a,#22c55e)",
                 color: "white",
                 fontWeight: 700,
-                cursor: submitting ? "not-allowed" : "pointer",
+                cursor: (submitting || verificationResult?.label === 'Fake') ? "not-allowed" : "pointer",
                 boxShadow: "0 12px 30px rgba(34,197,94,0.35)",
+                opacity: verificationResult?.label === 'Fake' ? 0.5 : 1,
               }}
             >
-              {submitting ? "Submitting..." : "Report Found Pet"}
+              {submitting ? "Submitting..." : verificationResult?.label === 'Fake' ? "Cannot Submit - Fake Image" : "Report Found Pet"}
             </button>
           </div>
         </form>

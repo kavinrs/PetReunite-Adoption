@@ -10,6 +10,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 
 from .ml_utils import predict_image_authenticity, validate_image_file
 from ml_models.yolo_loader import yolo_loader
+from ml_models.breed_classifier import breed_classifier
 
 logger = logging.getLogger(__name__)
 
@@ -224,6 +225,173 @@ class VerifyPetTypeView(APIView):
                     "error": "Failed to verify pet type. Please try again.",
                     "detail": str(e),
                     "is_match": False
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+class ClassifyBreedView(APIView):
+    """
+    API endpoint to classify pet breed using breed classification models.
+    Only works for: dog, horse, rabbit, bird
+    
+    POST /api/pets/classify-breed/
+    
+    Request:
+        - image: multipart/form-data file
+        - pet_type: string (dog, horse, rabbit, bird)
+        - user_breed: string (optional - user entered breed for comparison)
+        
+    Response:
+        {
+            "predicted_breed": "labrador_retriever",
+            "confidence": 0.87,
+            "is_supported": true,
+            "low_confidence": false,
+            "user_breed": "labrador",
+            "is_match": true,
+            "normalized_predicted": "labrador_retriever",
+            "normalized_input": "labrador",
+            "message": "Breed classified successfully",
+            "all_predictions": [...]
+        }
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    
+    def post(self, request):
+        """Handle breed classification request."""
+        try:
+            # Get inputs
+            image_file = request.FILES.get('image')
+            pet_type = request.data.get('pet_type', '').strip()
+            user_breed = request.data.get('user_breed', '').strip()
+            
+            # Validate inputs
+            if not image_file:
+                return Response(
+                    {"error": "No image file provided. Please upload an image."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not pet_type:
+                return Response(
+                    {"error": "Pet type is required."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate image file
+            is_valid, error_message = validate_image_file(image_file, max_size_mb=10)
+            if not is_valid:
+                return Response(
+                    {"error": error_message},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            logger.info(f"Classifying breed for pet_type='{pet_type}', user_breed='{user_breed}'")
+            
+            # Check if pet type is supported
+            if not breed_classifier.is_supported(pet_type):
+                return Response(
+                    {
+                        "predicted_breed": None,
+                        "confidence": 0.0,
+                        "is_supported": False,
+                        "low_confidence": False,
+                        "message": f"Breed classification not supported for {pet_type}. Only dog, horse, rabbit, and bird are supported.",
+                        "status": "not_supported"
+                    },
+                    status=status.HTTP_200_OK
+                )
+            
+            # Run breed classification
+            try:
+                prediction = breed_classifier.predict(image_file, pet_type)
+            except Exception as e:
+                logger.error(f"Breed classification failed: {e}", exc_info=True)
+                return Response(
+                    {
+                        "error": "Failed to classify breed.",
+                        "detail": str(e),
+                        "predicted_breed": None,
+                        "confidence": 0.0,
+                        "is_supported": True,
+                        "status": "error"
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+            predicted_breed = prediction.get('predicted_breed')
+            confidence = prediction.get('confidence', 0.0)
+            low_confidence = prediction.get('low_confidence', False)
+            
+            # Handle model not available
+            if not predicted_breed:
+                return Response(
+                    {
+                        "predicted_breed": None,
+                        "confidence": 0.0,
+                        "is_supported": True,
+                        "low_confidence": False,
+                        "message": prediction.get('message', 'Breed model not available'),
+                        "status": "model_unavailable"
+                    },
+                    status=status.HTTP_200_OK
+                )
+            
+            # Prepare response
+            response_data = {
+                "predicted_breed": predicted_breed,
+                "confidence": confidence,
+                "is_supported": True,
+                "low_confidence": low_confidence,
+                "all_predictions": prediction.get('all_predictions', []),
+                "pet_type": pet_type
+            }
+            
+            # If user provided breed, compare
+            if user_breed:
+                is_match = breed_classifier.compare_breeds(predicted_breed, user_breed)
+                response_data.update({
+                    "user_breed": user_breed,
+                    "is_match": is_match,
+                    "normalized_predicted": breed_classifier.normalize_breed_name(predicted_breed),
+                    "normalized_input": breed_classifier.normalize_breed_name(user_breed)
+                })
+                
+                if is_match:
+                    response_data["message"] = "Verified: Entered breed matches detected breed ✅"
+                    response_data["status"] = "verified"
+                else:
+                    response_data["message"] = f"Mismatch: Detected breed is {predicted_breed.replace('_', ' ').title()}"
+                    response_data["status"] = "mismatch"
+            else:
+                # No user input - auto-fill scenario
+                response_data["message"] = f"Breed automatically identified as: {predicted_breed.replace('_', ' ').title()}"
+                response_data["status"] = "auto_filled"
+                response_data["user_breed"] = None
+                response_data["is_match"] = None
+            
+            # Add low confidence warning
+            if low_confidence:
+                response_data["warning"] = "Low confidence prediction. Breed may be uncertain."
+            
+            logger.info(
+                f"Breed classification complete: "
+                f"predicted={predicted_breed}, confidence={confidence:.2%}, "
+                f"user_breed={user_breed}, match={response_data.get('is_match')}"
+            )
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error in breed classification: {e}", exc_info=True)
+            return Response(
+                {
+                    "error": "Failed to classify breed. Please try again.",
+                    "detail": str(e),
+                    "is_supported": False
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

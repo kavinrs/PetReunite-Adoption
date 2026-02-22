@@ -835,6 +835,33 @@ export async function verifyPetType(imageFile: File, petType: string): Promise<A
   return { ok: false, status: resp.status, error: message, data };
 }
 
+// ===== BREED CLASSIFICATION API FUNCTION =====
+
+export async function classifyBreed(
+  imageFile: File, 
+  petType: string, 
+  userBreed?: string
+): Promise<ApiResult> {
+  const url = `${PETS_BASE}/classify-breed/`;
+  const formData = new FormData();
+  formData.append("image", imageFile);
+  formData.append("pet_type", petType);
+  if (userBreed && userBreed.trim()) {
+    formData.append("user_breed", userBreed.trim());
+  }
+
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: formData,
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to classify breed";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
 // ===== MULTIPLE PHOTOS API FUNCTIONS =====
 
 export async function uploadLostPetPhotos(reportId: number, photos: File[]): Promise<ApiResult> {

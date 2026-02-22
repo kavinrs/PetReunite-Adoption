@@ -4,6 +4,7 @@ import { reportLostPet } from "../services/api";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
 import { useImageVerification } from "../hooks/useImageVerification";
 import { usePetTypeVerification } from "../hooks/usePetTypeVerification";
+import { useBreedClassification } from "../hooks/useBreedClassification";
 import Toast from "../components/Toast";
 import ImageVerificationBadge from "../components/ImageVerificationBadge";
 import FakeImageAlert from "../components/FakeImageAlert";
@@ -71,6 +72,16 @@ export default function ReportLostPet() {
     markAlertShown,
   } = usePetTypeVerification();
 
+  // Breed classification hook
+  const {
+    classificationResult: breedResult,
+    isClassifying: isBreedClassifying,
+    classificationError: breedError,
+    classifyPetBreed,
+    clearClassification: clearBreedClassification,
+    shouldAutoFill,
+  } = useBreedClassification();
+
   // Show/hide alert based on presence of fake images
   // Alert stays visible until ALL fake images are removed
   useEffect(() => {
@@ -120,6 +131,35 @@ export default function ReportLostPet() {
     }
   }, [photo, verificationResult, form.pet_type]);
 
+  // Breed classification effect
+  // Run breed classification when: pet type is verified AND breed field has value OR is empty
+  useEffect(() => {
+    const petTypeVerified = petTypeResult && petTypeResult.status === 'verified';
+    const hasBreed = form.breed.trim().length > 0;
+    
+    // Only classify for supported pet types: dog, horse, rabbit, bird
+    const supportedTypes = ['dog', 'horse', 'rabbit', 'bird'];
+    const normalizedPetType = form.pet_type.toLowerCase().trim().replace(' ', '_');
+    const isSupported = supportedTypes.includes(normalizedPetType);
+    
+    if (photo && petTypeVerified && isSupported) {
+      console.log('🔍 Running breed classification:', form.pet_type, hasBreed ? `breed: ${form.breed}` : 'no breed');
+      classifyPetBreed(photo, form.pet_type, hasBreed ? form.breed : undefined);
+    } else if (!isSupported && form.pet_type.trim()) {
+      // Clear classification for unsupported types
+      clearBreedClassification();
+    }
+  }, [photo, petTypeResult, form.pet_type, form.breed]);
+
+  // Auto-fill breed if empty and classification succeeded
+  useEffect(() => {
+    if (shouldAutoFill && breedResult && breedResult.predicted_breed && !form.breed.trim()) {
+      const formattedBreed = breedResult.predicted_breed.replace(/_/g, ' ');
+      console.log('✨ Auto-filling breed:', formattedBreed);
+      setForm(prev => ({ ...prev, breed: formattedBreed }));
+    }
+  }, [shouldAutoFill, breedResult, form.breed]);
+
   // Show pet type mismatch alert
   useEffect(() => {
     if (petTypeResult && petTypeResult.status === 'mismatch' && !hasShownMismatchAlert) {
@@ -135,6 +175,12 @@ export default function ReportLostPet() {
     // Clear pet type verification when user changes pet type
     if (field === 'pet_type') {
       clearPetTypeVerification();
+      clearBreedClassification();
+    }
+    
+    // Clear breed classification when user changes breed
+    if (field === 'breed') {
+      clearBreedClassification();
     }
   }
 
@@ -496,9 +542,101 @@ export default function ReportLostPet() {
                 required
                 value={form.breed}
                 onChange={(e) => handleChange("breed", e.target.value)}
-                style={inputStyle}
+                onBlur={() => {
+                  // Trigger breed classification on blur if conditions are met
+                  if (photo && petTypeResult?.status === 'verified' && form.breed.trim()) {
+                    classifyPetBreed(photo, form.pet_type, form.breed);
+                  }
+                }}
+                style={{
+                  ...inputStyle,
+                  borderColor: breedResult?.status === 'mismatch' 
+                    ? '#ef4444'  // Red for mismatch (blocks submission)
+                    : breedResult?.status === 'verified'
+                    ? '#22c55e'
+                    : 'rgba(15,23,42,0.15)'
+                }}
                 placeholder="Breed"
               />
+              
+              {/* Breed Classification Status */}
+              {isBreedClassifying && (
+                <div style={{ marginTop: 8, fontSize: 13, color: "#6b7280", display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ animation: 'spin 1s linear infinite' }}>🔍</span>
+                  Classifying breed...
+                </div>
+              )}
+              
+              {breedError && (
+                <div style={{ marginTop: 8, fontSize: 13, color: "#dc2626" }}>
+                  ⚠️ {breedError}
+                </div>
+              )}
+              
+              {breedResult && breedResult.status === 'not_supported' && (
+                <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280", fontStyle: 'italic' }}>
+                  ℹ️ Breed classification not available for {form.pet_type}
+                </div>
+              )}
+              
+              {breedResult && breedResult.status === 'auto_filled' && (
+                <div style={{ 
+                  marginTop: 8, 
+                  fontSize: 13, 
+                  color: "#2563eb",
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}>
+                  ✨ {breedResult.message}
+                  {breedResult.low_confidence && (
+                    <span style={{ fontSize: 11, color: "#f59e0b", fontWeight: 400 }}>
+                      ({breedResult.warning})
+                    </span>
+                  )}
+                </div>
+              )}
+              
+              {breedResult && breedResult.status === 'verified' && (
+                <div style={{ 
+                  marginTop: 8, 
+                  fontSize: 13, 
+                  color: "#16a34a",
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}>
+                  ✅ {breedResult.message}
+                  {breedResult.low_confidence && (
+                    <div style={{ fontSize: 11, color: "#f59e0b", fontWeight: 400, marginTop: 2 }}>
+                      {breedResult.warning}
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {breedResult && breedResult.status === 'mismatch' && (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ 
+                    fontSize: 13, 
+                    color: "#dc2626",
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginBottom: 4
+                  }}>
+                    ❌ {breedResult.message}
+                  </div>
+                  {breedResult.low_confidence && (
+                    <div style={{ fontSize: 11, color: "#6b7280" }}>
+                      {breedResult.warning}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div>
               <label style={labelStyle}>
@@ -842,7 +980,9 @@ export default function ReportLostPet() {
                 additionalImages.some(img => img.verificationStatus === 'fake_detected') ||
                 additionalImages.some(img => img.verificationStatus === 'verifying') ||
                 isPetTypeVerifying ||
-                (petTypeResult?.status === 'mismatch')
+                isBreedClassifying ||
+                (petTypeResult?.status === 'mismatch') ||
+                (breedResult?.status === 'mismatch')
               }
               style={{
                 flex: "1 1 260px",
@@ -855,7 +995,9 @@ export default function ReportLostPet() {
                   additionalImages.some(img => img.verificationStatus === 'fake_detected') ||
                   additionalImages.some(img => img.verificationStatus === 'verifying') ||
                   isPetTypeVerifying ||
-                  petTypeResult?.status === 'mismatch'
+                  isBreedClassifying ||
+                  petTypeResult?.status === 'mismatch' ||
+                  breedResult?.status === 'mismatch'
                 )
                   ? "rgba(249,115,22,0.6)"
                   : "linear-gradient(90deg,#f97316,#ec4899)",
@@ -867,13 +1009,16 @@ export default function ReportLostPet() {
                   additionalImages.some(img => img.verificationStatus === 'fake_detected') ||
                   additionalImages.some(img => img.verificationStatus === 'verifying') ||
                   isPetTypeVerifying ||
-                  petTypeResult?.status === 'mismatch'
+                  isBreedClassifying ||
+                  petTypeResult?.status === 'mismatch' ||
+                  breedResult?.status === 'mismatch'
                 ) ? "not-allowed" : "pointer",
                 boxShadow: "0 12px 34px rgba(249,115,22,0.35)",
                 opacity: (
                   verificationResult?.label === 'Fake' || 
                   additionalImages.some(img => img.verificationStatus === 'fake_detected') ||
-                  petTypeResult?.status === 'mismatch'
+                  petTypeResult?.status === 'mismatch' ||
+                  breedResult?.status === 'mismatch'
                 ) ? 0.5 : 1,
               }}
             >
@@ -881,13 +1026,17 @@ export default function ReportLostPet() {
                 ? "Submitting..." 
                 : isPetTypeVerifying
                   ? "Verifying Pet Type..."
-                  : additionalImages.some(img => img.verificationStatus === 'verifying')
-                    ? "Verifying Images..."
-                    : petTypeResult?.status === 'mismatch'
-                      ? "Cannot Submit - Wrong Pet Type"
-                      : (verificationResult?.label === 'Fake' || additionalImages.some(img => img.verificationStatus === 'fake_detected'))
-                        ? "Cannot Submit - Fake Image" 
-                        : "Report Pet"}
+                  : isBreedClassifying
+                    ? "Classifying Breed..."
+                    : additionalImages.some(img => img.verificationStatus === 'verifying')
+                      ? "Verifying Images..."
+                      : breedResult?.status === 'mismatch'
+                        ? "Cannot Submit - Wrong Breed"
+                        : petTypeResult?.status === 'mismatch'
+                          ? "Cannot Submit - Wrong Pet Type"
+                          : (verificationResult?.label === 'Fake' || additionalImages.some(img => img.verificationStatus === 'fake_detected'))
+                            ? "Cannot Submit - Fake Image" 
+                            : "Report Pet"}
             </button>
           </div>
         </form>

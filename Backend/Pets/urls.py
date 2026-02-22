@@ -70,7 +70,7 @@ from .views import (
     ConvertToAdoptionView,
 )
 
-from .ml_views import CheckImageAuthenticityView, VerifyPetTypeView
+from .ml_views import CheckImageAuthenticityView, VerifyPetTypeView, ClassifyBreedView
 
 from .photo_views import (
     UploadFoundPetPhotosView,
@@ -375,6 +375,11 @@ urlpatterns = [
         "verify-pet-type/",
         VerifyPetTypeView.as_view(),
         name="verify-pet-type",
+    ),
+    path(
+        "classify-breed/",
+        ClassifyBreedView.as_view(),
+        name="classify-breed",
     ),
     
     # Multiple Photos Management

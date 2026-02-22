@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { reportLostPet } from "../services/api";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
 import { useImageVerification } from "../hooks/useImageVerification";
+import { usePetTypeVerification } from "../hooks/usePetTypeVerification";
 import Toast from "../components/Toast";
 import ImageVerificationBadge from "../components/ImageVerificationBadge";
 import FakeImageAlert from "../components/FakeImageAlert";
+import PetTypeMismatchAlert from "../components/PetTypeMismatchAlert";
 import MultiImageUpload from "../components/MultiImageUpload";
 import type { ImageWithVerification } from "../components/MultiImageUpload";
 
@@ -46,6 +48,7 @@ export default function ReportLostPet() {
   const [locating, setLocating] = useState(false);
   const [locError, setLocError] = useState<string | null>(null);
   const [showFakeAlert, setShowFakeAlert] = useState(false);
+  const [showPetTypeMismatchAlert, setShowPetTypeMismatchAlert] = useState(false);
   const navigate = useNavigate();
 
   // Image verification hook
@@ -56,6 +59,17 @@ export default function ReportLostPet() {
     verifyImage,
     clearVerification,
   } = useImageVerification();
+
+  // Pet type verification hook
+  const {
+    verificationResult: petTypeResult,
+    isVerifying: isPetTypeVerifying,
+    verificationError: petTypeError,
+    verifyPet,
+    clearVerification: clearPetTypeVerification,
+    hasShownMismatchAlert,
+    markAlertShown,
+  } = usePetTypeVerification();
 
   // Show/hide alert based on presence of fake images
   // Alert stays visible until ALL fake images are removed
@@ -91,8 +105,37 @@ export default function ReportLostPet() {
     }
   }, [verificationResult, additionalImages]);
 
+  // Pet type verification effect
+  // Run YOLO verification when: image is real AND pet type is entered
+  useEffect(() => {
+    const imageIsReal = verificationResult && verificationResult.label === 'Real';
+    const hasPetType = form.pet_type.trim().length > 0;
+    
+    if (photo && imageIsReal && hasPetType) {
+      console.log('🔍 Running pet type verification:', form.pet_type);
+      verifyPet(photo, form.pet_type);
+    } else if (!hasPetType) {
+      // Clear verification if pet type is empty
+      clearPetTypeVerification();
+    }
+  }, [photo, verificationResult, form.pet_type]);
+
+  // Show pet type mismatch alert
+  useEffect(() => {
+    if (petTypeResult && petTypeResult.status === 'mismatch' && !hasShownMismatchAlert) {
+      console.log('🚨 Pet type mismatch detected, showing alert');
+      setShowPetTypeMismatchAlert(true);
+      markAlertShown();
+    }
+  }, [petTypeResult, hasShownMismatchAlert, markAlertShown]);
+
   function handleChange(field: keyof typeof initialForm, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
+    
+    // Clear pet type verification when user changes pet type
+    if (field === 'pet_type') {
+      clearPetTypeVerification();
+    }
   }
 
   function handleUseCurrentLocation() {
@@ -252,6 +295,16 @@ export default function ReportLostPet() {
         />
       )}
       
+      {/* Pet Type Mismatch Alert */}
+      {showPetTypeMismatchAlert && petTypeResult && petTypeResult.status === 'mismatch' && (
+        <PetTypeMismatchAlert
+          show={showPetTypeMismatchAlert}
+          detectedType={petTypeResult.detected_type || 'Unknown'}
+          userInput={petTypeResult.user_input}
+          onClose={() => setShowPetTypeMismatchAlert(false)}
+        />
+      )}
+      
       <div
         style={{
           maxWidth: 940,
@@ -356,9 +409,83 @@ export default function ReportLostPet() {
                 required
                 value={form.pet_type}
                 onChange={(e) => handleChange("pet_type", e.target.value)}
-                style={inputStyle}
+                onBlur={() => {
+                  // Trigger verification on blur if conditions are met
+                  if (photo && verificationResult?.label === 'Real' && form.pet_type.trim()) {
+                    verifyPet(photo, form.pet_type);
+                  }
+                }}
+                style={{
+                  ...inputStyle,
+                  borderColor: petTypeResult?.status === 'mismatch' 
+                    ? '#ef4444' 
+                    : petTypeResult?.status === 'verified'
+                    ? '#22c55e'
+                    : 'rgba(15,23,42,0.15)'
+                }}
                 placeholder="Dog, Cat, etc."
               />
+              
+              {/* Pet Type Verification Status */}
+              {isPetTypeVerifying && (
+                <div style={{ marginTop: 8, fontSize: 13, color: "#6b7280", display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ animation: 'spin 1s linear infinite' }}>🔍</span>
+                  Verifying pet type...
+                </div>
+              )}
+              
+              {petTypeError && (
+                <div style={{ marginTop: 8, fontSize: 13, color: "#dc2626" }}>
+                  ⚠️ {petTypeError}
+                </div>
+              )}
+              
+              {petTypeResult && petTypeResult.status === 'verified' && (
+                <div style={{ 
+                  marginTop: 8, 
+                  fontSize: 13, 
+                  color: "#16a34a",
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}>
+                  ✅ Pet type verified
+                </div>
+              )}
+              
+              {petTypeResult && petTypeResult.status === 'mismatch' && (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ 
+                    fontSize: 13, 
+                    color: "#dc2626",
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginBottom: 4
+                  }}>
+                    ❌ Wrong pet type
+                  </div>
+                  {petTypeResult.suggestion && (
+                    <div style={{ fontSize: 12, color: "#6b7280" }}>
+                      {petTypeResult.suggestion}
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {petTypeResult && petTypeResult.status === 'uncertain' && (
+                <div style={{ marginTop: 8, fontSize: 13, color: "#f59e0b" }}>
+                  ⚠️ {petTypeResult.message}
+                </div>
+              )}
+              
+              {petTypeResult && petTypeResult.status === 'no_detection' && (
+                <div style={{ marginTop: 8, fontSize: 13, color: "#dc2626" }}>
+                  ⚠️ {petTypeResult.message}
+                </div>
+              )}
             </div>
             <div>
               <label style={labelStyle}>
@@ -713,7 +840,9 @@ export default function ReportLostPet() {
                 submitting || 
                 (verificationResult?.label === 'Fake') || 
                 additionalImages.some(img => img.verificationStatus === 'fake_detected') ||
-                additionalImages.some(img => img.verificationStatus === 'verifying')
+                additionalImages.some(img => img.verificationStatus === 'verifying') ||
+                isPetTypeVerifying ||
+                (petTypeResult?.status === 'mismatch')
               }
               style={{
                 flex: "1 1 260px",
@@ -724,7 +853,9 @@ export default function ReportLostPet() {
                   submitting || 
                   verificationResult?.label === 'Fake' || 
                   additionalImages.some(img => img.verificationStatus === 'fake_detected') ||
-                  additionalImages.some(img => img.verificationStatus === 'verifying')
+                  additionalImages.some(img => img.verificationStatus === 'verifying') ||
+                  isPetTypeVerifying ||
+                  petTypeResult?.status === 'mismatch'
                 )
                   ? "rgba(249,115,22,0.6)"
                   : "linear-gradient(90deg,#f97316,#ec4899)",
@@ -734,22 +865,29 @@ export default function ReportLostPet() {
                   submitting || 
                   verificationResult?.label === 'Fake' || 
                   additionalImages.some(img => img.verificationStatus === 'fake_detected') ||
-                  additionalImages.some(img => img.verificationStatus === 'verifying')
+                  additionalImages.some(img => img.verificationStatus === 'verifying') ||
+                  isPetTypeVerifying ||
+                  petTypeResult?.status === 'mismatch'
                 ) ? "not-allowed" : "pointer",
                 boxShadow: "0 12px 34px rgba(249,115,22,0.35)",
                 opacity: (
                   verificationResult?.label === 'Fake' || 
-                  additionalImages.some(img => img.verificationStatus === 'fake_detected')
+                  additionalImages.some(img => img.verificationStatus === 'fake_detected') ||
+                  petTypeResult?.status === 'mismatch'
                 ) ? 0.5 : 1,
               }}
             >
               {submitting 
                 ? "Submitting..." 
-                : additionalImages.some(img => img.verificationStatus === 'verifying')
-                  ? "Verifying Images..."
-                  : (verificationResult?.label === 'Fake' || additionalImages.some(img => img.verificationStatus === 'fake_detected'))
-                    ? "Cannot Submit - Fake Image" 
-                    : "Report Pet"}
+                : isPetTypeVerifying
+                  ? "Verifying Pet Type..."
+                  : additionalImages.some(img => img.verificationStatus === 'verifying')
+                    ? "Verifying Images..."
+                    : petTypeResult?.status === 'mismatch'
+                      ? "Cannot Submit - Wrong Pet Type"
+                      : (verificationResult?.label === 'Fake' || additionalImages.some(img => img.verificationStatus === 'fake_detected'))
+                        ? "Cannot Submit - Fake Image" 
+                        : "Report Pet"}
             </button>
           </div>
         </form>

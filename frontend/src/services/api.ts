@@ -815,6 +815,26 @@ export async function checkImageAuthenticity(imageFile: File): Promise<ApiResult
   return { ok: false, status: resp.status, error: message, data };
 }
 
+// ===== YOLO PET TYPE VERIFICATION API FUNCTION =====
+
+export async function verifyPetType(imageFile: File, petType: string): Promise<ApiResult> {
+  const url = `${PETS_BASE}/verify-pet-type/`;
+  const formData = new FormData();
+  formData.append("image", imageFile);
+  formData.append("pet_type", petType);
+
+  const resp = await fetchWithAuth(url, {
+    method: "POST",
+    body: formData,
+  });
+  const data = await parseJSONSafe(resp);
+  if (resp.ok) {
+    return { ok: true, status: resp.status, data };
+  }
+  const message = extractErrorMessage(data) ?? "Failed to verify pet type";
+  return { ok: false, status: resp.status, error: message, data };
+}
+
 // ===== MULTIPLE PHOTOS API FUNCTIONS =====
 
 export async function uploadLostPetPhotos(reportId: number, photos: File[]): Promise<ApiResult> {

@@ -70,7 +70,7 @@ from .views import (
     ConvertToAdoptionView,
 )
 
-from .ml_views import CheckImageAuthenticityView
+from .ml_views import CheckImageAuthenticityView, VerifyPetTypeView
 
 from .photo_views import (
     UploadFoundPetPhotosView,
@@ -370,6 +370,11 @@ urlpatterns = [
         "check-image-authenticity/",
         CheckImageAuthenticityView.as_view(),
         name="check-image-authenticity",
+    ),
+    path(
+        "verify-pet-type/",
+        VerifyPetTypeView.as_view(),
+        name="verify-pet-type",
     ),
     
     # Multiple Photos Management

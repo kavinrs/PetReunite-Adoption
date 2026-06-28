@@ -14,14 +14,19 @@ import {
   fetchChatroomAccessRequests,
   acceptChatroomAccessRequest,
   rejectChatroomAccessRequest,
+  fetchNearbyUsers,
+  fetchDirectChatRequests,
+  acceptDirectChatRequest,
+  rejectDirectChatRequest,
 } from "../services/api";
 import Toast from "../components/Toast";
 import RoomsPage from "../chat/RoomsPage";
+import NearbyUsersPage from "../components/NearbyUsersPage";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useViewportStandardization } from "../hooks/useViewportStandardization";
 
 type Tab = "owner" | "rescuer" | "adopter";
-type UserPageTab = "home" | "activity" | "chat";
+type UserPageTab = "home" | "activity" | "chat" | "nearby";
 
 // Helper function to get status badge styling
 const getStatusBadge = (status: string) => {
@@ -87,6 +92,9 @@ export default function UserHome() {
   const [chatRequestsLoading, setChatRequestsLoading] = useState(false);
   const [chatroomRequests, setChatroomRequests] = useState<any[]>([]);
   const [chatroomRequestsLoading, setChatroomRequestsLoading] = useState(false);
+  const [directChatRequests, setDirectChatRequests] = useState<any[]>([]);
+  const [directChatRequestsLoading, setDirectChatRequestsLoading] = useState(false);
+  const [reloadDirectChatTrigger, setReloadDirectChatTrigger] = useState(0);
   const [activitySubTab, setActivitySubTab] = useState<"lost" | "found" | "adoption" | "chat">(initialActivitySubTab);
   const [userHasNotification, setUserHasNotification] = useState(false);
   const [userNotificationOpen, setUserNotificationOpen] = useState(false);
@@ -264,6 +272,20 @@ export default function UserHome() {
       }
       setChatroomRequestsLoading(false);
     }
+    async function loadDirectChatRequests() {
+      setDirectChatRequestsLoading(true);
+      console.log("Loading direct chat requests...");
+      const res = await fetchDirectChatRequests('received');
+      console.log("Direct chat requests result:", res);
+      if (!mounted) return;
+      if (res.ok && Array.isArray(res.data)) {
+        console.log("Direct chat requests loaded:", res.data.length, "requests");
+        setDirectChatRequests(res.data);
+      } else {
+        console.error("Failed to load direct chat requests:", res.error);
+      }
+      setDirectChatRequestsLoading(false);
+    }
     async function loadNotifications() {
       const res = await fetchNotifications();
       if (!mounted) return;
@@ -282,18 +304,20 @@ export default function UserHome() {
     loadActivity();
     loadChatRequests();
     loadChatroomRequests();
+    loadDirectChatRequests();
     loadNotifications();
     const id = window.setInterval(() => {
       loadActivity();
       loadChatRequests();
       loadChatroomRequests();
+      loadDirectChatRequests();
       loadNotifications();
     }, 15000);
     return () => {
       mounted = false;
       window.clearInterval(id);
     };
-  }, []);
+  }, [reloadDirectChatTrigger]);
 
   useEffect(() => {
     let mounted = true;
@@ -514,6 +538,12 @@ export default function UserHome() {
         title = "Chatroom Request Accepted";
       } else if (n.notification_type === "chatroom_request_rejected") {
         title = "Chatroom Request Rejected";
+      } else if (n.notification_type === "direct_chat_request") {
+        title = "New Chat Request";
+      } else if (n.notification_type === "direct_chat_accepted") {
+        title = "Chat Request Accepted";
+      } else if (n.notification_type === "direct_chat_rejected") {
+        title = "Chat Request Declined";
       }
       pushItem(`chat-notif-${n.id}`, title, n.created_at || null, "chat");
     }
@@ -708,6 +738,11 @@ export default function UserHome() {
       onClick: () => navigate("/user/volunteer"),
     },
     {
+      label: "Nearby Users",
+      icon: "📍",
+      onClick: () => setPageTab("nearby"),
+    },
+    {
       label: "My Activity",
       icon: "📜",
       onClick: () => setPageTab("activity"),
@@ -803,6 +838,7 @@ export default function UserHome() {
               const isActive =
                 (link.label === "Home" && pageTab === "home") ||
                 (link.label === "My Activity" && pageTab === "activity") ||
+                (link.label === "Nearby Users" && pageTab === "nearby") ||
                 (link.label === "Chat" && pageTab === "chat");
               return (
               <button
@@ -1245,8 +1281,8 @@ export default function UserHome() {
           </div>
           </div>
 
-          {/* Find Your Perfect Pet Section (hide on chat tab) */}
-          {pageTab !== "chat" && (
+          {/* Find Your Perfect Pet Section (hide on chat and nearby tabs) */}
+          {pageTab !== "chat" && pageTab !== "nearby" && (
             <div
               style={{
                 background: "white",
@@ -1761,46 +1797,235 @@ export default function UserHome() {
 
                       {/* Chat Requests Tab */}
                       {activitySubTab === "chat" && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                          {chatRequests.length === 0 ? (
-                            <div style={{ padding: 40, textAlign: "center", color: "#94a3b8" }}>
-                              <div style={{ fontSize: 48, marginBottom: 12 }}>💬</div>
-                              <div style={{ fontWeight: 600 }}>No chat requests yet</div>
-                              <div style={{ fontSize: 13, marginTop: 4 }}>Request to chat about a pet to see it here</div>
-                            </div>
-                          ) : (
-                            chatRequests.map((req: any) => (
-                              <div key={`chat-req-${req.id}`} style={{ background: "#fafafa", border: "1px solid #f1f5f9", borderRadius: 16, padding: 16, display: "grid", gridTemplateColumns: "48px 1fr auto", gap: 16 }}>
-                                <div style={{ width: 48, height: 48, borderRadius: "50%", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 18 }}>💬</div>
-                                <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                                  <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-                                    {(() => {
-                                      const status = (req.status || 'requested').toLowerCase();
-                                      let badgeStyle = { bg: '#fef3c7', color: '#92400e', text: 'PENDING' };
-                                      if (status === 'active' || status === 'pending_user') badgeStyle = { bg: '#d1fae5', color: '#065f46', text: 'ACCEPTED' };
-                                      else if (status === 'closed') badgeStyle = { bg: '#fee2e2', color: '#991b1b', text: 'CLOSED' };
-                                      else if (status === 'read_only') badgeStyle = { bg: '#fef3c7', color: '#92400e', text: 'WAITING' };
-                                      return <span style={{ padding: "2px 8px", borderRadius: 999, background: badgeStyle.bg, color: badgeStyle.color, fontSize: 11, fontWeight: 800 }}>{badgeStyle.text}</span>;
-                                    })()}
-                                    {req.pet_kind && <span style={{ padding: "2px 8px", borderRadius: 999, background: req.pet_kind === "found" ? "#dbeafe" : "#fee2e2", color: req.pet_kind === "found" ? "#1e40af" : "#991b1b", fontSize: 11, fontWeight: 700 }}>{req.pet_kind.toUpperCase()}</span>}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                          {/* Pet Chat Requests Section */}
+                          <div>
+                            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12, color: "#0f172a" }}>
+                              Pet-Related Chat Requests
+                            </h3>
+                            {chatroomRequestsLoading ? (
+                              <div style={{ padding: 40, textAlign: "center", color: "#94a3b8" }}>
+                                Loading...
+                              </div>
+                            ) : chatroomRequests.length === 0 ? (
+                              <div style={{ padding: 40, textAlign: "center", color: "#94a3b8", background: "#f8fafc", borderRadius: 12 }}>
+                                <div style={{ fontSize: 48, marginBottom: 12 }}>💬</div>
+                                <div style={{ fontWeight: 600 }}>No pet chat requests yet</div>
+                                <div style={{ fontSize: 13, marginTop: 4 }}>Request to chat about a pet to see it here</div>
+                              </div>
+                            ) : (
+                              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                                {chatroomRequests.map((req: any) => (
+                                  <div key={`chatroom-req-${req.id}`} style={{ background: "#fafafa", border: "1px solid #f1f5f9", borderRadius: 16, padding: 16, display: "grid", gridTemplateColumns: "48px 1fr auto", gap: 16 }}>
+                                    <div style={{ width: 48, height: 48, borderRadius: "50%", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 18 }}>🐾</div>
+                                    <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                                      <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                                        {(() => {
+                                          const status = (req.status || 'pending').toLowerCase();
+                                          let badgeStyle = { bg: '#fef3c7', color: '#92400e', text: 'PENDING' };
+                                          if (status === 'approved') badgeStyle = { bg: '#d1fae5', color: '#065f46', text: 'APPROVED' };
+                                          else if (status === 'rejected') badgeStyle = { bg: '#fee2e2', color: '#991b1b', text: 'REJECTED' };
+                                          return <span style={{ padding: "2px 8px", borderRadius: 999, background: badgeStyle.bg, color: badgeStyle.color, fontSize: 11, fontWeight: 800 }}>{badgeStyle.text}</span>;
+                                        })()}
+                                      </div>
+                                      <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>Chatroom: {req.chatroom_title || "Pet Discussion"}</div>
+                                      <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                                        {req.status === 'approved' ? "Access granted - go to Chat tab" : req.status === 'rejected' ? "Access denied" : "Waiting for approval"}
+                                      </div>
+                                    </div>
+                                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center", gap: 8 }}>
+                                      <div style={{ fontSize: 11, color: "#9ca3af" }}>{req.created_at ? new Date(req.created_at).toLocaleDateString() : ""}</div>
+                                      {req.status === 'approved' && (
+                                        <button onClick={() => setPageTab("chat")} style={{ padding: "6px 12px", borderRadius: 999, border: "none", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", color: "white", cursor: "pointer", fontWeight: 600, fontSize: 11 }}>Go to Chat</button>
+                                      )}
+                                    </div>
                                   </div>
-                                  <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>{req.pet_name || req.pet_unique_id || `Pet #${req.pet_id}`}</div>
-                                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
-                                    {(() => {
-                                      const status = (req.status || 'requested').toLowerCase();
-                                      if (status === 'active' || status === 'pending_user') return "Chat accepted - go to Chat tab";
-                                      if (status === 'closed') return "Chat closed by admin";
-                                      return "Waiting for admin approval";
-                                    })()}
-                                </div>
+                                ))}
                               </div>
-                              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center", gap: 8 }}>
-                                <div style={{ fontSize: 11, color: "#9ca3af" }}>{req.created_at ? new Date(req.created_at).toLocaleDateString() : ""}</div>
-                                <button onClick={() => setPageTab("chat")} style={{ padding: "6px 12px", borderRadius: 999, border: "none", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", color: "white", cursor: "pointer", fontWeight: 600, fontSize: 11 }}>Go to Chat</button>
+                            )}
+                          </div>
+
+                          {/* Direct Chat Requests Section */}
+                          <div>
+                            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12, color: "#0f172a" }}>
+                              Direct Chat Requests
+                            </h3>
+                            {directChatRequestsLoading ? (
+                              <div style={{ padding: 40, textAlign: "center", color: "#94a3b8" }}>
+                                Loading...
                               </div>
-                            </div>
-                          ))
-                        )}
+                            ) : directChatRequests.length === 0 ? (
+                              <div style={{ padding: 40, textAlign: "center", color: "#94a3b8", background: "#f8fafc", borderRadius: 12 }}>
+                                <div style={{ fontSize: 48, marginBottom: 12 }}>👥</div>
+                                <div style={{ fontWeight: 600 }}>No direct chat requests</div>
+                                <div style={{ fontSize: 13, marginTop: 4 }}>Requests from nearby users will appear here</div>
+                              </div>
+                            ) : (
+                              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                                {directChatRequests.map((req: any) => (
+                                  <div key={`direct-req-${req.id}`} style={{ background: "#fafafa", border: "1px solid #f1f5f9", borderRadius: 16, padding: 16 }}>
+                                    <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
+                                      {/* Profile Photo */}
+                                      <div style={{
+                                        width: 56,
+                                        height: 56,
+                                        borderRadius: "50%",
+                                        background: req.sender?.profile_photo
+                                          ? `url(${req.sender.profile_photo})`
+                                          : "linear-gradient(135deg, #10b981, #059669)",
+                                        backgroundSize: "cover",
+                                        backgroundPosition: "center",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        fontSize: 28,
+                                        color: "#ffffff",
+                                        flexShrink: 0,
+                                      }}>
+                                        {!req.sender?.profile_photo && "👤"}
+                                      </div>
+                                      
+                                      {/* Request Info */}
+                                      <div style={{ flex: 1 }}>
+                                        <div style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "center" }}>
+                                          <span style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>
+                                            {req.sender?.full_name || req.sender?.username || "Unknown User"}
+                                          </span>
+                                          {(() => {
+                                            const status = (req.status || 'pending').toLowerCase();
+                                            let badgeStyle = { bg: '#fef3c7', color: '#92400e', text: 'PENDING' };
+                                            if (status === 'accepted') badgeStyle = { bg: '#d1fae5', color: '#065f46', text: 'ACCEPTED' };
+                                            else if (status === 'rejected') badgeStyle = { bg: '#fee2e2', color: '#991b1b', text: 'DECLINED' };
+                                            return <span style={{ padding: "2px 8px", borderRadius: 999, background: badgeStyle.bg, color: badgeStyle.color, fontSize: 11, fontWeight: 800 }}>{badgeStyle.text}</span>;
+                                          })()}
+                                        </div>
+                                        <div style={{ fontSize: 13, color: "#64748b", marginBottom: 8 }}>
+                                          @{req.sender?.username}
+                                        </div>
+                                        <div style={{ fontSize: 14, color: "#334155", fontWeight: 500, padding: 12, background: "#ffffff", borderRadius: 8, marginBottom: 8 }}>
+                                          "{req.reason}"
+                                        </div>
+                                        <div style={{ fontSize: 11, color: "#9ca3af" }}>
+                                          {req.created_at ? new Date(req.created_at).toLocaleString() : ""}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    {req.status === 'pending' && (
+                                      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                                        <button
+                                          onClick={async () => {
+                                            console.log("Accepting direct chat request:", req.id);
+                                            const result = await acceptDirectChatRequest(req.id);
+                                            console.log("Accept result:", result);
+                                            if (result.ok) {
+                                              const chatroomId = result.data?.chatroom_id;
+                                              console.log("Chatroom created/found:", chatroomId);
+                                              
+                                              setToast({
+                                                isVisible: true,
+                                                type: "success",
+                                                title: "Request Accepted",
+                                                message: `You can now chat with ${req.sender?.full_name || req.sender?.username || "this user"}`
+                                              });
+                                              
+                                              // Trigger reload of direct chat requests
+                                              setReloadDirectChatTrigger(prev => prev + 1);
+                                              
+                                              // Navigate to Direct Chat tab
+                                              setPageTab("chat");
+                                              
+                                              // Store chatroom_id in session storage to select it in RoomsPage
+                                              if (chatroomId) {
+                                                sessionStorage.setItem('selected_direct_chatroom_id', String(chatroomId));
+                                              }
+                                            } else {
+                                              console.error("Failed to accept request:", result.error);
+                                              setToast({
+                                                isVisible: true,
+                                                type: "error",
+                                                title: "Error",
+                                                message: result.error || "Failed to accept request"
+                                              });
+                                            }
+                                          }}
+                                          style={{
+                                            flex: 1,
+                                            padding: "10px 16px",
+                                            background: "linear-gradient(135deg, #10b981, #059669)",
+                                            color: "#ffffff",
+                                            border: "none",
+                                            borderRadius: 8,
+                                            fontSize: 14,
+                                            fontWeight: 600,
+                                            cursor: "pointer",
+                                          }}
+                                        >
+                                          ✓ Accept
+                                        </button>
+                                        <button
+                                          onClick={async () => {
+                                            if (confirm(`Decline chat request from ${req.sender?.full_name}?`)) {
+                                              const result = await rejectDirectChatRequest(req.id);
+                                              if (result.ok) {
+                                                setToast({
+                                                  isVisible: true,
+                                                  type: "success",
+                                                  title: "Request Declined",
+                                                  message: "Chat request declined"
+                                                });
+                                                setReloadDirectChatTrigger(prev => prev + 1);
+                                              } else {
+                                                setToast({
+                                                  isVisible: true,
+                                                  type: "error",
+                                                  title: "Error",
+                                                  message: result.error || "Failed to decline request"
+                                                });
+                                              }
+                                            }
+                                          }}
+                                          style={{
+                                            flex: 1,
+                                            padding: "10px 16px",
+                                            background: "#f1f5f9",
+                                            color: "#64748b",
+                                            border: "none",
+                                            borderRadius: 8,
+                                            fontSize: 14,
+                                            fontWeight: 600,
+                                            cursor: "pointer",
+                                          }}
+                                        >
+                                          ✗ Decline
+                                        </button>
+                                      </div>
+                                    )}
+                                    {req.status === 'accepted' && (
+                                      <button
+                                        onClick={() => setPageTab("chat")}
+                                        style={{
+                                          width: "100%",
+                                          padding: "10px 16px",
+                                          background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                                          color: "#ffffff",
+                                          border: "none",
+                                          borderRadius: 8,
+                                          fontSize: 14,
+                                          fontWeight: 600,
+                                          cursor: "pointer",
+                                          marginTop: 12,
+                                        }}
+                                      >
+                                        💬 Go to Chat
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
                     </>
@@ -2052,6 +2277,9 @@ export default function UserHome() {
             )}
           </div>
           )}
+
+          {/* Nearby Users page content */}
+          {pageTab === "nearby" && <NearbyUsersPage />}
 
           {/* Standalone Chat page content */}
           {pageTab === "chat" && (

@@ -3,6 +3,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import parsers
+from math import radians, cos, sin, asin, sqrt
 
 from .serializers import (
     RegisterSerializer,
@@ -216,3 +217,135 @@ class AdminVolunteerDetailView(generics.RetrieveUpdateDestroyAPIView):
         if user.is_staff or user.is_superuser:
             return VolunteerRequest.objects.all()
         return VolunteerRequest.objects.filter(user=user)
+
+
+def haversine_distance(lat1, lon1, lat2, lon2):
+    """
+    Calculate the great circle distance in kilometers between two points 
+    on the earth (specified in decimal degrees)
+    """
+    # Convert decimal degrees to radians
+    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+    
+    # Haversine formula
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+    a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+    c = 2 * asin(sqrt(a))
+    
+    # Radius of earth in kilometers
+    r = 6371
+    
+    return c * r
+
+
+class NearbyUsersView(APIView):
+    """
+    Get users within a specified radius (default 5-10 km) of the current user's location
+    Can search from profile location OR custom coordinates
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        # Get current user's profile
+        try:
+            user_profile = UserProfile.objects.get(user=request.user)
+        except UserProfile.DoesNotExist:
+            return Response(
+                {"detail": "User profile not found. Please update your profile with location."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Check if custom lat/lon provided in query params (for temporary search)
+        custom_lat = request.query_params.get("lat")
+        custom_lon = request.query_params.get("lon")
+        
+        if custom_lat and custom_lon:
+            try:
+                search_latitude = float(custom_lat)
+                search_longitude = float(custom_lon)
+            except ValueError:
+                return Response(
+                    {"detail": "Invalid latitude or longitude values"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        else:
+            # Use profile location
+            if not user_profile.latitude or not user_profile.longitude:
+                return Response(
+                    {
+                        "detail": "Location not set. Please update your profile with your location.",
+                        "nearby_users": []
+                    },
+                    status=status.HTTP_200_OK
+                )
+            search_latitude = user_profile.latitude
+            search_longitude = user_profile.longitude
+
+        # Get radius from query params (default 10 km, min 5 km, max 50 km)
+        try:
+            radius_km = float(request.query_params.get("radius", 10))
+            radius_km = max(5, min(radius_km, 50))  # Clamp between 5 and 50 km
+        except ValueError:
+            radius_km = 10
+
+        # Get all users with location data (excluding current user)
+        # Only show users whose PROFILE location is set
+        all_profiles = UserProfile.objects.filter(
+            latitude__isnull=False,
+            longitude__isnull=False
+        ).exclude(user=request.user).select_related('user')
+
+        nearby_users = []
+        
+        for profile in all_profiles:
+            # Calculate distance from search location to user's PROFILE location
+            distance = haversine_distance(
+                search_latitude,
+                search_longitude,
+                profile.latitude,  # User's profile location
+                profile.longitude  # User's profile location
+            )
+
+            # If within radius, add to results
+            if distance <= radius_km:
+                nearby_users.append({
+                    "user_unique_id": profile.user_unique_id,
+                    "user_id": profile.user.id,
+                    "full_name": profile.full_name,
+                    "username": profile.user.username,
+                    "city": profile.city,
+                    "state": profile.state,
+                    "profile_photo": request.build_absolute_uri(profile.profile_photo.url) if profile.profile_photo else None,
+                    "distance_km": round(distance, 2),
+                    "role": profile.role,
+                })
+
+        # Sort by distance (closest first)
+        nearby_users.sort(key=lambda x: x["distance_km"])
+
+        # Determine what location info to return
+        if custom_lat and custom_lon:
+            # Custom search location
+            location_info = {
+                "city": "Custom Location",
+                "state": "",
+                "latitude": search_latitude,
+                "longitude": search_longitude,
+            }
+        else:
+            # Profile location
+            location_info = {
+                "city": user_profile.city,
+                "state": user_profile.state,
+                "latitude": search_latitude,
+                "longitude": search_longitude,
+            }
+
+        return Response({
+            "count": len(nearby_users),
+            "radius_km": radius_km,
+            "your_location": location_info,
+            "nearby_users": nearby_users,
+            "search_from_profile": custom_lat is None and custom_lon is None,
+        })

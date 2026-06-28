@@ -1,411 +1,438 @@
-from django.urls import path
-
-from .views import (
-    AdminClearDataView,
-    AdminConversationAcceptView,
-    AdminConversationCloseView,
-    AdminConversationDeleteView,
-    AdminConversationClearMessagesView,
-    AdminConversationListView,
-    AdminConversationStatusUpdateView,
-    AdminFoundPetDetailView,
-    AdminFoundPetListView,
-    AdminLostPetDetailView,
-    AdminLostPetListView,
-    AdminPetDetailView,
-    AdminPetDeleteView,
-    AdminPetListView,
-    AdminReportSummaryView,
-    AdminUpdateAdoptionRequestView,
-    AdminUserListView,
-    AdminUserDeleteView,
-    AdminStaffListView,
-    AdminUserActivityView,
-    AdminChatMessageDeleteForEveryoneView,
-    AdminChatMessageDeleteForMeView,
-    AdminChatMessageListCreateView,
-    AdoptionRequestDetailView,
-    AdoptionRequestListView,
-    AllReportsView,
-    CreateAdoptionRequestView,
-    CreateMessageView,
-    FoundPetReportView,
-    FoundPetReportDetailView,
-    LostPetReportView,
-    LostPetReportDetailView,
-    MessageListView,
-    MyActivityView,
-    PetDetailView,
-    PetListView,
-    PublicFoundPetsView,
-    PublicLostPetsView,
-    UserAdoptionRequestsView,
-    UserChatMessageDeleteForEveryoneView,
-    UserChatMessageDeleteForMeView,
-    UserChatMessageListCreateView,
-    UserConversationConfirmView,
-    UserConversationDeleteView,
-    UserConversationListCreateView,
-    NotificationListView,
-    NotificationMarkReadView,
-    NotificationMarkAllReadView,
-    # Chatroom Access Approval Views
-    ChatroomInviteUserView,
-    ChatroomAccessRequestListView,
-    ChatroomAccessRequestAcceptView,
-    ChatroomAccessRequestRejectView,
-    ChatroomMessageListCreateView,
-    ChatroomMessageDeleteForMeView,
-    ChatroomMessageDeleteForEveryoneView,
-    ChatroomParticipantsView,
-    ClearChatroomMessagesView,
-    DeleteChatroomView,
-    MyChatroomsView,
-    AdminChatroomsView,
-    AdminCreateChatroomView,
-    AdminChatroomParticipantsView,
-    AdminChatroomAccessRequestsView,
-    # Adoption from Found Pets Views
-    EligibleForAdoptionListView,
-    ConvertToAdoptionView,
-)
-
-from .ml_views import CheckImageAuthenticityView, VerifyPetTypeView, ClassifyBreedView
-
-from .photo_views import (
-    UploadFoundPetPhotosView,
-    UploadLostPetPhotosView,
-    DeleteFoundPetPhotoView,
-    DeleteLostPetPhotoView,
-    ReorderPhotosView,
-)
-
-urlpatterns = [
-    # User-facing report endpoints
-    path("reports/found/", FoundPetReportView.as_view(), name="pets-found-report"),
-    path(
-        "reports/found/<int:pk>/",
-        FoundPetReportDetailView.as_view(),
-        name="pets-found-report-detail",
-    ),
-    path("reports/lost/", LostPetReportView.as_view(), name="pets-lost-report"),
-    path(
-        "reports/lost/<int:pk>/",
-        LostPetReportDetailView.as_view(),
-        name="pets-lost-report-detail",
-    ),
-    path("reports/all/", AllReportsView.as_view(), name="pets-all-reports"),
-    # Public pet listings for dashboard
-    path("public/lost/", PublicLostPetsView.as_view(), name="pets-public-lost"),
-    path("public/found/", PublicFoundPetsView.as_view(), name="pets-public-found"),
-    # Admin dashboard endpoints
-    path("admin/summary/", AdminReportSummaryView.as_view(), name="admin-report-summary"),
-    path("admin/users/", AdminUserListView.as_view(), name="admin-user-list"),
-    path("admin/users/<int:user_id>/", AdminUserDeleteView.as_view(), name="admin-user-delete"),
-    path("admin/staff/", AdminStaffListView.as_view(), name="admin-staff-list"),
-    path(
-        "admin/users/<int:user_id>/activity/",
-        AdminUserActivityView.as_view(),
-        name="admin-user-activity",
-    ),
-    path(
-        "admin/reports/found/",
-        AdminFoundPetListView.as_view(),
-        name="pets-admin-found-list",
-    ),
-    path(
-        "admin/reports/found/<int:pk>/",
-        AdminFoundPetDetailView.as_view(),
-        name="pets-admin-found-detail",
-    ),
-    path(
-        "admin/reports/lost/",
-        AdminLostPetListView.as_view(),
-        name="pets-admin-lost-list",
-    ),
-    path(
-        "admin/reports/lost/<int:pk>/",
-        AdminLostPetDetailView.as_view(),
-        name="pets-admin-lost-detail",
-    ),
-    # Adoption feature endpoints
-    path("pets/", PetListView.as_view(), name="pets-list"),
-    path("pets/<int:pk>/", PetDetailView.as_view(), name="pets-detail"),
-    # Admin pet endpoints (can view all pets including inactive)
-    path("admin/pets/", AdminPetListView.as_view(), name="admin-pets-list"),
-    path("admin/pets/<int:pk>/", AdminPetDetailView.as_view(), name="admin-pets-detail"),
-    path("admin/pets/<int:pk>/delete/", AdminPetDeleteView.as_view(), name="admin-pets-delete"),
-    path(
-        "pets/<int:pet_id>/adoption-requests/",
-        CreateAdoptionRequestView.as_view(),
-        name="create-adoption-request",
-    ),
-    path(
-        "adoption-requests/",
-        AdoptionRequestListView.as_view(),
-        name="adoption-requests-list",
-    ),
-    path(
-        "adoption-requests/<int:pk>/",
-        AdoptionRequestDetailView.as_view(),
-        name="adoption-request-detail",
-    ),
-    path(
-        "my-adoption-requests/",
-        UserAdoptionRequestsView.as_view(),
-        name="user-adoption-requests",
-    ),
-    path(
-        "my-activity/",
-        MyActivityView.as_view(),
-        name="user-my-activity",
-    ),
-    path(
-        "adoption-requests/<int:adoption_request_id>/messages/",
-        MessageListView.as_view(),
-        name="adoption-messages-list",
-    ),
-    path(
-        "adoption-requests/<int:adoption_request_id>/messages/create/",
-        CreateMessageView.as_view(),
-        name="create-adoption-message",
-    ),
-    # Admin adoption endpoints
-    path(
-        "admin/adoption-requests/<int:pk>/",
-        AdminUpdateAdoptionRequestView.as_view(),
-        name="admin-update-adoption-request",
-    ),
-    path(
-        "admin/clear-data/",
-        AdminClearDataView.as_view(),
-        name="admin-clear-data",
-    ),
-    # General chat endpoints
-    path(
-        "chat/conversations/",
-        UserConversationListCreateView.as_view(),
-        name="chat-conversations",
-    ),
-    path(
-        "chat/conversations/<int:pk>/confirm/",
-        UserConversationConfirmView.as_view(),
-        name="chat-conversation-confirm",
-    ),
-    path(
-        "chat/conversations/<int:conversation_id>/messages/",
-        UserChatMessageListCreateView.as_view(),
-        name="chat-messages-user",
-    ),
-    path(
-        "admin/chat/conversations/",
-        AdminConversationListView.as_view(),
-        name="chat-conversations-admin",
-    ),
-    path(
-        "admin/chat/conversations/<int:conversation_id>/messages/",
-        AdminChatMessageListCreateView.as_view(),
-        name="chat-messages-admin",
-    ),
-    path(
-        "admin/chat/conversations/<int:pk>/accept/",
-        AdminConversationAcceptView.as_view(),
-        name="chat-conversation-accept",
-    ),
-    path(
-        "admin/chat/conversations/<int:pk>/close/",
-        AdminConversationCloseView.as_view(),
-        name="chat-conversation-close",
-    ),
-    path(
-        "admin/chat/conversations/<int:pk>/status/",
-        AdminConversationStatusUpdateView.as_view(),
-        name="chat-conversation-status-update",
-    ),
-    path(
-        "admin/chat/conversations/<int:pk>/delete/",
-        AdminConversationDeleteView.as_view(),
-        name="chat-conversation-delete",
-    ),
-    path(
-        "admin/chat/conversations/<int:pk>/clear-messages/",
-        AdminConversationClearMessagesView.as_view(),
-        name="chat-conversation-clear-messages",
-    ),
-    path(
-        "chat/conversations/<int:pk>/delete/",
-        UserConversationDeleteView.as_view(),
-        name="chat-conversation-user-delete",
-    ),
-    path(
-        "chat/conversations/<int:conversation_id>/messages/<int:message_id>/delete-for-me/",
-        UserChatMessageDeleteForMeView.as_view(),
-        name="chat-message-user-delete-for-me",
-    ),
-    path(
-        "chat/conversations/<int:conversation_id>/messages/<int:message_id>/delete-for-everyone/",
-        UserChatMessageDeleteForEveryoneView.as_view(),
-        name="chat-message-user-delete-for-everyone",
-    ),
-    path(
-        "admin/chat/conversations/<int:conversation_id>/messages/<int:message_id>/delete-for-me/",
-        AdminChatMessageDeleteForMeView.as_view(),
-        name="chat-message-admin-delete-for-me",
-    ),
-    path(
-        "admin/chat/conversations/<int:conversation_id>/messages/<int:message_id>/delete-for-everyone/",
-        AdminChatMessageDeleteForEveryoneView.as_view(),
-        name="chat-message-admin-delete-for-everyone",
-    ),
-    # Notification endpoints
-    path(
-        "notifications/",
-        NotificationListView.as_view(),
-        name="notifications-list",
-    ),
-    path(
-        "notifications/<int:pk>/mark-read/",
-        NotificationMarkReadView.as_view(),
-        name="notification-mark-read",
-    ),
-    path(
-        "notifications/mark-all-read/",
-        NotificationMarkAllReadView.as_view(),
-        name="notifications-mark-all-read",
-    ),
-    # Chatroom Access Approval endpoints
-    path(
-        "chatrooms/<int:chatroom_id>/invite-user/",
-        ChatroomInviteUserView.as_view(),
-        name="chatroom-invite-user",
-    ),
-    path(
-        "chatrooms/create-invitation/",
-        ChatroomInviteUserView.as_view(),
-        name="chatroom-create-invitation",
-    ),
-    path(
-        "chatroom-access-requests/",
-        ChatroomAccessRequestListView.as_view(),
-        name="chatroom-access-requests-list",
-    ),
-    path(
-        "chatroom-access-requests/<int:request_id>/accept/",
-        ChatroomAccessRequestAcceptView.as_view(),
-        name="chatroom-access-request-accept",
-    ),
-    path(
-        "chatroom-access-requests/<int:request_id>/reject/",
-        ChatroomAccessRequestRejectView.as_view(),
-        name="chatroom-access-request-reject",
-    ),
-    path(
-        "chatrooms/my-chatrooms/",
-        MyChatroomsView.as_view(),
-        name="my-chatrooms",
-    ),
-    path(
-        "admin/chatrooms/",
-        AdminChatroomsView.as_view(),
-        name="admin-chatrooms",
-    ),
-    path(
-        "admin/chatrooms/create/",
-        AdminCreateChatroomView.as_view(),
-        name="admin-create-chatroom",
-    ),
-    path(
-        "admin/chatrooms/<int:chatroom_id>/participants/",
-        AdminChatroomParticipantsView.as_view(),
-        name="admin-chatroom-participants",
-    ),
-    path(
-        "admin/chatrooms/<int:chatroom_id>/access-requests/",
-        AdminChatroomAccessRequestsView.as_view(),
-        name="admin-chatroom-access-requests",
-    ),
-    path(
-        "chatrooms/<int:chatroom_id>/messages/",
-        ChatroomMessageListCreateView.as_view(),
-        name="chatroom-messages",
-    ),
-    path(
-        "chatrooms/<int:chatroom_id>/messages/<int:message_id>/delete-for-me/",
-        ChatroomMessageDeleteForMeView.as_view(),
-        name="chatroom-message-delete-for-me",
-    ),
-    path(
-        "chatrooms/<int:chatroom_id>/messages/<int:message_id>/delete-for-everyone/",
-        ChatroomMessageDeleteForEveryoneView.as_view(),
-        name="chatroom-message-delete-for-everyone",
-    ),
-    path(
-        "chatrooms/<int:chatroom_id>/participants/",
-        ChatroomParticipantsView.as_view(),
-        name="chatroom-participants",
-    ),
-    path(
-        "chatrooms/<int:chatroom_id>/clear-messages/",
-        ClearChatroomMessagesView.as_view(),
-        name="clear-chatroom-messages",
-    ),
-    path(
-        "chatrooms/<int:chatroom_id>/delete/",
-        DeleteChatroomView.as_view(),
-        name="delete-chatroom",
-    ),
-    # Adoption from Found Pets endpoints
-    path(
-        "admin/adoption/eligible-pets/",
-        EligibleForAdoptionListView.as_view(),
-        name="eligible-for-adoption-list",
-    ),
-    path(
-        "admin/adoption/convert/<int:pk>/",
-        ConvertToAdoptionView.as_view(),
-        name="convert-to-adoption",
-    ),
-    # ML-based Image Verification
-    path(
-        "check-image-authenticity/",
-        CheckImageAuthenticityView.as_view(),
-        name="check-image-authenticity",
-    ),
-    path(
-        "verify-pet-type/",
-        VerifyPetTypeView.as_view(),
-        name="verify-pet-type",
-    ),
-    path(
-        "classify-breed/",
-        ClassifyBreedView.as_view(),
-        name="classify-breed",
-    ),
-    
-    # Multiple Photos Management
-    path(
-        "reports/found/<int:report_id>/photos/",
-        UploadFoundPetPhotosView.as_view(),
-        name="upload-found-pet-photos",
-    ),
-    path(
-        "reports/lost/<int:report_id>/photos/",
-        UploadLostPetPhotosView.as_view(),
-        name="upload-lost-pet-photos",
-    ),
-    path(
-        "photos/found/<int:photo_id>/",
-        DeleteFoundPetPhotoView.as_view(),
-        name="delete-found-pet-photo",
-    ),
-    path(
-        "photos/lost/<int:photo_id>/",
-        DeleteLostPetPhotoView.as_view(),
-        name="delete-lost-pet-photo",
-    ),
-    path(
-        "reports/<str:report_type>/<int:report_id>/photos/reorder/",
-        ReorderPhotosView.as_view(),
-        name="reorder-photos",
-    ),
-]
+from django.urls import path
+
+from .views import (
+    AdminClearDataView,
+    AdminConversationAcceptView,
+    AdminConversationCloseView,
+    AdminConversationDeleteView,
+    AdminConversationClearMessagesView,
+    AdminConversationListView,
+    AdminConversationStatusUpdateView,
+    AdminFoundPetDetailView,
+    AdminFoundPetListView,
+    AdminLostPetDetailView,
+    AdminLostPetListView,
+    AdminPetDetailView,
+    AdminPetDeleteView,
+    AdminPetListView,
+    AdminReportSummaryView,
+    AdminUpdateAdoptionRequestView,
+    AdminUserListView,
+    AdminUserDeleteView,
+    AdminStaffListView,
+    AdminUserActivityView,
+    AdminChatMessageDeleteForEveryoneView,
+    AdminChatMessageDeleteForMeView,
+    AdminChatMessageListCreateView,
+    AdoptionRequestDetailView,
+    AdoptionRequestListView,
+    AllReportsView,
+    CreateAdoptionRequestView,
+    CreateMessageView,
+    FoundPetReportView,
+    FoundPetReportDetailView,
+    LostPetReportView,
+    LostPetReportDetailView,
+    MessageListView,
+    MyActivityView,
+    PetDetailView,
+    PetListView,
+    PublicFoundPetsView,
+    PublicLostPetsView,
+    UserAdoptionRequestsView,
+    UserChatMessageDeleteForEveryoneView,
+    UserChatMessageDeleteForMeView,
+    UserChatMessageListCreateView,
+    UserConversationConfirmView,
+    UserConversationDeleteView,
+    UserConversationListCreateView,
+    NotificationListView,
+    NotificationMarkReadView,
+    NotificationMarkAllReadView,
+                                    
+    ChatroomInviteUserView,
+    ChatroomAccessRequestListView,
+    ChatroomAccessRequestAcceptView,
+    ChatroomAccessRequestRejectView,
+    ChatroomMessageListCreateView,
+    ChatroomMessageDeleteForMeView,
+    ChatroomMessageDeleteForEveryoneView,
+    ChatroomParticipantsView,
+    ClearChatroomMessagesView,
+    DeleteChatroomView,
+    MyChatroomsView,
+    AdminChatroomsView,
+    AdminCreateChatroomView,
+    AdminChatroomParticipantsView,
+    AdminChatroomAccessRequestsView,
+                                    
+    EligibleForAdoptionListView,
+    ConvertToAdoptionView,
+                               
+    DirectChatRequestCreateView,
+    DirectChatRequestListView,
+    DirectChatRequestAcceptView,
+    DirectChatRequestRejectView,
+)
+
+from .ml_views import CheckImageAuthenticityView, VerifyPetTypeView, ClassifyBreedView
+
+from .photo_views import (
+    UploadFoundPetPhotosView,
+    UploadLostPetPhotosView,
+    DeleteFoundPetPhotoView,
+    DeleteLostPetPhotoView,
+    ReorderPhotosView,
+)
+
+urlpatterns = [
+                                  
+    path("reports/found/", FoundPetReportView.as_view(), name="pets-found-report"),
+    path(
+        "reports/found/<int:pk>/",
+        FoundPetReportDetailView.as_view(),
+        name="pets-found-report-detail",
+    ),
+    path("reports/lost/", LostPetReportView.as_view(), name="pets-lost-report"),
+    path(
+        "reports/lost/<int:pk>/",
+        LostPetReportDetailView.as_view(),
+        name="pets-lost-report-detail",
+    ),
+    path("reports/all/", AllReportsView.as_view(), name="pets-all-reports"),
+                                       
+    path("public/lost/", PublicLostPetsView.as_view(), name="pets-public-lost"),
+    path("public/found/", PublicFoundPetsView.as_view(), name="pets-public-found"),
+                               
+    path("admin/summary/", AdminReportSummaryView.as_view(), name="admin-report-summary"),
+    path("admin/users/", AdminUserListView.as_view(), name="admin-user-list"),
+    path("admin/users/<int:user_id>/", AdminUserDeleteView.as_view(), name="admin-user-delete"),
+    path("admin/staff/", AdminStaffListView.as_view(), name="admin-staff-list"),
+    path(
+        "admin/users/<int:user_id>/activity/",
+        AdminUserActivityView.as_view(),
+        name="admin-user-activity",
+    ),
+    path(
+        "admin/reports/found/",
+        AdminFoundPetListView.as_view(),
+        name="pets-admin-found-list",
+    ),
+    path(
+        "admin/reports/found/<int:pk>/",
+        AdminFoundPetDetailView.as_view(),
+        name="pets-admin-found-detail",
+    ),
+    path(
+        "admin/reports/lost/",
+        AdminLostPetListView.as_view(),
+        name="pets-admin-lost-list",
+    ),
+    path(
+        "admin/reports/lost/<int:pk>/",
+        AdminLostPetDetailView.as_view(),
+        name="pets-admin-lost-detail",
+    ),
+                                
+    path("pets/", PetListView.as_view(), name="pets-list"),
+    path("pets/<int:pk>/", PetDetailView.as_view(), name="pets-detail"),
+                                                                
+    path("admin/pets/", AdminPetListView.as_view(), name="admin-pets-list"),
+    path("admin/pets/<int:pk>/", AdminPetDetailView.as_view(), name="admin-pets-detail"),
+    path("admin/pets/<int:pk>/delete/", AdminPetDeleteView.as_view(), name="admin-pets-delete"),
+    path(
+        "pets/<int:pet_id>/adoption-requests/",
+        CreateAdoptionRequestView.as_view(),
+        name="create-adoption-request",
+    ),
+    path(
+        "adoption-requests/",
+        AdoptionRequestListView.as_view(),
+        name="adoption-requests-list",
+    ),
+    path(
+        "adoption-requests/<int:pk>/",
+        AdoptionRequestDetailView.as_view(),
+        name="adoption-request-detail",
+    ),
+    path(
+        "my-adoption-requests/",
+        UserAdoptionRequestsView.as_view(),
+        name="user-adoption-requests",
+    ),
+    path(
+        "my-activity/",
+        MyActivityView.as_view(),
+        name="user-my-activity",
+    ),
+    path(
+        "adoption-requests/<int:adoption_request_id>/messages/",
+        MessageListView.as_view(),
+        name="adoption-messages-list",
+    ),
+    path(
+        "adoption-requests/<int:adoption_request_id>/messages/create/",
+        CreateMessageView.as_view(),
+        name="create-adoption-message",
+    ),
+                              
+    path(
+        "admin/adoption-requests/<int:pk>/",
+        AdminUpdateAdoptionRequestView.as_view(),
+        name="admin-update-adoption-request",
+    ),
+    path(
+        "admin/clear-data/",
+        AdminClearDataView.as_view(),
+        name="admin-clear-data",
+    ),
+                            
+    path(
+        "chat/conversations/",
+        UserConversationListCreateView.as_view(),
+        name="chat-conversations",
+    ),
+    path(
+        "chat/conversations/<int:pk>/confirm/",
+        UserConversationConfirmView.as_view(),
+        name="chat-conversation-confirm",
+    ),
+    path(
+        "chat/conversations/<int:conversation_id>/messages/",
+        UserChatMessageListCreateView.as_view(),
+        name="chat-messages-user",
+    ),
+    path(
+        "admin/chat/conversations/",
+        AdminConversationListView.as_view(),
+        name="chat-conversations-admin",
+    ),
+    path(
+        "admin/chat/conversations/<int:conversation_id>/messages/",
+        AdminChatMessageListCreateView.as_view(),
+        name="chat-messages-admin",
+    ),
+    path(
+        "admin/chat/conversations/<int:pk>/accept/",
+        AdminConversationAcceptView.as_view(),
+        name="chat-conversation-accept",
+    ),
+    path(
+        "admin/chat/conversations/<int:pk>/close/",
+        AdminConversationCloseView.as_view(),
+        name="chat-conversation-close",
+    ),
+    path(
+        "admin/chat/conversations/<int:pk>/status/",
+        AdminConversationStatusUpdateView.as_view(),
+        name="chat-conversation-status-update",
+    ),
+    path(
+        "admin/chat/conversations/<int:pk>/delete/",
+        AdminConversationDeleteView.as_view(),
+        name="chat-conversation-delete",
+    ),
+    path(
+        "admin/chat/conversations/<int:pk>/clear-messages/",
+        AdminConversationClearMessagesView.as_view(),
+        name="chat-conversation-clear-messages",
+    ),
+    path(
+        "chat/conversations/<int:pk>/delete/",
+        UserConversationDeleteView.as_view(),
+        name="chat-conversation-user-delete",
+    ),
+    path(
+        "chat/conversations/<int:conversation_id>/messages/<int:message_id>/delete-for-me/",
+        UserChatMessageDeleteForMeView.as_view(),
+        name="chat-message-user-delete-for-me",
+    ),
+    path(
+        "chat/conversations/<int:conversation_id>/messages/<int:message_id>/delete-for-everyone/",
+        UserChatMessageDeleteForEveryoneView.as_view(),
+        name="chat-message-user-delete-for-everyone",
+    ),
+    path(
+        "admin/chat/conversations/<int:conversation_id>/messages/<int:message_id>/delete-for-me/",
+        AdminChatMessageDeleteForMeView.as_view(),
+        name="chat-message-admin-delete-for-me",
+    ),
+    path(
+        "admin/chat/conversations/<int:conversation_id>/messages/<int:message_id>/delete-for-everyone/",
+        AdminChatMessageDeleteForEveryoneView.as_view(),
+        name="chat-message-admin-delete-for-everyone",
+    ),
+                            
+    path(
+        "notifications/",
+        NotificationListView.as_view(),
+        name="notifications-list",
+    ),
+    path(
+        "notifications/<int:pk>/mark-read/",
+        NotificationMarkReadView.as_view(),
+        name="notification-mark-read",
+    ),
+    path(
+        "notifications/mark-all-read/",
+        NotificationMarkAllReadView.as_view(),
+        name="notifications-mark-all-read",
+    ),
+                                        
+    path(
+        "chatrooms/<int:chatroom_id>/invite-user/",
+        ChatroomInviteUserView.as_view(),
+        name="chatroom-invite-user",
+    ),
+    path(
+        "chatrooms/create-invitation/",
+        ChatroomInviteUserView.as_view(),
+        name="chatroom-create-invitation",
+    ),
+    path(
+        "chatroom-access-requests/",
+        ChatroomAccessRequestListView.as_view(),
+        name="chatroom-access-requests-list",
+    ),
+    path(
+        "chatroom-access-requests/<int:request_id>/accept/",
+        ChatroomAccessRequestAcceptView.as_view(),
+        name="chatroom-access-request-accept",
+    ),
+    path(
+        "chatroom-access-requests/<int:request_id>/reject/",
+        ChatroomAccessRequestRejectView.as_view(),
+        name="chatroom-access-request-reject",
+    ),
+    path(
+        "chatrooms/my-chatrooms/",
+        MyChatroomsView.as_view(),
+        name="my-chatrooms",
+    ),
+    path(
+        "admin/chatrooms/",
+        AdminChatroomsView.as_view(),
+        name="admin-chatrooms",
+    ),
+    path(
+        "admin/chatrooms/create/",
+        AdminCreateChatroomView.as_view(),
+        name="admin-create-chatroom",
+    ),
+    path(
+        "admin/chatrooms/<int:chatroom_id>/participants/",
+        AdminChatroomParticipantsView.as_view(),
+        name="admin-chatroom-participants",
+    ),
+    path(
+        "admin/chatrooms/<int:chatroom_id>/access-requests/",
+        AdminChatroomAccessRequestsView.as_view(),
+        name="admin-chatroom-access-requests",
+    ),
+    path(
+        "chatrooms/<int:chatroom_id>/messages/",
+        ChatroomMessageListCreateView.as_view(),
+        name="chatroom-messages",
+    ),
+    path(
+        "chatrooms/<int:chatroom_id>/messages/<int:message_id>/delete-for-me/",
+        ChatroomMessageDeleteForMeView.as_view(),
+        name="chatroom-message-delete-for-me",
+    ),
+    path(
+        "chatrooms/<int:chatroom_id>/messages/<int:message_id>/delete-for-everyone/",
+        ChatroomMessageDeleteForEveryoneView.as_view(),
+        name="chatroom-message-delete-for-everyone",
+    ),
+    path(
+        "chatrooms/<int:chatroom_id>/participants/",
+        ChatroomParticipantsView.as_view(),
+        name="chatroom-participants",
+    ),
+    path(
+        "chatrooms/<int:chatroom_id>/clear-messages/",
+        ClearChatroomMessagesView.as_view(),
+        name="clear-chatroom-messages",
+    ),
+    path(
+        "chatrooms/<int:chatroom_id>/delete/",
+        DeleteChatroomView.as_view(),
+        name="delete-chatroom",
+    ),
+                                        
+    path(
+        "admin/adoption/eligible-pets/",
+        EligibleForAdoptionListView.as_view(),
+        name="eligible-for-adoption-list",
+    ),
+    path(
+        "admin/adoption/convert/<int:pk>/",
+        ConvertToAdoptionView.as_view(),
+        name="convert-to-adoption",
+    ),
+                                 
+    path(
+        "check-image-authenticity/",
+        CheckImageAuthenticityView.as_view(),
+        name="check-image-authenticity",
+    ),
+    path(
+        "verify-pet-type/",
+        VerifyPetTypeView.as_view(),
+        name="verify-pet-type",
+    ),
+    path(
+        "classify-breed/",
+        ClassifyBreedView.as_view(),
+        name="classify-breed",
+    ),
+    
+                                
+    path(
+        "reports/found/<int:report_id>/photos/",
+        UploadFoundPetPhotosView.as_view(),
+        name="upload-found-pet-photos",
+    ),
+    path(
+        "reports/lost/<int:report_id>/photos/",
+        UploadLostPetPhotosView.as_view(),
+        name="upload-lost-pet-photos",
+    ),
+    path(
+        "photos/found/<int:photo_id>/",
+        DeleteFoundPetPhotoView.as_view(),
+        name="delete-found-pet-photo",
+    ),
+    path(
+        "photos/lost/<int:photo_id>/",
+        DeleteLostPetPhotoView.as_view(),
+        name="delete-lost-pet-photo",
+    ),
+    path(
+        "reports/<str:report_type>/<int:report_id>/photos/reorder/",
+        ReorderPhotosView.as_view(),
+        name="reorder-photos",
+    ),
+    
+                                             
+    path(
+        "direct-chat-requests/create/",
+        DirectChatRequestCreateView.as_view(),
+        name="direct-chat-request-create",
+    ),
+    path(
+        "direct-chat-requests/",
+        DirectChatRequestListView.as_view(),
+        name="direct-chat-requests-list",
+    ),
+    path(
+        "direct-chat-requests/<int:request_id>/accept/",
+        DirectChatRequestAcceptView.as_view(),
+        name="direct-chat-request-accept",
+    ),
+    path(
+        "direct-chat-requests/<int:request_id>/reject/",
+        DirectChatRequestRejectView.as_view(),
+        name="direct-chat-request-reject",
+    ),
+]

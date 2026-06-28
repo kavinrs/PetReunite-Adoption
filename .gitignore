@@ -1,8 +1,6 @@
 venv/
 
 # Ignore machine-learned model artifacts and large binaries
-ml_models/
-Backend/ml_models/
 
 # Backup files created during automated operations
 *.bak
